@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline';" />
+        <title></title>
+        <link rel="stylesheet" href="styles/index.css">
+        <link rel="stylesheet" href="../../node_modules/bootstrap-icons/font/bootstrap-icons.css">
+    </head>
+    <body>
+        <div class="navigation">
+            <br />
+            <button id="btn_back" class="back button"><i class="bi bi-chevron-left"></i></button>
+            <button id="btn_forward" class="forward button"><i class="bi bi-chevron-right"></i></button>
+            <div class="breadcrumbs"></div>
+            <input type="text" spellcheck="false" class="location hidden"></input>
+            <div class="filter" contenteditable="true"></div>
+            <div class="disk_space"></div>
+        </div>
+        <div class="container">
+            <div class="sidebar"></div>
+            <div class="context_menu"></div>
+
+            <div class="selection-rectangle"></div>
+            <div class="tab-header"></div>
+
+            <div class="main"></div>
+            <div class="sentinel"></div>
+            <div class="footer">
+                <div class="msg"></div>
+                <div class="progress hidden">
+                    <div class="progress_status"></div>
+                    <progress class="progress_bar" value="0" max="100"></progress>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
