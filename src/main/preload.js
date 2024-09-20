@@ -99,6 +99,7 @@ class Utilities {
         this.breadcrumbs = document.querySelector('.breadcrumbs');
         this.location_input = document.querySelector('.location');
 
+
         if (!this.location_input) {
             return;
         }
@@ -119,11 +120,6 @@ class Utilities {
         this.is_cut_operation = false;
 
         this.selected_files_size = 0;
-
-        // handle location events
-        if (!this.location_input) {
-            return;
-        }
 
         this.location_input.addEventListener('keydown', (e) => {
 
@@ -2340,10 +2336,25 @@ class FileManager {
 
         // get list view item
         ipcRenderer.on('get_item', (e, f) => {
+
             let active_tab_content = tabManager.get_active_tab_content();
+            let items = active_tab_content.querySelectorAll('.tr, .card')
+            let idx = 0;
+            items.forEach((item, i) => {
+                if (item.dataset.is_dir === 'true') {
+                    idx = i;
+                }
+            })
+
             let tr = this.get_list_view_item(f);
             let table = active_tab_content.querySelector('.table');
-            table.prepend(tr);
+
+            if (f.is_dir) {
+                table.prepend(tr);
+            } else {
+                table.insertBefore(tr, items[idx + 1]);
+            }
+
 
             // focus item
             tr.classList.add('highlight_select');
@@ -3255,10 +3266,11 @@ class FileManager {
         copy_arr.forEach(f => {
             let tr = this.get_list_view_item(f);
             if (f.is_dir === 'true') {
-                table.insertBefore(tr, items[0]);
+                table.prepend(tr);
             } else {
-                table.insertBefore(tr, items[idx]);
+                table.insertBefore(tr, items[idx + 1]);
             }
+            tr.classList.add('highlight_select');
         })
         dragSelect.drag_select();
         copy_arr = [];

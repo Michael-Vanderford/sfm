@@ -97,7 +97,7 @@ if (!isMainThread) {
                                 let progress_data = {
                                     id: progress_id,
                                     cmd: 'progress',
-                                    status: `Started compression.`,
+                                    status: `Compressing "${path.basename(file_path)}"`,
                                     max: Math.round(parseInt(size)),
                                     value: stats.size
                                 }
@@ -115,7 +115,7 @@ if (!isMainThread) {
 
                 let msg = {
                     cmd: 'set_msg',
-                    msg: `Compressing "${path.basename(file_path)}"`,
+                    msg: `Compressing files.`,
                     has_timeout: 0
                 }
                 parentPort.postMessage(msg);

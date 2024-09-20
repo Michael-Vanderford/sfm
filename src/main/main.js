@@ -528,29 +528,66 @@ class Utilities {
 
     // delete
     delete(e, delete_arr) {
+
         if (delete_arr.length > 0) {
-            delete_arr.forEach(f => {
-                if (f.is_dir) {
-                    try {
-                        fs.rmSync(f.href, { recursive: true });
-                        // win.send('remove_item', f.href);
-                    } catch (err) {
-                        console.error(err);
-                    }
+
+            // Create alert dialog
+            const options = {
+                type: 'question',
+                buttons: ['Cancel', 'Delete'],
+                defaultId: 1,
+                title: 'Delete',
+                message: `Are you sure you want to delete the ${delete_arr.length} items?`,
+                detail: 'If you delete and item, it will be permanetly lost.'
+            }
+
+            // Show alert dialog
+            dialog.showMessageBox(null, options).then((response) => {
+                if (response.response === 1) {
+
+                    delete_arr.forEach(f => {
+                        if (f.is_dir) {
+                            try {
+                                fs.rmSync(f.href, { recursive: true });
+                            } catch (err) {
+                                console.error(err);
+                            }
+                        } else {
+                            try {
+                                fs.unlinkSync(f.href);
+                            } catch (err) {
+                                console.error(err);
+                            }
+                        }
+                    })
+                    e.sender.send('remove_items', delete_arr);
+                    e.sender.send('set_msg', `${delete_arr.length} items deleted.`);
+                    delete_arr = [];
                 } else {
-                    try {
-                        fs.unlinkSync(f.href);
-                        // win.send('remove_item', f.href);
-                    } catch (err) {
-                        console.error(err);
-                    }
+                    win.send('set_msg', 'Operation cancelled.');
                 }
 
-            })
-            e.sender.send('remove_items', delete_arr);
-            delete_arr = [];
-        } else {
-            win.send('set_msg', 'Error: No files selected.');
+            });
+
+            // delete_arr.forEach(f => {
+            //     if (f.is_dir) {
+            //         try {
+            //             fs.rmSync(f.href, { recursive: true });
+            //             // win.send('remove_item', f.href);
+            //         } catch (err) {
+            //             console.error(err);
+            //         }
+            //     } else {
+            //         try {
+            //             fs.unlinkSync(f.href);
+            //         } catch (err) {
+            //             console.error(err);
+            //         }
+            //     }
+            // })
+            // e.sender.send('remove_items', delete_arr);
+            // delete_arr = [];
+
         }
     }
 
@@ -998,7 +1035,7 @@ class WindowManager {
     constructor() {
 
         this.windows = [];
-        this.window_settings;
+        this.window_settings = {};
 
         // init window settings
         this.window_file = path.join(app.getPath('userData'), 'window.json');
@@ -1015,7 +1052,7 @@ class WindowManager {
         if (fs.existsSync(this.window_file)) {
             this.window_settings = JSON.parse(fs.readFileSync(this.window_file, 'utf-8'));
         } else {
-            let window_settings = {
+            this.window_settings = {
                 window: {
                     width: 1024,
                     height: 600,
@@ -1023,7 +1060,7 @@ class WindowManager {
                     y: 0
                 }
             };
-            fs.writeFileSync(this.window_file, JSON.stringify(window_settings, null, 4));
+            fs.writeFileSync(this.window_file, JSON.stringify(this.window_settings, null, 4));
         }
     }
 
@@ -1081,6 +1118,7 @@ class WindowManager {
                 preload: path.join(__dirname, 'preload.js'),
                 sandbox: false
             },
+            icon: path.join(__dirname, '../renderer/icons/icon.png')
         });
 
         // listen for window move
@@ -2066,6 +2104,23 @@ app.on('ready', () => {
     });
 
 });
+
+// init
+function init() {
+
+    // check if .config directory exists
+    
+
+    // const settingsManager = new SettingsManager();
+    // const windowManager = new WindowManager();
+    // const utilities = new Utilities();
+    // const iconManager = new IconManager();
+    // const fileManager = new FileManager();
+    // const workspaceManager = new WorkspaceManager();
+    // const deviceManager = new DeviceManager();
+    // const dialogManager = new DialogManager();
+    // const menuManager = new MenuManager();
+}
 
 
 

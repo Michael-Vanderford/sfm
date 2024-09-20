@@ -375,7 +375,7 @@ hr {
 }
 
 .active-tab-content {
-    overflow-x: auto;
+    overflow-x: hidden; 
     overflow-y: auto;
     box-sizing: border-box;
     border: none;
@@ -697,7 +697,7 @@ span {
 
 /* Style for scrollbar */
 ::-webkit-scrollbar {
-    width: 8px;
+    width: 4px;
 }
 
 ::-webkit-scrollbar-track {
@@ -705,12 +705,12 @@ span {
 }
 
 ::-webkit-scrollbar-thumb {
-    background: var(--sidebar);
+    background: var(--scrollbar);
     border-radius: 5px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--border);
+    background: var(--scrollbar-hover);
 }
 
 /* Define dark color scheme */
@@ -737,6 +737,8 @@ span {
         --location: #2c2c2c;
         --location-border: #3b3a3a;
         --progress: #2c2c2c;
+        --scrollbar: #3b3a3a;
+        --scrollbar-hover: #5c636a;
 
         --msg-connect: #ffa500;
         --msg-connect-error: #ff0000;

@@ -132,7 +132,8 @@ class Utilities {
                         value: bytes_copied
                     }
                     parentPort.postMessage(set_progress);
-                    if (bytes_copied === max) {
+
+                    if (bytes_copied === max || i === files_arr.length - 1) {
                         let set_progress = {
                             cmd: 'set_progress',
                             max: 0,
