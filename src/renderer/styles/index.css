@@ -132,8 +132,8 @@ hr {
 }
 
 .breadcrumb_spacer {
-    padding-left: 2px;
-    padding-right: 2px;
+    padding-left: 0px;
+    padding-right: 0px;
     margin-left: 5px;
 }
 
@@ -375,7 +375,7 @@ hr {
 }
 
 .active-tab-content {
-    overflow-x: hidden; 
+    overflow-x: hidden;
     overflow-y: auto;
     box-sizing: border-box;
     border: none;
@@ -434,6 +434,7 @@ hr {
 
 .footer .msg {
     padding-right: 15px;
+    user-select: text;
 }
 
 .table {

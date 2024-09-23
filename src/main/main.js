@@ -281,7 +281,7 @@ class Utilities {
                     win.send('set_progress', data)
                 }
                 if (data.cmd === 'compress_done') {
-                    win.send('remove_item', data.file_path);
+                    // win.send('remove_item', data.file_path);
                     let f = gio.get_file(data.file_path);
                     if (f) {
                         f.id = btoa(data.file_path);
@@ -1116,7 +1116,8 @@ class WindowManager {
                 nodeIntegrationInWorker: true,
                 nativeWindowOpen: true,
                 preload: path.join(__dirname, 'preload.js'),
-                sandbox: false
+                sandbox: false,
+                backgroundThrottling: false
             },
             icon: path.join(__dirname, '../renderer/icons/icon.png')
         });
@@ -1455,7 +1456,13 @@ class MenuManager {
                         {
                             label: 'tar.gz',
                             click: () => {
-                                e.sender.send('context-menu-command', 'compress')
+                                e.sender.send('context-menu-command', 'compress_gz')
+                            }
+                        },
+                        {
+                            label: 'tar.xz',
+                            click: () => {
+                                e.sender.send('context-menu-command', 'compress_xz')
                             }
                         },
                         {
@@ -1597,7 +1604,13 @@ class MenuManager {
                         {
                             label: 'tar.gz',
                             click: () => {
-                                e.sender.send('context-menu-command', 'compress')
+                                e.sender.send('context-menu-command', 'compress_gz')
+                            }
+                        },
+                        {
+                            label: 'tar.xz',
+                            click: () => {
+                                e.sender.send('context-menu-command', 'compress_xz')
                             }
                         },
                         {
@@ -2096,6 +2109,11 @@ app.on('ready', () => {
     // create main window
     win = windowManager.create_main_window();
 
+    process.on('uncaughtException', (err) => {
+        win.send('set_msg', err.message);
+        // console.error('Uncaught Exception:', error);
+    });
+
     // listen for window close
     ipcMain.on('close-window', (event, data) => {
         windowManager.windows.forEach(window => {
@@ -2109,7 +2127,7 @@ app.on('ready', () => {
 function init() {
 
     // check if .config directory exists
-    
+
 
     // const settingsManager = new SettingsManager();
     // const windowManager = new WindowManager();

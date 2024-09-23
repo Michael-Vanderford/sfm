@@ -1,14 +1,24 @@
 const { parentPort, workerData, isMainThread } = require('worker_threads');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const { exec, execSync } = require('child_process');
+const archiver = require('archiver');
 const gio = require('../gio/bin/linux-x64-125/gio');
 
 class Utilities {
 
     // sanitize file name
     sanitize_file_name(href) {
-        return href.replace(/:/g, '_');
+        return href.replace(/\n/g, '').replace('/\:/g', '\\:').replace(/\\n/g, '');
+    }
+
+    // used in moving a file with an invalid character in the name
+    sanitize_file(href) {
+        href = href.replace(/\n/g, '');
+        href = href.replace(/\:/g, ':');
+        href = href.replace(/\\n:/g, '');
+        return href;
     }
 
     // handle duplicate file names
@@ -30,7 +40,7 @@ if (!isMainThread) {
     parentPort.on('message', (data) => {
         const cmd = data.cmd;
         switch (cmd) {
-            // Compress Files
+
             case 'compress': {
 
                 let location = data.location;
@@ -39,123 +49,97 @@ if (!isMainThread) {
                 let files_arr = data.files_arr;
                 let progress_id = data.id;
 
-                let c = 0;
-                let cmd = '';
-                let file_list = files_arr.map(item => `"${path.basename(item.href)}"`).join(' ');
-
                 // Create command for compressed file
-                let destination = utilities.sanitize_file_name(path.basename(files_arr[0].href));
-                files_arr = [];
+                let filename = utilities.sanitize_file_name(path.basename(files_arr[0].href));
 
-                let watcher;
+                let file_path;
                 let setinterval_id;
+
+                let output;
+                let archive;
 
                 if (type === 'zip') {
 
-                    destination = destination.substring(0, destination.length - path.extname(destination).length) + '.zip';
-                    cmd = `cd '${location}'; zip -r -q '${destination}' ${file_list}`;
+                    filename = filename.substring(0, filename.length - path.extname(filename).length) + '.zip';
+                    file_path = path.format({ dir: location, base: filename });
 
-                    // Watch for temporary files created by zip
-                    let tmpFileNamePattern = /zi\w+/;
-                    let tmpFilePath;
-                    watcher = fs.watch(location, (eventType, filename) => {
-                        if (eventType === 'rename' && tmpFileNamePattern.test(filename)) {
-                            tmpFilePath = path.join(location, filename);
-                        }
-                    });
+                    output = fs.createWriteStream(file_path);
+                    archive = archiver('zip', { zlib: { level: 9 } });
 
-                    setinterval_id = setInterval(() => {
-                        fs.stat(tmpFilePath, (err, stats) => {
-                            if (!err) {
+                } else if (type=== 'tar.gz') {
 
-                                let progress_data = {
-                                    id: progress_id,
-                                    cmd: 'progress',
-                                    status: `Compressing "${path.basename(file_path)}"`,
-                                    max: Math.round(parseInt(size)),
-                                    value: stats.size
-                                }
-                                parentPort.postMessage(progress_data);
+                    filename = filename.substring(0, filename.length - path.extname(filename).length) + '.tar.gz';
+                    file_path = path.format({ dir: location, base: filename });
 
-                            }
+                    output = fs.createWriteStream(file_path);
+                    archive = archiver('tar', { gzip: true, xz: false, zlib: { level: 9 } });
 
-                        });
+                } else if (type === 'tar.xz') {
 
-                    }, 1000);
+                    filename = filename.substring(0, filename.length - path.extname(filename).length) + '.tar.xz';
+                    file_path = path.format({ dir: location, base: filename });
+
+                    output = fs.createWriteStream(file_path);
+                    archive = archiver('tar', { gzip: false, xz: true, zlib: { level: 9 } });
 
                 } else {
-
-                    destination = destination.substring(0, destination.length - path.extname(destination).length) + '.tar.gz';
-                    cmd = `cd '${location}' && tar czf "${destination}" ${file_list}`;
-
-                    const compressionRatio = 0.5;
-                    setinterval_id = setInterval(() => {
-
-                        fs.stat(file_path, (err, stats) => {
-                            if (!err) {
-
-                                let progress_data = {
-                                    id: progress_id,
-                                    cmd: 'progress',
-                                    status: `Compressing "${path.basename(file_path)}"`,
-                                    max: Math.round(parseInt(size)),
-                                    value: stats.size
-                                }
-                                parentPort.postMessage(progress_data);
-
-                            }
-
-                        });
-
-                    }, 1000);
-
-                }
-
-                let file_path = path.format({ dir: location, base: destination });
-
-                let msg = {
-                    cmd: 'set_msg',
-                    msg: `Compressing files.`,
-                    has_timeout: 0
-                }
-                parentPort.postMessage(msg);
-
-                // execute cmd
-                let process = exec(cmd);
-
-                // listen for data
-                process.stdout.on('data', (data) => {
-                    console.log(data);
-                });
-
-                // listen for errors
-                process.stderr.on('data', (data) => {
-
-                    clearInterval(setinterval_id);
-                    if (watcher) {
-                        watcher.close();
-                    }
-
                     let msg = {
                         cmd: 'set_msg',
-                        msg: data
+                        msg: `Error: Unknown compression type`
                     }
-
                     parentPort.postMessage(msg);
-                    return;
+                }
 
-                })
+                files_arr.forEach(f => {
+                    if (f.is_dir) {
+                        archive.directory(f.href, path.relative(location, f.href));
+                    } else {
+                        archive.file(f.href, { name: path.relative(location, f.href) });
+                    }
+                });
 
-                // listen for process exit
-                process.on('close', (code) => {
+                archive.on('warning', (err) => {
+                    if (err.code === 'ENOENT') {
+                        let msg = {
+                            cmd: 'set_msg',
+                            msg: `Error: ${err.message}`
+                        }
+                        parentPort.postMessage(msg);
+                    } else {
+                        throw err;
+                    }
+                });
 
-                    console.log('done compressing files', code);
+                archive.on('error', function(err) {
+                    let msg = {
+                        cmd: 'set_msg',
+                        msg: `Error: ${err.message}`
+                    }
+                    parentPort.postMessage(msg);
+                    throw err;
+                });
 
+                archive.on('progress', (progress) => {
+                    let progress_data = {
+                        id: progress_id,
+                        cmd: 'progress',
+                        status: `Compressing "${path.basename(file_path)}"`,
+                        max: progress.entries.total,
+                        value: progress.entries.processed
+                    }
+                    parentPort.postMessage(progress_data);
+                });
+
+                output.on('close', function() {
                     clearInterval(setinterval_id);
 
-                    if (watcher) {
-                        watcher.close();
+                    let progress = {
+                        cmd: 'progress',
+                        value: 0,
+                        max: 0,
+                        status: ''
                     }
+                    parentPort.postMessage(progress);
 
                     let compress_done = {
                         cmd: 'compress_done',
@@ -163,13 +147,245 @@ if (!isMainThread) {
                         file_path: file_path,
                     }
                     parentPort.postMessage(compress_done);
+
+                    files_arr = [];
                     size = 0;
                     c = 0;
-
                 });
+
+                archive.pipe(output);
+                archive.finalize();
 
                 break;
             }
+
+
+            // Compress Files
+            // case 'compress': {
+
+            //     let location = data.location;
+            //     let type = data.type;
+            //     let size = data.size;
+            //     let files_arr = data.files_arr;
+            //     let progress_id = data.id;
+
+            //     // create a temporary file list
+            //     const tmp_file = path.join(os.tmpdir(), 'file_list.txt');
+
+            //     // sanitize file names
+            //     // rename the file if it has a \n in the name
+            //     files_arr.forEach(f => {
+            //         // check if file has an invalid character in the name and copy
+            //         if (f.href.includes('\n')) {
+            //             let new_name = utilities.sanitize_file(f.name);
+            //             let new_href = path.join(location, new_name);
+            //             gio.mv(f.href, new_href, (err, res) => {
+            //                 if (!err) {
+            //                     f.href = new_href;
+            //                 }
+            //             });
+            //         }
+            //     });
+            //     fs.writeFileSync(tmp_file, files_arr.map(item => path.relative(location, utilities.sanitize_file_name(item.href))).join('\n'));
+
+            //     let c = 0;
+            //     let cmd = '';
+            //     let file_list = files_arr.map(item => `"${path.basename(item.href)}"`).join(' ');
+
+            //     // Create command for compressed file
+            //     let filename = utilities.sanitize_file_name(path.basename(files_arr[0].href));
+
+            //     let watcher;
+            //     let file_path;
+            //     let setinterval_id;
+
+            //     if (type === 'zip') {
+
+            //         filename = filename.substring(0, filename.length - path.extname(filename).length) + '.zip';
+            //         file_path = path.format({ dir: location, base: filename });
+
+            //         const output = fs.createWriteStream(file_path);
+            //         const archive = archiver('zip', { zlib: { level: 9 } });
+
+            //         archive.pipe(output);
+            //         files_arr.forEach(f => {
+            //             archive.file(f.href, { name: path.relative(location, f.href) });
+            //         });
+
+            //         archive.on('warning', (err) => {
+            //             if (err.code === 'ENOENT') {
+            //                 let msg = {
+            //                     cmd: 'set_msg',
+            //                     msg: `Error: ${err.message}`
+            //                 }
+            //                 parentPort.postMessage(msg);
+            //             } else {
+            //                 throw err;
+            //             }
+
+            //         });
+
+            //         archive.on('error', function(err) {
+            //             let msg = {
+            //                 cmd: 'set_msg',
+            //                 msg: `Error: ${err.message}`
+            //             }
+            //             parentPort.postMessage(msg);
+            //             throw err;
+            //         });
+
+            //         output.on('end', function() {
+
+            //             let progress = {
+            //                 cmd: 'progress',
+            //                 value: 0,
+            //                 max: 0,
+            //                 status: ''
+            //             }
+            //             parentPort.postMessage(progress);
+            //             let compress_done = {
+            //                 cmd: 'compress_done',
+            //                 id: progress_id,
+            //                 file_path: file_path,
+            //             }
+            //             parentPort.postMessage(compress_done);
+            //             files_arr = [];
+            //             size = 0;
+            //             c = 0;
+
+            //         });
+
+            //         archive.finalize();
+            //         return;
+
+            //         // cmd = `cd '${location}'; zip -r '${filename}' -@ < "${tmp_file}"`;
+
+            //         // // Watch for temporary files created by zip
+            //         // let tmpFileNamePattern = /zi\w+/;
+            //         // let tmpFilePath;
+            //         // watcher = fs.watch(location, (eventType, filename) => {
+            //         //     if (eventType === 'rename' && tmpFileNamePattern.test(filename)) {
+            //         //         tmpFilePath = path.join(location, filename);
+            //         //     }
+            //         // });
+
+            //         // setinterval_id = setInterval(() => {
+            //         //     fs.stat(tmpFilePath, (err, stats) => {
+            //         //         if (!err) {
+            //         //             let progress_data = {
+            //         //                 id: progress_id,
+            //         //                 cmd: 'progress',
+            //         //                 status: `Compressing "${path.basename(file_path)}"`,
+            //         //                 max: Math.round(parseInt(size)),
+            //         //                 value: stats.size
+            //         //             }
+            //         //             parentPort.postMessage(progress_data);
+            //         //         }
+            //         //     });
+            //         // }, 1000);
+
+            //     } else {
+
+            //         filename = filename.substring(0, filename.length - path.extname(filename).length) + '.tar.gz';
+            //         file_path = path.format({ dir: location, base: filename });
+
+            //         cmd = `cd '${location}' && tar --force-local -czf "${filename}" -C '${location}' -T "${tmp_file}"`;
+
+            //         const compressionRatio = 0.5;
+            //         setinterval_id = setInterval(() => {
+
+            //             fs.stat(file_path, (err, stats) => {
+            //                 if (!err) {
+
+            //                     let progress_data = {
+            //                         id: progress_id,
+            //                         cmd: 'progress',
+            //                         status: `Compressing "${path.basename(file_path)}"`,
+            //                         max: Math.round(parseInt(size)),
+            //                         value: stats.size / compressionRatio
+            //                     }
+            //                     parentPort.postMessage(progress_data);
+
+            //                 }
+
+            //             });
+
+            //         }, 1000);
+
+            //     }
+
+            //     let msg = {
+            //         cmd: 'set_msg',
+            //         msg: `Compressing ${files_arr.length} files.`,
+            //         has_timeout: 0
+            //     }
+            //     parentPort.postMessage(msg);
+
+            //     // execute cmd
+            //     exec(cmd, (err, stdout, stderr) => {
+
+            //         if (err || stderr) {
+
+            //             clearInterval(setinterval_id);
+            //             if (watcher) {
+            //                 watcher.close();
+            //             }
+
+            //             let progress = {
+            //                 cmd: 'progress',
+            //                 value: 0,
+            //                 max: 0,
+            //                 status: ''
+            //             }
+            //             parentPort.postMessage(progress);
+
+            //             let msg = {
+            //                 cmd: 'set_msg',
+            //                 msg: `Error compressing files. ${err.message}`
+            //             }
+            //             parentPort.postMessage(msg);
+
+            //             // cleanup
+            //             fs.unlinkSync(tmp_file);
+            //             files_arr = [];
+            //             return;
+            //         }
+
+            //         // listen for process exit
+            //         if (stdout) {
+            //             let msg = {
+            //                 cmd: 'set_msg',
+            //                 msg: stdout
+            //             }
+            //             parentPort.postMessage(msg);
+
+            //         }
+
+            //         // cleanup
+            //         fs.unlinkSync(tmp_file);
+            //         clearInterval(setinterval_id);
+            //         if (watcher) {
+            //             watcher.close();
+            //         }
+            //         let compress_done = {
+            //             cmd: 'compress_done',
+            //             id: progress_id,
+            //             file_path: file_path,
+            //         }
+            //         parentPort.postMessage(compress_done);
+
+            //         files_arr = [];
+            //         size = 0;
+            //         c = 0;
+
+
+
+            //     });
+
+
+
+            //     break;
+            // }
 
             // Extract
             case 'extract': {

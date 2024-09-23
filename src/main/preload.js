@@ -1,5 +1,80 @@
 const ipcRenderer = require('electron').ipcRenderer;
 
+class EventManager {
+    constructor() {
+        this.listeners = new Map();
+    }
+
+    /**
+     * Add an event listener
+     * @param {string} event - The event name
+     * @param {function} callback - The callback function
+     * @param {object} context - The context to bind the callback to (optional)
+     */
+    on(event, callback, context = null) {
+        if (!this.listeners.has(event)) {
+            this.listeners.set(event, []);
+        }
+        this.listeners.get(event).push({ callback, context });
+    }
+
+    /**
+     * Remove an event listener
+     * @param {string} event - The event name
+     * @param {function} callback - The callback function to remove
+     * @param {object} context - The context of the callback (optional)
+     */
+    off(event, callback, context = null) {
+        if (!this.listeners.has(event)) return;
+
+        const eventListeners = this.listeners.get(event);
+        const filteredListeners = eventListeners.filter(
+            listener => listener.callback !== callback || listener.context !== context
+        );
+
+        if (filteredListeners.length) {
+            this.listeners.set(event, filteredListeners);
+        } else {
+            this.listeners.delete(event);
+        }
+    }
+
+    /**
+     * Trigger an event
+     * @param {string} event - The event name
+     * @param {...any} args - Arguments to pass to the event listeners
+     */
+    trigger(event, ...args) {
+        if (!this.listeners.has(event)) return;
+
+        const eventListeners = this.listeners.get(event);
+        eventListeners.forEach(listener => {
+            listener.callback.apply(listener.context, args);
+        });
+    }
+
+    /**
+     * Remove all listeners for a specific event or all events
+     * @param {string} event - The event name (optional)
+     */
+    removeAllListeners(event = null) {
+        if (event) {
+            this.listeners.delete(event);
+        } else {
+            this.listeners.clear();
+        }
+    }
+
+    /**
+     * Get the number of listeners for a specific event
+     * @param {string} event - The event name
+     * @returns {number} The number of listeners
+     */
+    listenerCount(event) {
+        return this.listeners.has(event) ? this.listeners.get(event).length : 0;
+    }
+}
+
 class SettingsManager {
 
     constructor() {
@@ -96,9 +171,10 @@ class Utilities {
 
     constructor() {
 
+        this.listeners = [];
+
         this.breadcrumbs = document.querySelector('.breadcrumbs');
         this.location_input = document.querySelector('.location');
-
 
         if (!this.location_input) {
             return;
@@ -173,6 +249,13 @@ class Utilities {
             this.set_folder_size(folder_data);
         })
 
+    }
+
+    removeAllListeners() {
+        listeners.forEach(({ element, event, handler }) => {
+            element.removeEventListener(event, handler);
+        });
+        listeners.length = 0;
     }
 
     // set folder size
@@ -678,18 +761,23 @@ class Utilities {
     edit() {
 
         let active_tab_content = document.querySelector('.active-tab-content');
+
         let items = active_tab_content.querySelectorAll('.highlight_select, .highlight');
         items.forEach((item, idx) => {
 
             let edit_name = item.querySelector('.href');
             edit_name.classList.add('hidden');
 
-            let input = item.querySelector('input');
+            let input = item.querySelector('.edit_name');
             input.classList.remove('hidden');
 
             if (idx === 0) {
-                input.focus();
-                input.setSelectionRange(0, input.value.lastIndexOf('.'));
+
+                setTimeout(() => {
+                    input.focus();
+                    input.setSelectionRange(0, input.value.lastIndexOf('.'));
+                }, 100);
+
             }
 
         });
@@ -2269,6 +2357,8 @@ class FileManager {
 
     constructor(tabManager, iconManager) {
 
+        // this.events = [];
+
         this.tabManager = tabManager;
         this.iconManager = iconManager;
         this.sort_direction = 'desc';
@@ -2695,6 +2785,13 @@ class FileManager {
     // get list view
     get_list_view (files_arr) {
 
+        // // clear event listeners
+        // if (this.events.length > 0) {
+        //     this.events.forEach(({item, type, event })=> {
+        //         item.removeEventListener(type, event);
+        //     });
+        // }
+
         const start = this.loaded_rows;
         const end = Math.min(start + this.chunk_size, files_arr.length);
 
@@ -2808,10 +2905,6 @@ class FileManager {
             ipcRenderer.send('columns_menu');
         })
 
-        active_tab_content.addEventListener('keydown', (e) => {
-
-        });
-
         active_tab_content.appendChild(table);
         this.lazy_load_files(files_arr);
 
@@ -2865,6 +2958,10 @@ class FileManager {
                     input.value = f.name;
                     input.classList.add('edit_name', 'hidden');
                     input.spellcheck = false;
+
+                    // let input = utilities.add_div(['edit_name', 'hidden']);
+                    // input.contentEditable = true;
+                    // input.innerHTML = f.name;
 
                     let link = utilities.add_link(f.href, f.name);
                     link.draggable = false;
@@ -3094,9 +3191,21 @@ class FileManager {
             }
         })
 
+        // // event for keydown
+        // const key_down = (e) => {
+        //     if (e.key === 'F2') {
+        //         utilities.edit();
+        //     }
+        // }
+
+        // tr.addEventListener('keydown', key_down);
+
+        // this.events.push({item: tr, type: 'keydown', event: key_down});
+
         return tr;
 
     }
+
 
     // lazy load files
     lazy_load_files(files_arr) {
@@ -3405,7 +3514,11 @@ class MenuManager {
                     utilities.clear()
                     break;
                 }
-                case 'compress': {
+                case 'compress_xz': {
+                    utilities.compress('tar.xz');
+                    break
+                }
+                case 'compress_gz': {
                     utilities.compress('tar.gz');
                     break;
                 }
@@ -3458,6 +3571,7 @@ class MenuManager {
 
 }
 
+let eventManager
 let utilities;
 let settingsManager;
 let viewManager;
@@ -3477,6 +3591,8 @@ document.addEventListener('DOMContentLoaded', (e) => {
 
 // init
 init = () => {
+
+    eventManager = new EventManager();
 
     utilities = new Utilities();
     settingsManager = new SettingsManager();

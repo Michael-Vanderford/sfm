@@ -77,18 +77,20 @@ class Utilities {
                 // get recursive files
                 this.get_files_arr(f.source, f.destination, (err, dirents) => {
                     if (err) {
-                        console.error(err);
+                        let msg = {
+                            cmd: 'set_msg',
+                            msg: err
+                        }
+                        parentPort.postMessage(msg);
                         return;
                     }
                     dirents.forEach((ff, i) => {
                         files_arr.push(ff);
                     });
-
                 })
             } else {
                 files_arr.push(f);
             }
-
         });
 
         // sort so we create all the directories first
