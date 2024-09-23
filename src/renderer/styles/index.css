@@ -471,6 +471,12 @@ hr {
     /* position: relative; */
 }
 
+.table .th_sort_icon {
+    position: absolute;
+    right: 0;
+    /* padding-left: 5px; */
+}
+
 .list_view .th_drag_handle:hover {
     background-color: #3794ff !important;
 }

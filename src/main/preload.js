@@ -2819,6 +2819,16 @@ class FileManager {
         for (const key in settings.columns) {
             if (settings.columns[key]) {
 
+                let th_sort_icon = document.createElement('i');
+                th_sort_icon.classList.add('th_sort_icon');
+                if (this.sort_by === key) {
+                    th_sort_icon.classList.add('bi', 'bi-caret-up-fill');
+                    if (this.sort_direction === 'desc') {
+                        th_sort_icon.classList.remove('bi-caret-up-fill');
+                        th_sort_icon.classList.add('bi-caret-down-fill');
+                    }
+                }
+
                 let drag_handle = document.createElement('div');
                 drag_handle.classList.add('drag_handle');
 
@@ -2836,6 +2846,7 @@ class FileManager {
                 } else {
 
                     let th = document.createElement('th');
+
                     switch (key) {
                         case 'size':
                             th.innerHTML = 'Size';
@@ -2857,6 +2868,7 @@ class FileManager {
                             break;
                     }
 
+                    th.appendChild(th_sort_icon);
                     th.appendChild(drag_handle);
                     th.dataset.col_name = key;
                     tr.appendChild(th);
@@ -2872,6 +2884,7 @@ class FileManager {
                     e.stopPropagation();
                     this.sort_direction = this.sort_direction === 'asc' ? 'desc' : 'asc';
                     this.sort_by = key;
+
                     this.get_list_view(files_arr);
                 });
 
