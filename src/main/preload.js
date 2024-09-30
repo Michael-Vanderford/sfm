@@ -1,77 +1,54 @@
 const ipcRenderer = require('electron').ipcRenderer;
 
 class EventManager {
-    constructor() {
-        this.listeners = new Map();
+    constructor(container) {
+        this.container = container || document;
+        this.events = {};
     }
 
-    /**
-     * Add an event listener
-     * @param {string} event - The event name
-     * @param {function} callback - The callback function
-     * @param {object} context - The context to bind the callback to (optional)
-     */
-    on(event, callback, context = null) {
-        if (!this.listeners.has(event)) {
-            this.listeners.set(event, []);
+    // Method to add an event listener
+    addEvent(eventType, selector, callback) {
+        if (!this.events[eventType]) {
+            this.events[eventType] = [];
+            this.container.addEventListener(eventType, (e) => this.handleEvent(e));
         }
-        this.listeners.get(event).push({ callback, context });
+
+        this.events[eventType].push({ selector, callback });
     }
 
-    /**
-     * Remove an event listener
-     * @param {string} event - The event name
-     * @param {function} callback - The callback function to remove
-     * @param {object} context - The context of the callback (optional)
-     */
-    off(event, callback, context = null) {
-        if (!this.listeners.has(event)) return;
-
-        const eventListeners = this.listeners.get(event);
-        const filteredListeners = eventListeners.filter(
-            listener => listener.callback !== callback || listener.context !== context
-        );
-
-        if (filteredListeners.length) {
-            this.listeners.set(event, filteredListeners);
-        } else {
-            this.listeners.delete(event);
+    // Method to handle events
+    handleEvent(event) {
+        const { type, target } = event;
+        if (this.events[type]) {
+            this.events[type].forEach(({ selector, callback }) => {
+                if (target.matches(selector) || target.closest(selector)) {
+                    callback.call(target, event);
+                }
+            });
         }
     }
 
-    /**
-     * Trigger an event
-     * @param {string} event - The event name
-     * @param {...any} args - Arguments to pass to the event listeners
-     */
-    trigger(event, ...args) {
-        if (!this.listeners.has(event)) return;
+    // Method to remove an event listener
+    removeEvent(eventType, selector, callback) {
+        if (this.events[eventType]) {
+            this.events[eventType] = this.events[eventType].filter(
+                (entry) => entry.selector !== selector || entry.callback !== callback
+            );
 
-        const eventListeners = this.listeners.get(event);
-        eventListeners.forEach(listener => {
-            listener.callback.apply(listener.context, args);
-        });
-    }
-
-    /**
-     * Remove all listeners for a specific event or all events
-     * @param {string} event - The event name (optional)
-     */
-    removeAllListeners(event = null) {
-        if (event) {
-            this.listeners.delete(event);
-        } else {
-            this.listeners.clear();
+            // If no more listeners exist for this event type, remove the main listener
+            if (this.events[eventType].length === 0) {
+                this.container.removeEventListener(eventType, this.handleEvent);
+                delete this.events[eventType];
+            }
         }
     }
 
-    /**
-     * Get the number of listeners for a specific event
-     * @param {string} event - The event name
-     * @returns {number} The number of listeners
-     */
-    listenerCount(event) {
-        return this.listeners.has(event) ? this.listeners.get(event).length : 0;
+    // Method to clear all event listeners
+    clearAllEvents() {
+        for (let eventType in this.events) {
+            this.container.removeEventListener(eventType, this.handleEvent);
+        }
+        this.events = {};
     }
 }
 
@@ -206,6 +183,8 @@ class Utilities {
             }
 
             if (e.key === 'Enter') {
+                e.preventDefault();
+                e.stopPropagation();
                 this.location = this.location_input.value;
                 this.hide_location_input();
                 fileManager.get_files(this.location);
@@ -260,14 +239,17 @@ class Utilities {
 
     // set folder size
     set_folder_size(folder_data) {
-        let active_tab_content = document.querySelector('.active-tab-content');
+        // console.log('folder data', folder_data);
+        let active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
         let item = active_tab_content.querySelector(`[data-href="${folder_data.source}"]`);
         if (!item) {
             return;
         }
         item.dataset.size = folder_data.size;
         let size_item = item.querySelector('[data-col_name="size"]');
-        size_item.textContent = this.get_file_size(folder_data.size);
+        if (size_item) {
+            size_item.textContent = this.get_file_size(folder_data.size);
+        }
     }
 
     // get home dir
@@ -740,8 +722,10 @@ class Utilities {
     }
 
     cancel_edit() {
+
         let active_tab_content = document.querySelector('.active-tab-content');
-        let items = active_tab_content.querySelectorAll('.card, .tr');
+
+        let items = active_tab_content.querySelectorAll('.highlight, .highlight_select');
         items.forEach(item => {
             let name = item.querySelector('.href');
             if (name) {
@@ -751,16 +735,22 @@ class Utilities {
             let input = item.querySelector('input');
             if (input) {
                 input.classList.add('hidden');
+                input.removeEventListener('focus', this.focus_input);
+                console.log('input', input);
             }
             // name.classList.remove('hidden');
         });
-        items = null;
+        // items = null;
+
+        let location = document.querySelector('.placeholder');
+        location.focus();
+
     }
 
     // edit -
-    edit() {
+    edit(href) {
 
-        let active_tab_content = document.querySelector('.active-tab-content');
+        let active_tab_content = tabManager.get_active_tab_content();
 
         let items = active_tab_content.querySelectorAll('.highlight_select, .highlight');
         items.forEach((item, idx) => {
@@ -770,18 +760,27 @@ class Utilities {
 
             let input = item.querySelector('.edit_name');
             input.classList.remove('hidden');
-
+            input.addEventListener('focus', this.focus_input);
             if (idx === 0) {
-
                 setTimeout(() => {
                     input.focus();
                     input.setSelectionRange(0, input.value.lastIndexOf('.'));
-                }, 100);
-
+                }, 1);
             }
 
         });
 
+        active_tab_content.style.display = 'none';
+        active_tab_content.offsetHeight; // Force a reflow
+        active_tab_content.style.display = '';
+
+    }
+
+    focus_input(e) {
+        setTimeout(() => {
+            e.target.focus();
+            e.target.setSelectionRange(0, e.target.value.lastIndexOf('.'));
+        }, 1);
     }
 
     // rename file
@@ -1487,7 +1486,7 @@ class WorkspaceManager {
 
                 workspace_div.addEventListener('mouseover', (e) => {
                     workspace_div.title = `${file.href} \n Rename (F2)`;
-                    a.focus();
+                    // a.focus();
                 })
 
                 // Show Workspace Context Menu
@@ -1718,92 +1717,90 @@ class SideBarManager {
 
 class KeyBoardManager {
 
-    constructor(Utilities, FileManager) {
-
-        this.utilities = Utilities;
-        this.fileManager = FileManager;
-
+    constructor() {
 
         // add event listener for keydown
         document.addEventListener('keydown', (e) => {
 
-            // e.preventDefault();
-            // e.stopPropagation();
+        //     // e.preventDefault();
+        //     // e.stopPropagation();
 
-            // prevent inputs from firing global keyboard events
-            if (e.target.isContentEditable || e.target.tagName === 'INPUT') {
-                return;
-            }
+        //     // prevent inputs from firing global keyboard events
+        //     if (e.target.isContentEditable || e.target.tagName === 'INPUT') {
+        //         return;
+        //     }
 
-            // ctrl + l to focus location
-            if (e.ctrlKey && e.key === 'l') {
-                e.preventDefault();
-                e.stopPropagation();
-                utilities.show_location_input();
-            }
+        //     // ctrl + l to focus location
+        //     if (e.ctrlKey && e.key === 'l') {
+        //         e.preventDefault();
+        //         e.stopPropagation();
+        //         utilities.show_location_input();
+        //     }
 
-            // esc to deselect all
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                e.stopPropagation();
-                this.utilities.clear();
-            }
+        //     // esc to deselect all
+        //     if (e.key === 'Escape') {
+        //         e.preventDefault();
+        //         e.stopPropagation();
+        //         utilities.clear();
+        //     }
 
-            // ctrl + a to select all
-            if (e.ctrlKey && e.key === 'a') {
-                e.preventDefault();
-                e.stopPropagation();
-                this.utilities.select_all();
-            }
+        //     // ctrl + a to select all
+        //     if (e.ctrlKey && e.key === 'a') {
+        //         e.preventDefault();
+        //         e.stopPropagation();
+        //         utilities.select_all();
+        //     }
 
-            // ctrl + c to copy
-            if (e.ctrlKey && e.key === 'c') {
-                this.utilities.copy();
-            }
+        //     // ctrl + c to copy
+        //     if (e.ctrlKey && e.key === 'c') {
+        //         utilities.copy();
+        //     }
 
-            // ctrl + v to paste
-            if (e.ctrlKey && e.key === 'v') {
-                this.utilities.paste();
-            }
+        //     // ctrl + v to paste
+        //     if (e.ctrlKey && e.key === 'v') {
+        //         utilities.paste();
+        //     }
 
-            // ctrl + x to cut
-            if (e.ctrlKey && e.key === 'x') {
-                e.preventDefault();
-                e.stopPropagation();
-                this.utilities.cut();
-            }
+        //     // ctrl + x to cut
+        //     if (e.ctrlKey && e.key === 'x') {
+        //         e.preventDefault();
+        //         e.stopPropagation();
+        //         utilities.cut();
+        //     }
 
-            // ctrl + shift + n to create a new folder
-            if (e.ctrlKey && e.shiftKey && e.key.toLocaleLowerCase() === 'n') {
-                e.preventDefault();
-                e.stopPropagation();
-                this.utilities.mkdir();
-            }
+        //     // ctrl + shift + n to create a new folder
+        //     if (e.ctrlKey && e.shiftKey && e.key.toLocaleLowerCase() === 'n') {
+        //         e.preventDefault();
+        //         e.stopPropagation();
+        //         utilities.mkdir();
+        //     }
 
-            // ctrl + shift + e to extract
-            if (e.ctrlKey && e.shiftKey && e.key.toLocaleLowerCase() === 'e') {
-                e.preventDefault();
-                e.stopPropagation();
-                this.utilities.extract();
-            }
+        //     // ctrl + shift + e to extract
+        //     if (e.ctrlKey && e.shiftKey && e.key.toLocaleLowerCase() === 'e') {
+        //         e.preventDefault();
+        //         e.stopPropagation();
+        //         utilities.extract();
+        //     }
 
-            // ctrl + shift + c to compress
-            if (e.ctrlKey && e.shiftKey && e.key.toLocaleLowerCase() === 'c') {
-                e.preventDefault();
-                e.stopPropagation();
-                this.utilities.compress('zip');
-            }
+        //     // ctrl + shift + c to compress
+        //     if (e.ctrlKey && e.shiftKey && e.key.toLocaleLowerCase() === 'c') {
+        //         e.preventDefault();
+        //         e.stopPropagation();
+        //         utilities.compress('zip');
+        //     }
 
-            // del to delete
-            if (e.key === 'Delete') {
-                e.preventDefault();
-                e.stopPropagation();
-                this.utilities.delete();
-            }
+        //     // del to delete
+        //     if (e.key === 'Delete') {
+        //         e.preventDefault();
+        //         e.stopPropagation();
+        //         utilities.delete();
+        //     }
 
             // f5 to refresh
             if (e.key === 'F5') {
-                this.fileManager.get_files(utilities.get_location());
+                e.preventDefault();
+                e.stopPropagation();
+                fileManager.get_files(utilities.get_location());
             }
 
         })
@@ -1830,6 +1827,9 @@ class IconManager {
 
     // get icons
     get_icons() {
+
+        console.log('running get icons');
+
         let items = document.querySelectorAll('tr');
         items.forEach(item => {
             // console.log('get icon', item.dataset.is_dir, item.dataset.href);
@@ -1862,7 +1862,7 @@ class IconManager {
 
     // set folder icon
     set_folder_icon(href, icon) {
-        let active_tab_content = document.querySelector('.active-tab-content');
+        let active_tab_content = tabManager.get_active_tab_content();
         let icon_div = active_tab_content.querySelector(`[data-href="${href}"]`);
         if (!icon_div) {
             return;
@@ -1871,7 +1871,6 @@ class IconManager {
         if (img) {
             img.src = icon;
         }
-
     }
 
 }
@@ -2412,9 +2411,9 @@ class FileManager {
 
         // get files
         ipcRenderer.on('ls', (e, files_arr) => {
-            this.files_arr = files_arr;
+            // this.files_arr = files_arr;
             if (this.view === 'list_view') {
-                this.get_list_view(this.files_arr);
+                this.get_list_view(files_arr);
             }
             ipcRenderer.send('get_disk_space', this.location);
         });
@@ -2900,6 +2899,7 @@ class FileManager {
 
         files_arr.forEach((f, idx) => {
             let tr = document.createElement('tr'); //this.get_list_view_item(f);
+            tr.classList.add('tr', 'lazy');
             tr.dataset.id = f.id;
             tr.dataset.href = f.href;
             tr.dataset.name = f.name;
@@ -2908,9 +2908,11 @@ class FileManager {
             tr.dataset.content_type = f.content_type;
             tr.dataset.is_dir = f.is_dir;
             tr.dataset.location = f.location;
-            tr.classList.add('tr', 'lazy');
             table.appendChild(tr);
         });
+
+        active_tab_content.appendChild(table);
+        this.lazy_load_files(files_arr);
 
         thead.addEventListener('contextmenu', (e) => {
             e.preventDefault();
@@ -2918,8 +2920,7 @@ class FileManager {
             ipcRenderer.send('columns_menu');
         })
 
-        active_tab_content.appendChild(table);
-        this.lazy_load_files(files_arr);
+
 
     }
 
@@ -2928,6 +2929,24 @@ class FileManager {
 
         let tr = document.createElement('tr');
         tr.classList.add('tr');
+
+        let div_name = utilities.add_div(['div_name']);
+        let div_icon = utilities.add_div(['icon']);
+        let img = document.createElement('img');
+
+        let input = document.createElement('input');
+        input.type = 'text';
+        input.value = f.name;
+        input.classList.add('edit_name', 'hidden');
+        input.spellcheck = false;
+
+        // let input = utilities.add_div(['edit_name', 'hidden']);
+        // input.contentEditable = true;
+        // input.innerHTML = f.name;
+
+        let link = utilities.add_link(f.href, f.name);
+        link.draggable = false;
+        link.classList.add('href');
 
         // tr.dataset.id = f.id;
         // tr.dataset.href = f.href;
@@ -2956,29 +2975,14 @@ class FileManager {
                 // handle name column
                 if (key === 'name') {
 
-                    let div_name = utilities.add_div(['div_name']);
 
-                    let div_icon = utilities.add_div(['icon']);
-                    let img = document.createElement('img');
                     img.loading = 'lazy';
                     div_icon.appendChild(img);
 
                     let td_name = document.createElement('td');
                     td_name.classList.add('name');
 
-                    let input = document.createElement('input');
-                    input.type = 'text';
-                    input.value = f.name;
-                    input.classList.add('edit_name', 'hidden');
-                    input.spellcheck = false;
 
-                    // let input = utilities.add_div(['edit_name', 'hidden']);
-                    // input.contentEditable = true;
-                    // input.innerHTML = f.name;
-
-                    let link = utilities.add_link(f.href, f.name);
-                    link.draggable = false;
-                    link.classList.add('href');
 
                     div_name.append(div_icon, link, input);
                     td_name.append(div_name);
@@ -2988,6 +2992,7 @@ class FileManager {
 
                     // handle icons
                     if (f.is_dir) {
+
                         ipcRenderer.send('get_folder_icon', f.href);
                         ipcRenderer.send('get_folder_size', f.href);
 
@@ -3061,6 +3066,8 @@ class FileManager {
 
                     // handle rename
                     input.addEventListener('keydown', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
                         if (e.key === 'Enter') {
                             let id = f.id;
                             let source = f.href;
@@ -3198,27 +3205,18 @@ class FileManager {
             utilities.clear();
         });
 
-        tr.addEventListener('keydown', (e) => {
-            if (e.key === 'F2') {
-                utilities.edit();
-            }
-        })
-
-        // // event for keydown
-        // const key_down = (e) => {
+        // tr.addEventListener('keydown', (e) => {
         //     if (e.key === 'F2') {
         //         utilities.edit();
         //     }
-        // }
+        // })
 
         // tr.addEventListener('keydown', key_down);
-
         // this.events.push({item: tr, type: 'keydown', event: key_down});
 
         return tr;
 
     }
-
 
     // lazy load files
     lazy_load_files(files_arr) {
@@ -3251,11 +3249,11 @@ class FileManager {
                 } else {
                     observer.observe(lazy_item);
                 }
-                if (idx === 0) {
-                    active_tab_content.addEventListener('mouseover', (e) => {
-                        e.target.focus();
-                    });
-                }
+                // if (idx === 0) {
+                //     active_tab_content.addEventListener('mouseover', (e) => {
+                //         e.target.focus();
+                //     });
+                // }
 
                 if (idx === lazyItems.length - 1) {
                     utilities.set_msg(`Loaded ${files_arr.length} items`);
@@ -3263,6 +3261,7 @@ class FileManager {
                         dragSelect.drag_select();
                     }, 100);
                 }
+
             });
 
             function isInViewport(element) {
@@ -3283,6 +3282,9 @@ class FileManager {
                     let tr = this.get_list_view_item(f);
                     lazy_item.replaceWith(tr);
 
+
+
+                    // Stop watching and remove the placeholder
                     lazy_item.classList.remove("lazy");
                     observer.unobserve(lazy_item);
 
@@ -3616,7 +3618,7 @@ init = () => {
     fileManager = new FileManager(tabManager,iconManager);
     menuManager = new MenuManager();
     const navigation = new Navigation(FileManager);
-    const keyboardManager = new KeyBoardManager(utilities, fileManager);
+    const keyboardManager = new KeyBoardManager(utilities);
 
     // side bar init
     sideBarManager = new SideBarManager(utilities, fileManager);

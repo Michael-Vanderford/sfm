@@ -1117,7 +1117,6 @@ class WindowManager {
                 nativeWindowOpen: true,
                 preload: path.join(__dirname, 'preload.js'),
                 sandbox: false,
-                backgroundThrottling: false
             },
             icon: path.join(__dirname, '../renderer/icons/icon.png')
         });
