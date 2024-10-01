@@ -25,15 +25,15 @@ a {
     text-decoration: none;
 }
 
-/* a:hover {
+a:hover {
     text-decoration: underline;
-} */
+}
 
 img {
     padding-right: 15px;
 }
 
-/* input {
+input {
     background-color: var(--input);
     color: var(--text);
     border: 1px solid var(--border);
@@ -41,7 +41,7 @@ img {
     padding: 5px;
     width: 100%;
     outline: none;
-} */
+}
 
 hr {
     border: 1px solid var(--border);

@@ -760,7 +760,6 @@ class Utilities {
 
             let input = item.querySelector('.edit_name');
             input.classList.remove('hidden');
-            input.addEventListener('focus', this.focus_input);
             if (idx === 0) {
                 setTimeout(() => {
                     input.focus();
@@ -770,9 +769,9 @@ class Utilities {
 
         });
 
-        active_tab_content.style.display = 'none';
-        active_tab_content.offsetHeight; // Force a reflow
-        active_tab_content.style.display = '';
+        // active_tab_content.style.display = 'none';
+        // active_tab_content.offsetHeight; // Force a reflow
+        // active_tab_content.style.display = '';
 
     }
 
@@ -1486,7 +1485,7 @@ class WorkspaceManager {
 
                 workspace_div.addEventListener('mouseover', (e) => {
                     workspace_div.title = `${file.href} \n Rename (F2)`;
-                    // a.focus();
+                    a.focus();
                 })
 
                 // Show Workspace Context Menu
@@ -1722,79 +1721,87 @@ class KeyBoardManager {
         // add event listener for keydown
         document.addEventListener('keydown', (e) => {
 
-        //     // e.preventDefault();
-        //     // e.stopPropagation();
+            // e.preventDefault();
+            // e.stopPropagation();
 
-        //     // prevent inputs from firing global keyboard events
-        //     if (e.target.isContentEditable || e.target.tagName === 'INPUT') {
-        //         return;
-        //     }
+            // prevent inputs from firing global keyboard events
+            if (e.target.isContentEditable || e.target.tagName === 'INPUT') {
+                console.log('input');
+                return;
+            }
 
-        //     // ctrl + l to focus location
-        //     if (e.ctrlKey && e.key === 'l') {
-        //         e.preventDefault();
-        //         e.stopPropagation();
-        //         utilities.show_location_input();
-        //     }
+            // ctrl + l to focus location
+            if (e.ctrlKey && e.key === 'l') {
+                e.preventDefault();
+                e.stopPropagation();
+                utilities.show_location_input();
+            }
 
-        //     // esc to deselect all
-        //     if (e.key === 'Escape') {
-        //         e.preventDefault();
-        //         e.stopPropagation();
-        //         utilities.clear();
-        //     }
+            // esc to deselect all
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                utilities.clear();
+            }
 
-        //     // ctrl + a to select all
-        //     if (e.ctrlKey && e.key === 'a') {
-        //         e.preventDefault();
-        //         e.stopPropagation();
-        //         utilities.select_all();
-        //     }
+            // ctrl + a to select all
+            if (e.ctrlKey && e.key === 'a') {
+                e.preventDefault();
+                e.stopPropagation();
+                utilities.select_all();
+            }
 
-        //     // ctrl + c to copy
-        //     if (e.ctrlKey && e.key === 'c') {
-        //         utilities.copy();
-        //     }
+            // ctrl + c to copy
+            if (e.ctrlKey && e.key === 'c') {
+                utilities.copy();
+            }
 
-        //     // ctrl + v to paste
-        //     if (e.ctrlKey && e.key === 'v') {
-        //         utilities.paste();
-        //     }
+            // ctrl + v to paste
+            if (e.ctrlKey && e.key === 'v') {
+                utilities.paste();
+            }
 
-        //     // ctrl + x to cut
-        //     if (e.ctrlKey && e.key === 'x') {
-        //         e.preventDefault();
-        //         e.stopPropagation();
-        //         utilities.cut();
-        //     }
+            // ctrl + x to cut
+            if (e.ctrlKey && e.key === 'x') {
+                e.preventDefault();
+                e.stopPropagation();
+                utilities.cut();
+            }
 
-        //     // ctrl + shift + n to create a new folder
-        //     if (e.ctrlKey && e.shiftKey && e.key.toLocaleLowerCase() === 'n') {
-        //         e.preventDefault();
-        //         e.stopPropagation();
-        //         utilities.mkdir();
-        //     }
+            // ctrl + shift + n to create a new folder
+            if (e.ctrlKey && e.shiftKey && e.key.toLocaleLowerCase() === 'n') {
+                e.preventDefault();
+                e.stopPropagation();
+                utilities.mkdir();
+            }
 
-        //     // ctrl + shift + e to extract
-        //     if (e.ctrlKey && e.shiftKey && e.key.toLocaleLowerCase() === 'e') {
-        //         e.preventDefault();
-        //         e.stopPropagation();
-        //         utilities.extract();
-        //     }
+            // ctrl + shift + e to extract
+            if (e.ctrlKey && e.shiftKey && e.key.toLocaleLowerCase() === 'e') {
+                e.preventDefault();
+                e.stopPropagation();
+                utilities.extract();
+            }
 
-        //     // ctrl + shift + c to compress
-        //     if (e.ctrlKey && e.shiftKey && e.key.toLocaleLowerCase() === 'c') {
-        //         e.preventDefault();
-        //         e.stopPropagation();
-        //         utilities.compress('zip');
-        //     }
+            // ctrl + shift + c to compress
+            if (e.ctrlKey && e.shiftKey && e.key.toLocaleLowerCase() === 'c') {
+                e.preventDefault();
+                e.stopPropagation();
+                utilities.compress('zip');
+            }
 
-        //     // del to delete
-        //     if (e.key === 'Delete') {
-        //         e.preventDefault();
-        //         e.stopPropagation();
-        //         utilities.delete();
-        //     }
+            // del to delete
+            if (e.key === 'Delete') {
+                e.preventDefault();
+                e.stopPropagation();
+                utilities.delete();
+            }
+
+            // f2 to rename
+            if (e.key === 'F2') {
+                e.preventDefault();
+                e.stopPropagation();
+                utilities.edit();
+            }
 
             // f5 to refresh
             if (e.key === 'F5') {
@@ -3066,8 +3073,7 @@ class FileManager {
 
                     // handle rename
                     input.addEventListener('keydown', (e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
+                        
                         if (e.key === 'Enter') {
                             let id = f.id;
                             let source = f.href;
@@ -3144,6 +3150,7 @@ class FileManager {
         // handle mouseover
         tr.addEventListener('mouseover', function () {
             tr.classList.add('highlight');
+            link.focus();
         });
 
         // handle mouseout
@@ -3211,8 +3218,6 @@ class FileManager {
         //     }
         // })
 
-        // tr.addEventListener('keydown', key_down);
-        // this.events.push({item: tr, type: 'keydown', event: key_down});
 
         return tr;
 
