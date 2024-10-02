@@ -121,7 +121,7 @@ if (!isMainThread) {
 
                 archive.on('progress', (progress) => {
                     let progress_data = {
-                        id: progress_id,
+                        // id: progress_id,
                         cmd: 'progress',
                         status: `Compressing "${path.basename(file_path)}"`,
                         max: progress.entries.total,
@@ -152,6 +152,13 @@ if (!isMainThread) {
                     size = 0;
                     c = 0;
                 });
+
+                let msg = {
+                    cmd: 'set_msg',
+                    msg: `Compressing ${files_arr.length} files.`,
+                    has_timeout: 0
+                }
+                parentPort.postMessage(msg);
 
                 archive.pipe(output);
                 archive.finalize();

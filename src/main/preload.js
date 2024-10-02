@@ -723,10 +723,12 @@ class Utilities {
 
     cancel_edit() {
 
-        let active_tab_content = document.querySelector('.active-tab-content');
+        console.log('running cancel edit');
 
-        let items = active_tab_content.querySelectorAll('.highlight, .highlight_select');
+        let active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
+        let items = active_tab_content.querySelectorAll('.card, .tr');
         items.forEach(item => {
+
             let name = item.querySelector('.href');
             if (name) {
                 name.classList.remove('hidden');
@@ -736,11 +738,9 @@ class Utilities {
             if (input) {
                 input.classList.add('hidden');
                 input.removeEventListener('focus', this.focus_input);
-                console.log('input', input);
             }
-            // name.classList.remove('hidden');
         });
-        // items = null;
+        items = null;
 
         let location = document.querySelector('.placeholder');
         location.focus();
@@ -897,10 +897,13 @@ class Utilities {
     // clear selection
     clear() {
 
+        // clear inputs
+        this.cancel_edit();
+
         // clear filter
         let filter = document.querySelector('.filter');
         if (filter) {
-            filter.value = '';
+            filter.innerHTML = '';
         }
 
         // clear tab highlight
@@ -927,9 +930,7 @@ class Utilities {
             item.classList.remove('highlight_select', 'highlight');
         });
 
-        // clear inputs
-        this.cancel_edit();
-        this.set_msg('');
+        // this.set_msg('');
     }
 
     // clear highlighted items
@@ -939,6 +940,15 @@ class Utilities {
         items.forEach(item => {
             item.classList.remove('highlight_select', 'highlight', 'highlight_target');
         });
+    }
+
+    // clear filter
+    clear_filter() {
+        let filter = document.querySelector('.filter');
+        if (filter) {
+            filter.innerHTML = '';
+            filter.classList.remove('active');
+        }
     }
 
     // get selected files
@@ -1031,6 +1041,7 @@ class DragSelect {
 
         this.is_dragging = false;
         this.drag_select_arr = [];
+        this.c = 0;
 
     }
 
@@ -1069,6 +1080,8 @@ class DragSelect {
         let endPosX = 0;
         let endPosY = 0;
 
+
+
         active_tab_content.addEventListener('mousedown', (e) => {
 
             // console.log('cards', cards)
@@ -1088,7 +1101,7 @@ class DragSelect {
             selectionRectangle.style.height = '0';
             selectionRectangle.style.display = 'block';
 
-            items.forEach(item => item.classList.remove('selected'));
+            items.forEach(item => item.classList.remove('highlight_select'));
 
         });
 
@@ -1113,6 +1126,7 @@ class DragSelect {
             selectionRectangle.style.left = rectWidth > 0 ? startPosX + 'px' : endPosX + 'px';
             selectionRectangle.style.top = rectHeight > 0 ? startPosY + 'px' : endPosY + 'px';
 
+
             // Highlight selectable items within the selection area
             items.forEach(item => {
 
@@ -1125,6 +1139,8 @@ class DragSelect {
 
                 if (isSelected) {
                     item.classList.add('highlight_select');
+                } else {
+                    // item.classList.remove('highlight_select');
                 }
 
             });
@@ -1726,7 +1742,6 @@ class KeyBoardManager {
 
             // prevent inputs from firing global keyboard events
             if (e.target.isContentEditable || e.target.tagName === 'INPUT') {
-                console.log('input');
                 return;
             }
 
@@ -2798,6 +2813,8 @@ class FileManager {
         //     });
         // }
 
+        utilities.clear_filter();
+
         const start = this.loaded_rows;
         const end = Math.min(start + this.chunk_size, files_arr.length);
 
@@ -3073,7 +3090,7 @@ class FileManager {
 
                     // handle rename
                     input.addEventListener('keydown', (e) => {
-                        
+
                         if (e.key === 'Enter') {
                             let id = f.id;
                             let source = f.href;
