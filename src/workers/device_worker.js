@@ -1,4 +1,5 @@
 const { parentPort, workerData, isMainThread } = require('worker_threads');
+const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const gio = require('../gio/bin/linux-x64-125/gio');
@@ -29,7 +30,7 @@ class DeviceManager {
                         filter_arr[i].size_used = size.split(' ')[1];
                     }
                 } catch (err) {
-                    console.log('');
+                    console.log(`error getting devices ${err}`);
                 }
             }
 

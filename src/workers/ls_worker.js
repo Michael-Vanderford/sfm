@@ -92,7 +92,7 @@ if (!isMainThread) {
                 gio.exec(cmd, (err, res) => {
 
                     if (err) {
-                        console.error(err);
+                        console.error(`err ${err}`);
                         let msg = {
                             cmd: 'msg',
                             msg: err.message

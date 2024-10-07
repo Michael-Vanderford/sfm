@@ -27,7 +27,7 @@ class SettingsManager {
         this.settings_file = path.join(app.getPath('userData'), 'settings.json');
         this.setting = {};
 
-        // handle sendsync call from renderer
+        // handle send sync call from renderer
         ipcMain.on('get_settings', (e) => {
             e.returnValue = this.get_settings();
         })
@@ -74,7 +74,6 @@ class SettingsManager {
     // Toggle Menubar
     showMenubar() {
         let showMenubar = this.settings['File Menu']['show'];
-        console.log(showMenubar);
         if (showMenubar) {
             win.setMenuBarVisibility(true);
         } else {
@@ -207,8 +206,8 @@ class Utilities {
         this.home_dir = os.homedir();
 
         // listen for get_home_dir event
-        ipcMain.handle('get_home_dir', (e) => {
-            return this.home_dir;
+        ipcMain.on('get_home_dir', (e) => {
+            e.returnValue = os.homedir();
         });
 
         // listen for is_main event
@@ -228,8 +227,6 @@ class Utilities {
 
                 let compression_worker = new worker.Worker('./src/workers/compression_worker.js');
                 compression_worker.on('message', (data) => {
-
-                    // console.log('extract cmd', data.cmd);
 
                     if (data.cmd === 'set_msg') {
                         win.send('set_msg', data.msg, data.has_timeout);
@@ -326,7 +323,6 @@ class Utilities {
 
     // set is main flag
     set_is_main(is_main) {
-        console.log(`is_main: ${is_main}`);
         this.is_main = is_main;
     }
 
@@ -503,8 +499,6 @@ class Utilities {
     // rename
     rename(e, source, destination, id) {
 
-        console.log(`source: ${source}, destination: ${destination}`, id);
-
         if (fs.existsSync(destination)) {
             win.send('set_msg', 'Error: File name already exists.');
             return;
@@ -568,25 +562,6 @@ class Utilities {
                 }
 
             });
-
-            // delete_arr.forEach(f => {
-            //     if (f.is_dir) {
-            //         try {
-            //             fs.rmSync(f.href, { recursive: true });
-            //             // win.send('remove_item', f.href);
-            //         } catch (err) {
-            //             console.error(err);
-            //         }
-            //     } else {
-            //         try {
-            //             fs.unlinkSync(f.href);
-            //         } catch (err) {
-            //             console.error(err);
-            //         }
-            //     }
-            // })
-            // e.sender.send('remove_items', delete_arr);
-            // delete_arr = [];
 
         }
     }
@@ -701,7 +676,6 @@ class IconManager {
             return await app.getFileIcon(href, { size: 32 }).then(icon => {
                 return icon.toDataURL();
             }).catch((err) => {
-                // console.log(err);
                 return `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAADHklEQVRYhe2WX0/yVhzHP8VBW04r0pKIgjDjlRfPC3BX7vXM1+OdMXsPXi9eqEu27DUgf1ICgQrlFGkxnF0sdgrq00dxyZZ9kyb0d2i/n/b8vj0H/teS6vX69xcXF7/4vh9JKdV7j7Ozs+s0fpnlwunp6c/Hx8c/5nK53EcepFar/ZAGYgXg6Ojo6CPG3wqxApDL5bLrMM9kMgnE+fn5qxArAOuSECL5Xa1WX4X4NIB6vY5pmmia9iaEtlyQUqp1Qcznc+I4Rqm/b1kul595frcus5eUzWbJZt9uqVRToJRiMBgk58PhEM/zUEqhlMLzPIbDIfDXU3c6HcIwTAWZCqDdbtPtdgGQUhIEAYZh4HkenudhmiaTyQQpJY1GA9d1abVaz179hwBqtRq6rgMwmUxwHAfHcZBSIqWkWCziOA5BEKCUwjRNhBDMZrP1AHymvhnAtm1GoxHj8RghBEIIxuMxvu+zubmJpmnEcUwYhhiG8dX7pU5BqVQCwLIsoigiDEMqlQoA3W4X27axLIv9/X16vR57e3vJN+AtpXoDYRgynU6Zz+cAFAoF8vn8mwZpzFMBKKVotVq4rkuj0WCxWNBsNun3+wCfn4LZbEY+n8c0TZRSZDIZDg4OkvH/fgoMw+D+/p44jl+c14+mINViJKVkNBqxvb2dfNt938dxHJRSdLtddF3HdV3m8zm9Xo+trS0sy1oxtCzr44vRYDBIVjlN0ygUCskG5LHx1paCxWJBu91OUvDY7bqu43keYRjS6XQIggCA29tbSqUSzWZzPSmIogghRJKCx7XAdV2klAghKJfLyf+VUhiG8e9JwVd7QNd1ptMpURShaRq2bXN3d8discC27RevieOY6XT6vhT4vh8v74yXU/DYhDs7O2iaRhRFPDw8IIQgjmP6/T7FYvHZxhQgiqLYdV39aW1lCm5ubn5frlmWRbVaTSJYKpXY3d1NOl3X9cQsl8tRrVZXzAGur69/W65tLBeurq7+ODw8/FKpVHY2NjZWxt+jOI7nl5eXv56cnPwUBEHv6dhrYRWAuQ7zJ7oH0m0U/0n9CS0Pytp5nRYfAAAAAElFTkSuQmCC`;
             })
             // try {
@@ -831,7 +805,6 @@ class NetworkManager {
     // Save network settings to network.json
     setNetworkSettings(network_settings) {
 
-        console.log(network_settings)
         if (network_settings.save_connection) {
             try {
                 this.network_settings_arr.push(network_settings);
@@ -973,7 +946,6 @@ class FileManager {
                         }
                     } catch (err) {
                         // win.send('msg', 'watcher error: ' + err.message);
-                        // console.log('watcher error', err)
                     }
                 }
 
@@ -985,7 +957,6 @@ class FileManager {
 
     // get files
     get_files(location) {
-        console.log(`getting files for ${location}`);
         this.location = location
         this.ls_worker.postMessage({
             cmd: 'ls',
@@ -1040,6 +1011,10 @@ class WindowManager {
         // init window settings
         this.window_file = path.join(app.getPath('userData'), 'window.json');
         this.get_window_setting();
+
+        ipcMain.on('get_window_settings', (e) => {
+            e.returnValue = this.window_settings;
+        });
 
         ipcMain.on('update_window_settings', (e, window_settings) => {
             this.update_window_settings(window_settings);
@@ -1137,16 +1112,10 @@ class WindowManager {
                 this.window_settings.window.width = window.getBounds().width;
                 this.window_settings.window.height = window.getBounds().height;
                 this.update_window_settings(this.window_settings);
-                // console.log(`Window resized to: ${lastSize[0]}x${lastSize[1]}`);
             }, 100);
         });
 
-        // Track when resize is finished
-        // win.on('resized', () => {
-        //     console.log('Window resize completed');
-        // });
-
-        window.webContents.openDevTools();
+        // window.webContents.openDevTools();
         window.loadFile('src/renderer/index.html');
         this.windows.push(window);
         return window;
@@ -1180,8 +1149,6 @@ class DialogManager {
                 preload: path.join(__dirname, '..', 'renderer', 'dialogs', 'scripts', data.preload),
             },
         })
-
-        console.log(path.join(__dirname, '..', 'renderer', 'dialogs', 'scripts', data.preload));
 
         dialog.loadFile(path.join(__dirname, '..', 'renderer', 'dialogs', data.load_file));
         // dialog.webContents.openDevTools()
@@ -1221,8 +1188,6 @@ class MenuManager {
         // Main Menu
         this.main_menu = null;
         ipcMain.on('main_menu', (e, destination) => {
-
-            // console.log('destination', destination);
 
             utilities.set_is_main(true);
 
@@ -1269,26 +1234,26 @@ class MenuManager {
                 {
                     type: 'separator'
                 },
-                // {
-                //     label: 'View',
-                //     submenu: [
-                //         {
-                //             label: 'Grid',
-                //             click: (e) => {
-                //                 win.send('switch_view', 'grid')
-                //             }
-                //         },
-                //         {
-                //             label: 'List',
-                //             click: () => {
-                //                 win.send('switch_view', 'list')
-                //             }
-                //         },
-                //     ]
-                // },
-                // {
-                //     type: 'separator'
-                // },
+                {
+                    label: 'View',
+                    submenu: [
+                        {
+                            label: 'Grid',
+                            click: (e) => {
+                                win.send('switch_view', 'grid_view')
+                            }
+                        },
+                        {
+                            label: 'List',
+                            click: () => {
+                                win.send('switch_view', 'list_view')
+                            }
+                        },
+                    ]
+                },
+                {
+                    type: 'separator'
+                },
                 {
                     id: 'paste',
                     label: 'Paste',
@@ -1729,7 +1694,6 @@ class MenuManager {
         // Workspace Menu
         ipcMain.on('workspace_menu', (e, file) => {
 
-            // // console.log(file)
             let workspace_menu_template = [
                 {
                     label: 'Rename',
@@ -1879,11 +1843,9 @@ class MenuManager {
                     label: launchers[i].name,
                     click: () => {
 
-                        // console.log(launchers[i]);
-
                         // Set Default Application
                         let set_default_launcher_cmd = `xdg-mime default ${path.basename(launchers[i].appid)} ${launchers[i].mimetype}`;
-                        // console.log(set_default_launcher_cmd)
+
                         execSync(set_default_launcher_cmd);
 
                         let cmd = launchers[i].cmd.toLocaleLowerCase().replace(/%u|%f/g, `'${f.href}'`);
@@ -1900,7 +1862,7 @@ class MenuManager {
             }))
 
         } catch (err) {
-            // console.log(err)
+            console.log(err)
         }
     }
 
@@ -2003,7 +1965,6 @@ class MenuManager {
 
     // Templated Menu
     add_templates_menu(menu, location) {
-        console.log('adding templates', location);
         let template_menu = menu.getMenuItemById('templates');
         let templates = fs.readdirSync(path.join(utilities.home_dir, 'Templates'));
         templates.forEach((file, idx) => {
@@ -2110,7 +2071,6 @@ app.on('ready', () => {
 
     process.on('uncaughtException', (err) => {
         win.send('set_msg', err.message);
-        // console.error('Uncaught Exception:', error);
     });
 
     // listen for window close

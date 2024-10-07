@@ -20,10 +20,8 @@ class Utilities {
 
     constructor() {
 
-        // get gome dir
-        ipcRenderer.invoke('get_home_dir').then(home_dir => {
-            this.home_dir = home_dir;
-        });
+        // get home dir
+        this.home_dir = ipcRenderer.sendSync('get_home_dir');
 
         // set message
         ipcRenderer.on('set_msg', (e, msg) => {
