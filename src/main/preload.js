@@ -101,6 +101,13 @@ class SettingsManager {
             ipcRenderer.send('update_settings', this.settings);
         }
 
+        // sort by
+        if (this.settings.sort_by === '' || this.settings.sort_by === undefined) {
+            this.settings.sort_by = 'mtime';
+            this.settings.sort_direction = 'desc';
+            ipcRenderer.send('update_settings', this.settings);
+        }
+
         // list view settings
         this.list_view_settings = ipcRenderer.sendSync('get_list_view_settings');
         if (!this.list_view_settings.col_width || this.list_view_settings.col_width === undefined) {
@@ -758,7 +765,6 @@ class Utilities {
     edit(href) {
 
         let active_tab_content = tabManager.get_active_tab_content();
-
         let items = active_tab_content.querySelectorAll('.highlight_select, .highlight');
         items.forEach((item, idx) => {
 
@@ -904,6 +910,8 @@ class Utilities {
     // clear selection
     clear() {
 
+        console.log('clear selection');
+
         // clear inputs
         this.cancel_edit();
 
@@ -942,6 +950,9 @@ class Utilities {
 
     // clear highlighted items
     clear_highlight() {
+
+        console.log('clear highlight');
+
         let main = document.querySelector('.main');
         let items = main.querySelectorAll('.highlight_select, .highlight, .highlight_target');
         items.forEach(item => {
@@ -1049,6 +1060,8 @@ class DragSelect {
         this.drag_select_arr = [];
         this.c = 0;
 
+        this.is_dragging_divs = false;
+
     }
 
     // set is dragging
@@ -1107,7 +1120,13 @@ class DragSelect {
             selectionRectangle.style.height = '0';
             selectionRectangle.style.display = 'block';
 
-            items.forEach(item => item.classList.remove('highlight_select'));
+            // remove items from selection if not in the drag area
+            // items.forEach(item => {
+            //     item.classList.remove('highlight_select');
+            // });
+
+            // items.forEach(item =>
+            //      item.classList.remove('highlight_select'));
 
         });
 
@@ -1161,6 +1180,7 @@ class DragSelect {
         });
 
         active_tab_content.addEventListener('click', (e) => {
+            console.log('click', allowClick);
             if (allowClick) {
                 utilities.clear();
             } else {
@@ -3350,13 +3370,6 @@ class FileManager {
     // get list view
     get_list_view (files_arr) {
 
-        // // clear event listeners
-        // if (this.events.length > 0) {
-        //     this.events.forEach(({item, type, event })=> {
-        //         item.removeEventListener(type, event);
-        //     });
-        // }
-
         utilities.clear_filter();
 
         const start = this.loaded_rows;
@@ -3390,28 +3403,17 @@ class FileManager {
 
                 let th_sort_icon = document.createElement('i');
                 th_sort_icon.classList.add('th_sort_icon');
-                if (this.sort_by === key) {
-                    console.log('sort by', key);
-                    th_sort_icon.classList.add('bi', 'bi-caret-up-fill');
-                    if (this.sort_direction === 'desc') {
-                        th_sort_icon.classList.remove('bi-caret-up-fill');
-                        th_sort_icon.classList.add('bi-caret-down-fill');
+                if (settings.sort_by === key) {
+
+                    // th_sort_icon.classList.add('bi', 'bi-caret-up-fill');
+                    if (settings.sort_direction === 'desc') {
+                        th_sort_icon.classList.remove('bi', 'bi-caret-up-fill');
+                        th_sort_icon.classList.add('bi', 'bi-caret-down-fill');
                     } else {
-                        th_sort_icon.classList.remove('bi-caret-down-fill');
-                        th_sort_icon.classList.add('bi-caret-up-fill');
+                        th_sort_icon.classList.remove('bi', 'bi-caret-down-fill');
+                        th_sort_icon.classList.add('bi', 'bi-caret-up-fill');
                     }
                 }
-
-                // if (settings.Sort && settings.Sort.by === header.toLowerCase()) {
-                //     let sort_asc_icon = add_icon('bi-caret-up-fill');
-                //     let sort_desc_icon = add_icon('bi-caret-down-fill');
-                //     if (sort_order === 'asc') {
-                //         sort_div.append(sort_asc_icon);
-                //     } else {
-                //         sort_div.append(sort_desc_icon);
-                //     }
-
-                // }
 
                 let drag_handle = document.createElement('div');
                 drag_handle.classList.add('drag_handle');
@@ -3472,7 +3474,10 @@ class FileManager {
         thead.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            console.log ('thead click', e.target.dataset.col_name);
+            settings.sort_by = e.target.dataset.col_name;
+            settings.sort_direction = settings.sort_direction === 'asc' ? 'desc' : 'asc';
+            ipcRenderer.send('update_settings', settings);
+            this.get_list_view(files_arr);
         })
 
         // table.appendChild(colgroup);
@@ -3481,7 +3486,7 @@ class FileManager {
         table.appendChild(tbody);
 
         // sort files array
-        files_arr = utilities.sort(files_arr, this.sort_by, this.sort_direction);
+        files_arr = utilities.sort(files_arr, settings.sort_by, settings.sort_direction);
 
         files_arr.forEach((f, idx) => {
             let tr = document.createElement('tr'); //this.get_list_view_item(f);
@@ -3548,16 +3553,17 @@ class FileManager {
         for (const key in settings.columns) {
             if (settings.columns[key]) {
 
+                // add data attributes from column settings
                 tr.dataset.id = f.id;
                 tr.dataset.href = f.href;
                 tr.dataset.content_type = f.content_type;
                 tr.dataset.is_dir = f.is_dir;
                 tr.dataset.location = f.location;
 
-                // add data attributes from column settings
                 tr.dataset[key] = f[key];
 
                 let td = document.createElement('td');
+
                 let title =
                     'Name: ' + f.display_name +
                     '\n' +
@@ -3572,7 +3578,22 @@ class FileManager {
                     // 'Created: ' + getDateTime(file.ctime) +
                     '\n' +
                     'Type: ' + f.content_type
+
                 td.title = title;
+
+                // // handle sort icon
+                // let th_sort_icon = document.createElement('i');
+                // th_sort_icon.classList.add('th_sort_icon');
+                // if (this.sort_by === key) {
+                //     th_sort_icon.classList.add('bi', 'bi-caret-up-fill');
+                //     if (this.sort_direction === 'desc') {
+                //         th_sort_icon.classList.remove('bi-caret-up-fill');
+                //         th_sort_icon.classList.add('bi-caret-down-fill');
+                //     } else {
+                //         th_sort_icon.classList.remove('bi-caret-down-fill');
+                //         th_sort_icon.classList.add('bi-caret-up-fill');
+                //     }
+                // }
 
                 // handle name column
                 if (key === 'name') {
@@ -3680,8 +3701,6 @@ class FileManager {
 
                 } else {
 
-
-
                     switch (key) {
                         case 'size':
                             td.innerHTML = utilities.get_file_size(f.size);
@@ -3694,6 +3713,9 @@ class FileManager {
                             break;
                         case 'atime':
                             td.innerHTML = utilities.get_date_time(f.atime);
+                            break;
+                        case 'type':
+                            td.innerHTML = f.content_type;
                             break;
                         default:
                             td.innerHTML = f[key];
@@ -3754,13 +3776,13 @@ class FileManager {
         tr.addEventListener('dragstart', (e) => {
             e.stopPropagation();
             dragSelect.set_is_dragging(true);
-            // utilities.copy();
+            dragSelect.is_dragging_divs = true;
         });
 
         // handle dragover
         tr.addEventListener('dragover', (e) => {
             e.preventDefault();
-            e.stopPropagation();
+            // e.stopPropagation();
             if (f.is_dir) {
                 tr.classList.add('highlight_target');
                 if (e.ctrlKey) {
@@ -3958,6 +3980,9 @@ class FileManager {
         this.get_breadcrumbs(this.location);
 
         ipcRenderer.send('is_main', 1);
+
+        let main = document.querySelector('.main');
+        main.style.width = window.innerWidth + 'px';
 
     }
 
