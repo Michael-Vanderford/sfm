@@ -945,6 +945,9 @@ class Utilities {
             item.classList.remove('highlight_select', 'highlight');
         });
 
+        // set is dragging to false
+        dragSelect.set_is_dragging(false);
+
         // this.set_msg('');
     }
 
@@ -1093,6 +1096,14 @@ class DragSelect {
             return;
         }
 
+        items.forEach(item => {
+            item.addEventListener('mousedown', (e) => {
+                console.log('mousedown');
+                this.is_dragging = true;
+            })
+        });
+
+
         let isSelecting = false;
         let startPosX = 0;
         let startPosY = 0;
@@ -1105,8 +1116,7 @@ class DragSelect {
 
             // console.log('cards', cards)
 
-            if (e.button === 2 || this.is_dragging) {
-                this.is_dragging = false;
+            if (e.button === 2) {
                 return;
             }
 
@@ -1135,6 +1145,8 @@ class DragSelect {
 
             // e.preventDefault();
             // e.stopPropagation();
+
+            console.log('is dragging', this.is_dragging);
 
             if (!isSelecting || this.is_dragging) {
                 return;
@@ -1165,7 +1177,10 @@ class DragSelect {
                 if (isSelected) {
                     item.classList.add('highlight_select');
                 } else {
-                    // item.classList.remove('highlight_select');
+                    // console.log('removing', item)
+                    if (!this.is_dragging) {
+                        item.classList.remove('highlight_select');
+                    }
                 }
 
             });
@@ -1175,6 +1190,7 @@ class DragSelect {
         });
 
         active_tab_content.addEventListener('mouseup', (e) => {
+            console.log('setting is selecting to false');
             isSelecting = false;
             selectionRectangle.style.display = 'none';
         });
@@ -1186,6 +1202,9 @@ class DragSelect {
             } else {
                 allowClick = 1;
             }
+
+            this.is_dragging = false;
+
         })
 
     }
