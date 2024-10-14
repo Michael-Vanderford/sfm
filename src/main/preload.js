@@ -134,6 +134,10 @@ class SettingsManager {
         return this.settings;
     }
 
+    get_window_settings() {
+        return ipcRenderer.sendSync('get_window_settings');
+    }
+
     // get view
     get_view() {
         return this.settings.view;
@@ -910,7 +914,7 @@ class Utilities {
     // clear selection
     clear() {
 
-        console.log('clear selection');
+        // console.log('clear selection');
 
         // clear inputs
         this.cancel_edit();
@@ -1090,7 +1094,7 @@ class DragSelect {
             return;
         }
 
-        const items = active_tab_content.querySelectorAll('.tr');
+        const items = active_tab_content.querySelectorAll('.tr, .card');
         if (items.length === 0) {
             console.log('no cards');
             return;
@@ -1098,7 +1102,6 @@ class DragSelect {
 
         items.forEach(item => {
             item.addEventListener('mousedown', (e) => {
-                console.log('mousedown');
                 this.is_dragging = true;
             })
         });
@@ -1145,8 +1148,7 @@ class DragSelect {
 
             // e.preventDefault();
             // e.stopPropagation();
-
-            console.log('is dragging', this.is_dragging);
+            // console.log('is dragging', this.is_dragging);
 
             if (!isSelecting || this.is_dragging) {
                 return;
@@ -1190,13 +1192,13 @@ class DragSelect {
         });
 
         active_tab_content.addEventListener('mouseup', (e) => {
-            console.log('setting is selecting to false');
+            // console.log('setting is selecting to false');
             isSelecting = false;
             selectionRectangle.style.display = 'none';
         });
 
         active_tab_content.addEventListener('click', (e) => {
-            console.log('click', allowClick);
+            // console.log('click', allowClick);
             if (allowClick) {
                 utilities.clear();
             } else {
@@ -2746,14 +2748,6 @@ class FileManager {
         this.isResizing = true;
 
         this.list_view_settings.col_width[this.currentColumn.dataset.col_name] = this.startWidth;
-
-        // console.log('resizing',
-        //             this.currentColumn,
-        //             this.currentColumn.style.width,
-        //             this.startX,
-        //             this.startWidth,
-        //             this.dragHandle.offsetWidth)
-
         this.currentColumn.removeEventListener('click', this.sortColumn);
 
     }
@@ -3009,12 +3003,21 @@ class FileManager {
         for (let i = 0; i < files_arr.length; i++) {
 
             let f = files_arr[i];
-            let card = this.get_grid_view_item(f);
+            let card = utilities.add_div(['card', 'lazy']) //this.get_grid_view_item(f);
+            card.dataset.id = f.id;
+            card.dataset.href = f.href;
+            card.dataset.name = f.name;
+            card.dataset.size = f.size;
+            card.dataset.mtime = f.mtime;
+            card.dataset.content_type = f.content_type;
+            card.dataset.is_dir = f.is_dir;
+            card.dataset.location = f.location;
             grid.appendChild(card);
 
         }
 
         active_tab_content.appendChild(grid);
+        this.lazy_load_files(files_arr);
 
     }
 
@@ -3062,6 +3065,7 @@ class FileManager {
         icon.draggable = false;
         card.draggable = true;
 
+        card.dataset.id = f.id;
         card.dataset.href = f.href;
         card.dataset.mtime = f.mtime;
         card.dataset.size = f.size;
@@ -3241,14 +3245,12 @@ class FileManager {
                 // navigation.addHistory(file.href);
                 tabManager.addTabHistory(f.href);
 
-                location.value = f.href;
                 if (e.ctrlKey) {
-                    // ipcRenderer.send('get_files', file.href, 1);
-                    fileOperations.getFiles(f.href, 1);
+                    this.get_files(f.href);
+                    tabManager.add_tab(f.href);
                 } else {
-                    location.dispatchEvent(new Event('change'));
+                    this.get_files(f.href);
                 }
-                ipcRenderer.send('saveRecentFile', f.href);
 
             })
 
@@ -3341,13 +3343,10 @@ class FileManager {
             href.addEventListener('click', (e) => {
                 e.preventDefault();
                 ipcRenderer.send('open', f.href);
-                ipcRenderer.send('saveRecentFile', f.href);
-
             })
             img.addEventListener('click', (e) => {
                 e.preventDefault();
                 ipcRenderer.send('open', f.href);
-                ipcRenderer.send('saveRecentFile', f.href);
             })
             size.append(utilities.get_file_size(f["size"]));
             // Context Menu
@@ -3405,6 +3404,8 @@ class FileManager {
 
         // update tab label when location changes
         tabManager.update_tab(utilities.get_location());
+
+        const table_container = utilities.add_div(['table_container']);
 
         let table = document.createElement('table');
         table.classList.add('table');
@@ -3524,6 +3525,8 @@ class FileManager {
         table.appendChild(tbody);
         active_tab_content.appendChild(table);
         this.lazy_load_files(files_arr);
+
+        dragSelect.drag_select();
 
         thead.addEventListener('contextmenu', (e) => {
             e.preventDefault();
@@ -3859,13 +3862,7 @@ class FileManager {
     lazy_load_files(files_arr) {
 
         let active_tab_content = document.querySelector('.active-tab-content');
-        let table = active_tab_content.querySelector('.table');
-        if (!table) {
-            console.log('table not found');
-            return;
-        }
-
-        let lazyItems = table.querySelectorAll(".lazy");
+        let lazyItems = active_tab_content.querySelectorAll(".lazy");
 
         // listen for scroll event
         if ("IntersectionObserver" in window) {
@@ -3886,6 +3883,7 @@ class FileManager {
                 } else {
                     observer.observe(lazy_item);
                 }
+
                 // if (idx === 0) {
                 //     active_tab_content.addEventListener('mouseover', (e) => {
                 //         e.target.focus();
@@ -3924,8 +3922,6 @@ class FileManager {
                         let card = this.get_grid_view_item(f);
                         lazy_item.replaceWith(card);
                     }
-
-
 
                     // Stop watching and remove the placeholder
                     lazy_item.classList.remove("lazy");
@@ -4239,6 +4235,9 @@ class WindowManager {
         let main = document.querySelector('.main');
         window.addEventListener('resize', (e) => {
             main.style.width = window.innerWidth + 'px';
+            let window_settings = settingsManager.get_window_settings();
+            window_settings.main_width = window.innerWidth;
+            ipcRenderer.send('update_window_settings', window_settings);
         })
     }
 
