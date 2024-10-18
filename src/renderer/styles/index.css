@@ -561,7 +561,7 @@ hr {
     width: 100%;
     overflow-x: auto;
     border-collapse: separate;
-    table-layout: fixed;
+    table-layout: fixed !important;
     border-spacing: 0 5px;
     margin-top: -5px;
 }
@@ -598,7 +598,11 @@ hr {
     /* padding-left: 5px; */
 }
 
-.list_view .th_drag_handle:hover {
+.table .drag_handle {
+    user-select: none;
+}
+
+.table .drag_handle:hover {
     background-color: #3794ff !important;
 }
 

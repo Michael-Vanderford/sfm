@@ -699,7 +699,7 @@ class Utilities {
 
     // paste
     paste() {
-        // this.destination = this.location;
+        console.log('running paste', this.destination);
         // check if cut operation
         if (this.is_cut_operation) {
             if (this.cut_arr.length > 0) {
@@ -740,8 +740,6 @@ class Utilities {
     }
 
     cancel_edit() {
-
-        console.log('running cancel edit');
 
         let active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
         let items = active_tab_content.querySelectorAll('.card, .tr');
@@ -2598,6 +2596,7 @@ class FileManager {
 
         this.isResizing = false;
 
+        this.sort_by_column = this.sort_by_column.bind(this);
         this.init_col_resize = this.init_col_resize.bind(this);
         this.resize_col = this.resize_col.bind(this);
         this.stop_col_resize = this.stop_col_resize.bind(this);
@@ -2635,27 +2634,25 @@ class FileManager {
         ipcRenderer.on('get_item', (e, f) => {
 
             let active_tab_content = tabManager.get_active_tab_content();
-            let items = active_tab_content.querySelectorAll('.tr, .card')
-            let idx = 0;
-            items.forEach((item, i) => {
-                if (item.dataset.is_dir === 'true') {
-                    idx = i;
-                }
-            })
+            let table = active_tab_content.querySelector('.table');
+            let tbody = table.querySelector('tbody');
+            let items = active_tab_content.querySelectorAll('.tr')
+            // convert items to array and get number of directories
+            let idx = Array.from(items).filter(item => item.dataset.is_dir === 'true').length;
+            console.log('get item', idx);
 
             let tr = this.get_list_view_item(f);
-            let table = active_tab_content.querySelector('.table');
 
             if (f.is_dir) {
-                table.prepend(tr);
+                tbody.prepend(tr);
             } else {
-                table.insertBefore(tr, items[idx + 1]);
+                // insert row at position idx
+                tbody.insertBefore(tr, tbody.children[idx]);
             }
-
 
             // focus item
             tr.classList.add('highlight_select');
-            let href = tr.querySelector('a');
+            let href = tr.querySelector('input');
             href.focus();
 
             dragSelect.drag_select();
@@ -2748,7 +2745,10 @@ class FileManager {
         this.isResizing = true;
 
         this.list_view_settings.col_width[this.currentColumn.dataset.col_name] = this.startWidth;
-        this.currentColumn.removeEventListener('click', this.sortColumn);
+
+        console.log('current column', this.currentColumn);
+        this.currentColumn.removeEventListener('click', this.sort_by_column);
+
 
     }
 
@@ -2760,21 +2760,10 @@ class FileManager {
 
                 e.stopPropagation();
                 e.preventDefault();
-
                 const newWidth = this.startWidth + (e.pageX - this.startX);
                 this.dragHandle.parentElement.style.width = `${newWidth}px`;
-
                 this.isResizing = true;
-
-                // console.log('resizing',
-                //             this.currentColumn.style.width,
-                //             this.startX,
-                //             this.startWidth,
-                //             newWidth,
-                //             this.dragHandle.parentElement)
-
                 this.currentColumn.style.cursor = 'col-resize';
-
                 this.list_view_settings.col_width[this.currentColumn.dataset.col_name] = newWidth;
 
             });
@@ -2809,7 +2798,8 @@ class FileManager {
             ipcRenderer.send('update_list_view_settings', this.list_view_settings);
 
             setTimeout(() => {
-                this.currentColumn.addEventListener('click', this.sortColumn);
+                console.log('current column', this.currentColumn);
+                this.currentColumn.addEventListener('click', this.sort_by_column);
             }, 100);
 
         }
@@ -3385,6 +3375,18 @@ class FileManager {
         return card;
     }
 
+    // sort event
+    sort_by_column(e) {
+
+        console.log('running sort by column', e.target);
+
+        // let settings = settingsManager.get_settings();
+        // settings.sort_by = e.target.dataset.col_name;
+        // settings.sort_direction = settings.sort_direction === 'asc' ? 'desc' : 'asc';
+        // ipcRenderer.send('update_settings', settings);
+        // this.get_list_view(files_arr);
+    }
+
     // get list view
     get_list_view (files_arr) {
 
@@ -3491,19 +3493,23 @@ class FileManager {
             }
         }
 
-        thead.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            settings.sort_by = e.target.dataset.col_name;
-            settings.sort_direction = settings.sort_direction === 'asc' ? 'desc' : 'asc';
-            ipcRenderer.send('update_settings', settings);
-            this.get_list_view(files_arr);
-        })
+        // handle sort event
+        // tr.removeEventListener('click', this.sort_by_handler);
+        // thead.addEventListener('click', (e) => {
+        //     e.preventDefault();
+        //     e.stopPropagation();
+        //     settings.sort_by = e.target.dataset.col_name;
+        //     settings.sort_direction = settings.sort_direction === 'asc' ? 'desc' : 'asc';
+        //     ipcRenderer.send('update_settings', settings);
+        //     this.get_list_view(files_arr);
+        // })
 
         // table.appendChild(colgroup);
         thead.appendChild(tr);
         table.appendChild(thead);
         table.appendChild(tbody);
+
+        thead.addEventListener('click', this.sort_by_column);
 
         // sort files array
         files_arr = utilities.sort(files_arr, settings.sort_by, settings.sort_direction);
