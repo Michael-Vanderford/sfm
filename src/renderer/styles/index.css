@@ -29,9 +29,9 @@ a:hover {
     text-decoration: underline;
 }
 
-img {
+/* img {
     padding-right: 15px;
-}
+} */
 
 input {
     background-color: var(--input);
@@ -655,14 +655,14 @@ td .div_name a {
     text-overflow: ellipsis;
 }
 
-td .div_name img {
+/* td .div_name img {
     width: 32px;
     padding-right: 10px;
-}
+} */
 
-td .icon {
-    width: 32px;
-}
+/* td .icon {
+    width: 48px;
+} */
 
 
 .card {
@@ -687,8 +687,9 @@ td .icon {
 }
 
 .icon img {
-    width: auto;
-    height: 24px;
+    width: 32px;
+    height: auto;
+    padding-right: 10px;
 }
 
 .svg {

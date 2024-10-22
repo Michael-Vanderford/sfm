@@ -1865,7 +1865,7 @@ class KeyBoardManager {
 
             // prevent inputs from firing global keyboard events
             if (e.target.isContentEditable || e.target.tagName === 'INPUT') {
-                return;
+                // return;
             }
 
             // ctrl + l to focus location
@@ -4035,12 +4035,14 @@ class FileManager {
         });
 
         let table = active_tab_content.querySelector('.table');
+        let tbody = table.querySelector('tbody');
         copy_arr.forEach(f => {
             let tr = this.get_list_view_item(f);
             if (f.is_dir === 'true') {
                 table.prepend(tr);
             } else {
-                table.insertBefore(tr, items[idx + 1]);
+                // table.insertBefore(tr, items[idx + 1]);
+                tbody.insertBefore(tr, tbody.childNodes[idx + 1]);
             }
             tr.classList.add('highlight_select');
         })
