@@ -198,11 +198,11 @@ class Utilities {
 
         this.location_input.addEventListener('keydown', (e) => {
 
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                e.stopPropagation();
-                this.hide_location_input();
-            }
+            // if (e.key === 'Escape') {
+            //     e.preventDefault();
+            //     e.stopPropagation();
+            //     this.hide_location_input();
+            // }
 
             if (e.key === 'Enter') {
                 e.preventDefault();
@@ -515,6 +515,7 @@ class Utilities {
             breadcrumb_item.innerHTML = `${breadcrumb}`;
             // breadcrumb_item.style = 'margin-right: 5px; cursor: pointer;';
             breadcrumb_item.addEventListener('click', (e) => {
+                console.log(e.target)
                 e.preventDefault();
                 e.stopPropagation();
                 let new_location = breadcrumbs.slice(0, index + 1).join('/');
@@ -527,9 +528,10 @@ class Utilities {
 
         // click event for breadcrumbs div
         breadcrumb_div.addEventListener('click', (e) => {
+            console.log('breadcrumbs click', e.target);
             e.preventDefault();
             e.stopPropagation();
-            utilities.show_location_input();
+            this.show_location_input();
         });
 
     }
@@ -554,8 +556,8 @@ class Utilities {
     // show location
     show_location_input() {
         this.location_input.classList.remove('hidden');
-        this.location_input.focus();
         this.breadcrumbs.classList.add('hidden');
+        // this.location_input.focus();
     }
 
     // hide location
@@ -916,6 +918,8 @@ class Utilities {
 
         // clear inputs
         this.cancel_edit();
+
+        this.hide_location_input();
 
         // clear filter
         let filter = document.querySelector('.filter');
@@ -2312,6 +2316,25 @@ class TabManager {
 
             });
 
+        })
+
+        // drop for active tab content
+        tab_content.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            // tab_content.classList.add('highlight');
+        });
+
+        tab_content.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            // tab_content.classList.remove('highlight');
+        })
+
+        tab_content.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('dropping on tab content', e);
         })
 
         // navigation.getCardCount(); // get new card count for navigation

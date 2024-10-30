@@ -736,6 +736,7 @@ class IconManager {
                     return true;
                 }
             })
+            console.log(theme_path);
             return theme_path;
         } catch (err) {
             console.log(err);
