@@ -155,7 +155,7 @@ if (!isMainThread) {
 
                 let msg = {
                     cmd: 'set_msg',
-                    msg: `Compressing ${files_arr.length} files.`,
+                    msg: `<img src="../renderer/icons/spinner.gif" style="width: 12px; height: 12px" alt="loading" />`,
                     has_timeout: 0
                 }
                 parentPort.postMessage(msg);

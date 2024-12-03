@@ -10,13 +10,44 @@ const os = require('os');
 const gio = require('../gio/bin/linux-x64-125/gio');
 const { XMLParser } = require('fast-xml-parser');
 
-
 // // Configure electron-reload
 // electronReload(__dirname, {
 //     electron: electronPath,
 //     forceHardReset: true,
 //     hardResetMethod: 'exit'
 // });
+
+class Watcher {
+
+    // listen for changes to a directory
+    constructor() {
+        this.location = '';
+        this.watcher = null;
+    }
+
+    // watch a directory using node fs.watch
+    watch(directory, callback) {
+
+        if (this.watcher) {
+            this.watcher.close();
+        }
+
+        this.watcher = fs.watch
+        this.watcher(directory, { recursive: true }, (event, filename) => {
+            callback(event, filename);
+        });
+        this.location = directory;
+    }
+
+    // close the watcher
+    close() {
+        if (this.watcher) {
+            this.watcher.close();
+            this.watcher = null;
+            this.location = '';
+        }
+    }
+}
 
 class SettingsManager {
 
@@ -746,16 +777,15 @@ class IconManager {
     // get folder icon
     get_folder_icon(e, href) {
         try {
-
             let folder_icon = `${path.join(this.theme_path, 'default-folder.svg')}`
             if (!fs.existsSync(folder_icon)) {
                 folder_icon = `${path.join(this.theme_path, 'folder.png')}`
             }
             e.sender.send('set_folder_icon', href, folder_icon);
+            // console.log(folder_icon);
         } catch (err) {
             console.log(err);
         }
-
     }
 
 }
@@ -874,6 +904,38 @@ class FileManager {
                 location: this.location
             }
             this.ls_worker.postMessage(ls_data);
+            watcherManager.close();
+            // watcherManager.watch(location, (event, filename) => {
+                // this.watcher_failed = 0;
+                // console.log(event, filename);
+                // if (event === 'rename') {
+                //     if (fs.existsSync(filename)) {
+                //         // win.send('get_item', gio.get_file(filename));
+                //     } else {
+                //         win.send('remove_item', filename);
+                //     }
+                // }
+                // if (event !== 'unknown') {
+                //     if (event === 'moved') {
+                //         win.send('remove_card', filename);
+                //     }
+                //     if (event === 'deleted') {
+                //         win.send('remove_card', filename);
+                //     }
+                //     if (event === 'created' || event === 'changed') {
+                //         // let f = gio.get_file(filename);
+                //         // if (f) {
+                //         //     win.send('get_item', f);
+                //         //     if (f.is_dir) {
+                //         //         win.send('get_folder_count', filename);
+                //         //         win.send('get_folder_size', filename);
+                //         //     }
+                //         // }
+                //     }
+                //     // win.send('clear_folder_size', path.dirname(filename));
+                //     // get_disk_space(href);
+                // }
+            // })
         })
 
         // listen for message from worker
@@ -881,7 +943,6 @@ class FileManager {
             const cmd = data.cmd;
             switch (cmd) {
                 case 'ls':
-                    // this.watch(this.location);
                     win.send('ls', data.files_arr);
                     break;
                 case 'set_msg':
@@ -1238,12 +1299,12 @@ class MenuManager {
                 {
                     label: 'View',
                     submenu: [
-                        {
-                            label: 'Grid',
-                            click: (e) => {
-                                win.send('switch_view', 'grid_view')
-                            }
-                        },
+                        // {
+                        //     label: 'Grid',
+                        //     click: (e) => {
+                        //         win.send('switch_view', 'grid_view')
+                        //     }
+                        // },
                         {
                             label: 'List',
                             click: () => {
@@ -2054,6 +2115,7 @@ class MenuManager {
 }
 
 const settingsManager = new SettingsManager();
+const watcherManager = new Watcher();
 const windowManager = new WindowManager();
 const utilities = new Utilities();
 const iconManager = new IconManager();

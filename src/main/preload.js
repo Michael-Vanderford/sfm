@@ -584,7 +584,7 @@ class Utilities {
                 msg_div.classList.remove('error');
             }
             msg_div.innerHTML = '';
-            msg_div.innerHTML = msg;
+            msg_div.innerHTML = `${msg}`;
         } catch (err) {
             console.log('set_msg error', err);
         }
@@ -1471,10 +1471,10 @@ class WorkspaceManager {
                 workspace.id = 'workspace'
                 workspace.classList.add('workspace')
             }
-            workspace.innerHTML = ''
+            workspace.innerHTML = '';
             this.sidebar.append(workspace);
             // workspace.append(add_header('Workspace'));
-            workspace.append(document.createElement('hr'))
+            workspace.append(document.createElement('hr'));
 
             if (res.length == 0) {
                 workspace.append('Drop a file or folder');
@@ -1487,12 +1487,13 @@ class WorkspaceManager {
             workspace.addEventListener('dragover', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
+
                 workspace.classList.add('active')
             })
 
-            workspace.addEventListener('dragleave', (e) => {
-                workspace.classList.remove('active')
-            })
+            // workspace.addEventListener('dragleave', (e) => {
+            //     workspace.classList.remove('active')
+            // })
 
             workspace.addEventListener('drop', (e) => {
                 let selected_files_arr = utilities.get_selected_files()
@@ -1514,126 +1515,165 @@ class WorkspaceManager {
 
             })
 
+            let table = document.createElement('table');
+            let tbody = document.createElement('tbody');
+            table.classList.add('workspace_table');
+            table.append(tbody);
+
+
             res.forEach(file => {
 
-                let workspace_div = utilities.add_div(['flex', 'item', 'workspace_div'])
-                let workspace_item = utilities.add_div(['workspace_item']);
-                let workspace_item_input = document.createElement('input');
-                let img = document.createElement('img')
+                let tr = document.createElement('tr');
+                tr.classList.add('item', 'workspace_item');
+                tr.dataset.href = file.href;
 
-                img.classList.add('icon', 'icon16')
+                let td1 = document.createElement('td');
+                let td2 = document.createElement('td');
+
+                let img = document.createElement('img');
+                img.classList.add('icon');
+
                 let a = document.createElement('a');
                 a.href = file.href;
+                a.preventDefault;
+
+                let input = document.createElement('input');
+                input.classList.add('input', 'hidden');
+
                 a.innerHTML = file.name;
                 a.preventDefault = true;
-                workspace_item_input.classList.add('input', 'hidden');
-                workspace_item_input.spellcheck = false;
 
-                workspace_div.dataset.href = file.href;
-                workspace_div.dataset.id = file.id;
-                workspace_item_input.value = file.name;
+                td1.append(img);
+                td2.append(a, input);
+                tr.append(td1, td2);
+                tbody.append(tr);
+
+                // let workspace_div = utilities.add_div(['flex', 'item', 'workspace_div']);
+                // let workspace_item = utilities.add_div(['workspace_item']);
+                // let workspace_item_input = document.createElement('input');
+                // let img = document.createElement('img')
+
+                // img.classList.add('icon', 'icon16')
+                // let a = document.createElement('a');
+                // a.href = file.href;
+                // a.innerHTML = file.name;
+                // a.preventDefault = true;
+                // workspace_item_input.classList.add('input', 'hidden');
+                // workspace_item_input.spellcheck = false;
+
+                // workspace_div.dataset.href = file.href;
+                // workspace_div.dataset.id = file.id;
+                // workspace_item_input.value = file.name;
 
                 if (file.content_type === 'inode/directory') {
-
-                    // utilities.set_folder_icon(img);
-
-                    // img.src = folder_icon + 'folder.svg';
-                    workspace_item.append(a);
-                    workspace_div.append(img, workspace_item, workspace_item_input);
-
-                } else {
-                    ipcRenderer.invoke('get_icon', (file.href)).then(res => {
-                        img.src = res;
-                        workspace_item.append(a);
-                        workspace_div.append(img, workspace_item, workspace_item_input);
-
-                    })
-                }
-
-                workspace_div.addEventListener('mouseover', (e) => {
-                    workspace_div.title = `${file.href} \n Rename (F2)`;
-                    a.focus();
-                })
-
-                // Show Workspace Context Menu
-                workspace_div.addEventListener('contextmenu', (e) => {
-                    e.preventDefault();
-                    ipcRenderer.send('workspace_menu', file);
-                    workspace_div.classList.add('highlight_select');
-                });
-
-                // Open Workspace Item
-                workspace_div.addEventListener('click', (e) => {
-
-                    e.preventDefault();
-                    e.stopPropagation();
-
-                    // handle click
-                    if (file.is_dir) {
-                        if (e.ctrlKey) {
-                            // tabManager.addTabHistory();
-                            tabManager.add_tab(file.href);
-                            fileManager.get_files(file.href);
-                        } else {
-                            // clear active tab content
-                            // utilities.clearActiveTabContent();
-                            // viewManager.getView(file.href);
-                            fileManager.get_files(file.href);
-                        }
-                    } else {
-                        ipcRenderer.send('open', file.href);
-                    }
-
-                    // add to history
-                    tabManager.addTabHistory(file.href);
-
-                    // handle highlight
-                    let items = this.sidebar.querySelectorAll('.item');
-                    items.forEach(item => {
-                        item.classList.remove('sidebar_active');
-                    })
-                    workspace_div.classList.add('sidebar_active')
-
-                })
-
-                // Edit workspace item
-                workspace_div.addEventListener('keyup', (e) => {
-
-                    e.preventDefault();
-                    e.stopPropagation();
-
-                    if (e.key === 'F2') {
-                        workspace_item_input.classList.remove('hidden');
-                        workspace_item.classList.add('hidden');
-                        workspace_item_input.focus();
-                        workspace_item_input.select();
-                    }
-                    if (e.key === 'Escape') {
+                    tr.dataset.is_dir = true;
+                    img.src = 'icons/folder.svg';
+                    tr.addEventListener('click', (e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        workspace_item_input.classList.add('hidden');
-                        workspace_item.classList.remove('hidden');
-                    }
+                        fileManager.get_files(file.href);
+                    });
+                } else {
+                    tr.dataset.is_dir = false;
+                    ipcRenderer.invoke('get_icon', (file.href)).then(res => {
+                        img.src = res;
+                    });
+                    tr.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        ipcRenderer.send('open', file.href);
+                    });
+                }
 
-                })
+                // iconManager.get_icons();
 
-                workspace_item_input.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                })
+                // workspace_div.addEventListener('mouseover', (e) => {
+                //     workspace_div.title = `${file.href} \n Rename (F2)`;
+                //     a.focus();
+                // })
 
-                workspace_item_input.addEventListener('keydown', (e) => {
-                    if (e.key === 'Enter') {
-                        ipcRenderer.send('rename_workspace', file.href, e.target.value)
-                    }
-                })
+                // // Show Workspace Context Menu
+                // workspace_div.addEventListener('contextmenu', (e) => {
+                //     e.preventDefault();
+                //     ipcRenderer.send('workspace_menu', file);
+                //     workspace_div.classList.add('highlight_select');
+                // });
+
+                // // Open Workspace Item
+                // workspace_div.addEventListener('click', (e) => {
+
+                //     e.preventDefault();
+                //     e.stopPropagation();
+
+                //     // handle click
+                //     if (file.is_dir) {
+                //         if (e.ctrlKey) {
+                //             // tabManager.addTabHistory();
+                //             tabManager.add_tab(file.href);
+                //             fileManager.get_files(file.href);
+                //         } else {
+                //             // clear active tab content
+                //             // utilities.clearActiveTabContent();
+                //             // viewManager.getView(file.href);
+                //             fileManager.get_files(file.href);
+                //         }
+                //     } else {
+                //         ipcRenderer.send('open', file.href);
+                //     }
+
+                //     // add to history
+                //     tabManager.addTabHistory(file.href);
+
+                //     // handle highlight
+                //     let items = this.sidebar.querySelectorAll('.item');
+                //     items.forEach(item => {
+                //         item.classList.remove('sidebar_active');
+                //     })
+                //     workspace_div.classList.add('sidebar_active')
+
+                // })
+
+                // // Edit workspace item
+                // workspace_div.addEventListener('keyup', (e) => {
+
+                //     e.preventDefault();
+                //     e.stopPropagation();
+
+                //     if (e.key === 'F2') {
+                //         workspace_item_input.classList.remove('hidden');
+                //         workspace_item.classList.add('hidden');
+                //         workspace_item_input.focus();
+                //         workspace_item_input.select();
+                //     }
+                //     if (e.key === 'Escape') {
+                //         e.preventDefault();
+                //         e.stopPropagation();
+                //         workspace_item_input.classList.add('hidden');
+                //         workspace_item.classList.remove('hidden');
+                //     }
+
+                // })
+
+                // workspace_item_input.addEventListener('click', (e) => {
+                //     e.stopPropagation();
+                // })
+
+                // workspace_item_input.addEventListener('keydown', (e) => {
+                //     if (e.key === 'Enter') {
+                //         ipcRenderer.send('rename_workspace', file.href, e.target.value)
+                //     }
+                // })
 
                 // workspace_item.append(img, a);
-                workspace_accordion_container.append(workspace_div);
-                workspace.append(workspace_accordion);
+                // workspace_accordion_container.append(workspace_div);
 
+                workspace.append(workspace_accordion);
                 this.workspace_view.append(workspace);
 
             })
+
+            workspace_accordion_container.append(table);
+
             return callback(workspace);
 
         })
@@ -1723,7 +1763,7 @@ class SideBarManager {
         let window_settings = ipcRenderer.sendSync('get_window_settings');
         if (window_settings.sidebar_width) {
             this.sidebar.style.width = `${window_settings.sidebar_width}px`;
-            this.main.style.width = `${window_settings.main_width}px`;
+            // this.main.style.width = `${window_settings.main_width}px`;
         }
 
         this.sidebar.append(this.home_view, this.workspace_view, this.device_view);
@@ -1835,7 +1875,7 @@ class SideBarManager {
             if (newSidebarWidth < 500) {
                 // Set the new widths
                 sidebar.style.width = newSidebarWidth + "px";
-                main.style.width = newMainWidth + "px";
+                // main.style.width = newMainWidth + "px";
             }
 
         }
@@ -2011,15 +2051,18 @@ class IconManager {
 
     // set folder icon
     set_folder_icon(href, icon) {
+
         let active_tab_content = tabManager.get_active_tab_content();
         let icon_div = active_tab_content.querySelector(`[data-href="${href}"]`);
         if (!icon_div) {
+            console.log('Error: Setting folder icon div');
             return;
         }
         let img = icon_div.querySelector('img');
         if (img) {
             img.src = icon;
         }
+
     }
 
 }
@@ -2637,7 +2680,12 @@ class FileManager {
 
         // get files
         ipcRenderer.on('ls', (e, files_arr) => {
+
             this.files_arr = files_arr;
+            if (this.view === '' || this.view === undefined) {
+                console.log('view is undefined');
+            }
+
             if (this.view === 'list_view') {
                 this.get_list_view(files_arr);
             } else if (this.view === 'grid_view') {
@@ -2997,6 +3045,8 @@ class FileManager {
     // get grid view
     get_grid_view(files_arr) {
 
+        console.log('running get list view');
+
         let active_tab_content = tabManager.get_active_tab_content();
         if (!active_tab_content) {
             this.tabManager.add_tab(utilities.get_location());
@@ -3061,7 +3111,7 @@ class FileManager {
         img.loading = 'lazy';
 
         card.classList.add('lazy');
-        card.style.opacity = 1;
+        // card.style.opacity = 1;
 
         // Populate values
         href.href = f.href;
@@ -3412,6 +3462,8 @@ class FileManager {
 
     // get list view
     get_list_view (files_arr) {
+
+        console.log('running get list view');
 
         utilities.clear_filter();
 
@@ -3874,6 +3926,7 @@ class FileManager {
                 utilities.paste();
             }
             utilities.clear();
+            dragSelect.set_is_dragging(true);
         });
 
         // tr.addEventListener('keydown', (e) => {
@@ -3908,7 +3961,7 @@ class FileManager {
                 if (isInViewport(lazy_item)) {
                     setTimeout(() => {
                         load_item(lazy_item, observer);
-                    }, 50);
+                    }, 10);
                 } else {
                     observer.observe(lazy_item);
                 }
@@ -3940,9 +3993,12 @@ class FileManager {
 
             // Function to load the item
             const load_item = (lazy_item, observer) => {
+
                 const id = lazy_item.dataset.id;
                 if (id) {
                     let f = files_arr.find(f => f.id === id);
+
+                    console.log('lazy load view', this.view);
 
                     if (this.view === 'list_view') {
                         let tr = this.get_list_view_item(f);
@@ -4011,7 +4067,7 @@ class FileManager {
     // request files from location
     get_files(location) {
 
-        utilities.set_msg(`Loading...`);
+        utilities.set_msg(`<img src="../renderer/icons/spinner.gif" style="width: 12px; height: 12px" alt="loading" /> Loading...`);
 
         this.location = location;
         utilities.set_location(location);
@@ -4026,7 +4082,7 @@ class FileManager {
         ipcRenderer.send('is_main', 1);
 
         let main = document.querySelector('.main');
-        main.style.width = window.innerWidth + 'px';
+        // main.style.width = window.innerWidth + 'px';
 
     }
 
@@ -4265,10 +4321,16 @@ class WindowManager {
 
         let main = document.querySelector('.main');
         window.addEventListener('resize', (e) => {
-            main.style.width = window.innerWidth + 'px';
+
             let window_settings = settingsManager.get_window_settings();
-            window_settings.main_width = window.innerWidth;
-            ipcRenderer.send('update_window_settings', window_settings);
+            console.log('window_settings', window_settings);
+
+            if (window_settings.main_width !== 0) {
+                // main.style.width = window.innerWidth + 'px';
+                window_settings.main_width = window.innerWidth;
+                ipcRenderer.send('update_window_settings', window_settings);
+            }
+
         })
     }
 

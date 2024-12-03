@@ -98,6 +98,9 @@ class Utilities {
             return a.source.length - b.source.length;
         });
 
+        
+
+
         let bytes_copied = 0;
         files_arr.forEach((f, i) => {
 
@@ -135,6 +138,12 @@ class Utilities {
                     }
                     parentPort.postMessage(set_progress);
 
+                    let msg = {
+                        cmd: 'set_msg',
+                        msg: `<img src="../renderer/icons/spinner.gif" style="width: 12px; height: 12px" alt="loading" />`
+                    }
+                    parentPort.postMessage(msg);
+
                     if (bytes_copied === max || i === files_arr.length - 1) {
                         let set_progress = {
                             cmd: 'set_progress',
@@ -142,11 +151,20 @@ class Utilities {
                             value: 0
                         }
                         parentPort.postMessage(set_progress);
+
+                        let msg = {
+                            cmd: 'set_msg',
+                            msg: `Done Copying ${i} Files`
+                        }
+                        parentPort.postMessage(msg);
+
                     }
+
                 });
             }
 
         });
+
 
         files_arr = [];
         copy_arr = [];
