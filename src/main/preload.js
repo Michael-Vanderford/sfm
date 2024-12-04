@@ -1082,11 +1082,13 @@ class DragSelect {
     drag_select () {
 
         if (this.is_dragging) {
+            console.log('is dragging');
             return;
         }
 
         const selectionRectangle = document.querySelector('.selection-rectangle');
         if (!selectionRectangle) {
+            console.log('no selection rectangle');
             return;
         }
 
@@ -1200,7 +1202,7 @@ class DragSelect {
         });
 
         active_tab_content.addEventListener('click', (e) => {
-            // console.log('click', allowClick);
+            console.log('click', allowClick, this.is_dragging);
             if (allowClick) {
                 utilities.clear();
             } else {
@@ -3607,7 +3609,7 @@ class FileManager {
         active_tab_content.appendChild(table);
         this.lazy_load_files(files_arr);
 
-        dragSelect.drag_select();
+        // dragSelect.drag_select();
 
         thead.addEventListener('contextmenu', (e) => {
             e.preventDefault();
@@ -3966,15 +3968,16 @@ class FileManager {
                     observer.observe(lazy_item);
                 }
 
-                // if (idx === 0) {
+                if (idx === 0) {
                 //     active_tab_content.addEventListener('mouseover', (e) => {
                 //         e.target.focus();
                 //     });
-                // }
+                }
 
                 if (idx === lazyItems.length - 1) {
                     utilities.set_msg(`Loaded ${files_arr.length} items`);
                     setTimeout(() => {
+                        dragSelect.set_is_dragging(false);
                         dragSelect.drag_select();
                     }, 100);
                 }
@@ -4066,6 +4069,8 @@ class FileManager {
 
     // request files from location
     get_files(location) {
+
+        console.log('getting files', location);
 
         utilities.set_msg(`<img src="../renderer/icons/spinner.gif" style="width: 12px; height: 12px" alt="loading" /> Loading...`);
 
