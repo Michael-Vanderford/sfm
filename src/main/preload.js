@@ -1974,7 +1974,7 @@ class KeyBoardManager {
             }
 
             // del to delete
-            if (e.key === 'Delete') {
+            if (e.key === 'Delete' && !e.target.isContentEditable && !e.target.tagName === 'INPUT') {
                 e.preventDefault();
                 e.stopPropagation();
                 utilities.delete();
