@@ -98,9 +98,6 @@ class Utilities {
             return a.source.length - b.source.length;
         });
 
-        
-
-
         let bytes_copied = 0;
         files_arr.forEach((f, i) => {
 
@@ -144,7 +141,7 @@ class Utilities {
                     }
                     parentPort.postMessage(msg);
 
-                    if (bytes_copied === max || i === files_arr.length - 1) {
+                    if (bytes_copied >= max - 16384) {
                         let set_progress = {
                             cmd: 'set_progress',
                             max: 0,
