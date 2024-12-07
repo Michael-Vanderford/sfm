@@ -106,6 +106,13 @@ class Utilities {
             if (f.is_dir) {
                 // fs.mkdirSync(destination, { recursive: true });
                 gio.mkdir(destination);
+
+                // // get size of destination directory
+                // let size = fs.statSync(destination).size;
+                // if (size) {
+                //     bytes_copied += parseInt(size);
+                // }
+
             } else {
                 // fs.copyFileSync(source, destination);
                 gio.cp_async(source, destination, (err, res) => {
@@ -141,27 +148,24 @@ class Utilities {
                     }
                     parentPort.postMessage(msg);
 
-                    if (bytes_copied >= max - 16384) {
-                        let set_progress = {
-                            cmd: 'set_progress',
-                            max: 0,
-                            value: 0
-                        }
-                        parentPort.postMessage(set_progress);
-
-                        let msg = {
-                            cmd: 'set_msg',
-                            msg: `Done Copying ${i} Files`
-                        }
-                        parentPort.postMessage(msg);
-
-                    }
-
                 });
+
             }
 
         });
 
+        let set_progress = {
+            cmd: 'set_progress',
+            max: 0,
+            value: 0
+        }
+        parentPort.postMessage(set_progress);
+
+        let msg = {
+            cmd: 'set_msg',
+            msg: `Done Copying ${files_arr.length} Files`
+        }
+        parentPort.postMessage(msg);
 
         files_arr = [];
         copy_arr = [];

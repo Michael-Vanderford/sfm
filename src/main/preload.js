@@ -1112,12 +1112,25 @@ class DragSelect {
 
 
         let isSelecting = false;
+        let isScrolling = false;
         let startPosX = 0;
         let startPosY = 0;
         let endPosX = 0;
         let endPosY = 0;
 
+        let scroll_timer;
+        active_tab_content.addEventListener('scroll', (e) => {
 
+            if (scroll_timer) {
+                clearTimeout(scroll_timer);
+            }
+
+            isScrolling = true;
+            scroll_timer = setTimeout(() => {
+                isScrolling = false;
+            }, 100);
+
+        });
 
         active_tab_content.addEventListener('mousedown', (e) => {
 
@@ -1137,22 +1150,10 @@ class DragSelect {
             selectionRectangle.style.height = '0';
             selectionRectangle.style.display = 'block';
 
-            // remove items from selection if not in the drag area
-            // items.forEach(item => {
-            //     item.classList.remove('highlight_select');
-            // });
-
-            // items.forEach(item =>
-            //      item.classList.remove('highlight_select'));
-
         });
 
         let allowClick = 1;
         active_tab_content.addEventListener('mousemove', (e) => {
-
-            // e.preventDefault();
-            // e.stopPropagation();
-            // console.log('is dragging', this.is_dragging);
 
             if (!isSelecting || this.is_dragging) {
                 return;
@@ -1183,8 +1184,8 @@ class DragSelect {
                 if (isSelected) {
                     item.classList.add('highlight_select');
                 } else {
-                    // console.log('removing', item)
-                    if (!this.is_dragging) {
+                    console.log('running');
+                    if (!this.is_dragging && !e.ctrlKey) {
                         item.classList.remove('highlight_select');
                     }
                 }
@@ -1196,13 +1197,12 @@ class DragSelect {
         });
 
         active_tab_content.addEventListener('mouseup', (e) => {
-            // console.log('setting is selecting to false');
             isSelecting = false;
             selectionRectangle.style.display = 'none';
         });
 
         active_tab_content.addEventListener('click', (e) => {
-            console.log('click', allowClick, this.is_dragging);
+
             if (allowClick) {
                 utilities.clear();
             } else {
@@ -1216,6 +1216,119 @@ class DragSelect {
     }
 
 }
+
+// class DragSelect {
+//     constructor() {
+//         this.is_dragging = false;
+//         this.is_selecting = false;
+//         this.drag_select_arr = new Set();
+//         this.startPosX = 0;
+//         this.startPosY = 0;
+//         this.endPosX = 0;
+//         this.endPosY = 0;
+//     }
+
+//     // Initialize the drag select functionality
+//     initialize() {
+//         const selectionRectangle = document.querySelector('.selection-rectangle');
+//         const active_tab_content = document.querySelector('.active-tab-content');
+
+//         if (!selectionRectangle || !active_tab_content) {
+//             console.error('Missing required elements.');
+//             return;
+//         }
+
+//         const items = active_tab_content.querySelectorAll('.tr, .card');
+//         if (!items.length) {
+//             console.log('No selectable items found.');
+//             return;
+//         }
+
+//         // Event listeners
+//         active_tab_content.addEventListener('mousedown', (e) => this.startSelection(e, selectionRectangle, active_tab_content));
+//         active_tab_content.addEventListener('mousemove', (e) => this.updateSelection(e, selectionRectangle, items));
+//         active_tab_content.addEventListener('mouseup', (e) => this.endSelection(e, selectionRectangle, items));
+//     }
+
+//     // Start selection
+//     startSelection(event, selectionRectangle, active_tab_content) {
+//         if (event.button === 2) return; // Ignore right-click
+
+//         this.is_selecting = true;
+//         this.startPosX = event.clientX;
+//         this.startPosY = event.clientY;
+
+//         selectionRectangle.style.left = `${this.startPosX}px`;
+//         selectionRectangle.style.top = `${this.startPosY}px`;
+//         selectionRectangle.style.width = '0';
+//         selectionRectangle.style.height = '0';
+//         selectionRectangle.style.display = 'block';
+
+//         // Prevent text selection
+//         active_tab_content.style.userSelect = 'none';
+//     }
+
+//     // Update selection rectangle and highlight items
+//     updateSelection(event, selectionRectangle, items) {
+//         if (!this.is_selecting) return;
+
+//         this.endPosX = event.clientX;
+//         this.endPosY = event.clientY;
+
+//         const rectWidth = this.endPosX - this.startPosX;
+//         const rectHeight = this.endPosY - this.startPosY;
+
+//         selectionRectangle.style.width = `${Math.abs(rectWidth)}px`;
+//         selectionRectangle.style.height = `${Math.abs(rectHeight)}px`;
+//         selectionRectangle.style.left = rectWidth > 0 ? `${this.startPosX}px` : `${this.endPosX}px`;
+//         selectionRectangle.style.top = rectHeight > 0 ? `${this.startPosY}px` : `${this.endPosY}px`;
+
+//         items.forEach(item => {
+//             const itemRect = item.getBoundingClientRect();
+//             const isWithinSelection = this.isWithinSelection(itemRect);
+
+//             if (isWithinSelection) {
+//                 if (event.ctrlKey) {
+//                     if (this.drag_select_arr.has(item)) {
+//                         item.classList.remove('highlight_select');
+//                         this.drag_select_arr.delete(item);
+//                     } else {
+//                         item.classList.add('highlight_select');
+//                         this.drag_select_arr.add(item);
+//                     }
+//                 } else {
+//                     item.classList.add('highlight_select');
+//                     this.drag_select_arr.add(item);
+//                 }
+//             } else if (!event.ctrlKey) {
+//                 item.classList.remove('highlight_select');
+//                 this.drag_select_arr.delete(item);
+//             }
+//         });
+//     }
+
+//     // End selection
+//     endSelection(event, selectionRectangle, items) {
+//         this.is_selecting = false;
+//         selectionRectangle.style.display = 'none';
+
+//         // Restore text selection
+//         document.querySelector('.active-tab-content').style.userSelect = '';
+
+//         // Ensure selected items are kept highlighted
+//         this.drag_select_arr.forEach(item => item.classList.add('highlight_select'));
+//     }
+
+//     // Check if an item is within the selection rectangle
+//     isWithinSelection(itemRect) {
+//         return (
+//             ((itemRect.left < this.endPosX && itemRect.right > this.startPosX) ||
+//                 (itemRect.left < this.startPosX && itemRect.right > this.endPosX)) &&
+//             ((itemRect.top < this.endPosY && itemRect.bottom > this.startPosY) ||
+//                 (itemRect.top < this.startPosY && itemRect.bottom > this.endPosY))
+//         );
+//     }
+// }
 
 class DeviceManager {
 
@@ -1573,7 +1686,13 @@ class WorkspaceManager {
                     tr.addEventListener('click', (e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        fileManager.get_files(file.href);
+                        if (e.ctrlKey) {
+                            tabManager.addTabHistory();
+                            tabManager.add_tab(file.href);
+                            fileManager.get_files(file.href);
+                        } else {
+                            fileManager.get_files(file.href);
+                        }
                     });
                 } else {
                     tr.dataset.is_dir = false;
