@@ -1061,16 +1061,173 @@ class Utilities {
 
 }
 
+// class DragSelect {
+
+//     constructor() {
+
+//         this.is_dragging = false;
+//         this.drag_select_arr = [];
+//         this.c = 0;
+
+//         this.is_dragging_divs = false;
+
+//     }
+
+//     // set is dragging
+//     set_is_dragging(is_dragging) {
+//         this.is_dragging = is_dragging;
+//     }
+
+//     // drag select
+//     drag_select () {
+
+//         if (this.is_dragging) {
+//             console.log('is dragging');
+//             return;
+//         }
+
+//         const selectionRectangle = document.querySelector('.selection-rectangle');
+//         if (!selectionRectangle) {
+//             console.log('no selection rectangle');
+//             return;
+//         }
+
+//         let active_tab_content = document.querySelector('.active-tab-content');
+//         if (!active_tab_content) {
+//             console.log('no active tab content');
+//             return;
+//         }
+
+//         const items = active_tab_content.querySelectorAll('.tr, .card');
+//         if (items.length === 0) {
+//             console.log('no cards');
+//             return;
+//         }
+
+//         items.forEach(item => {
+//             item.addEventListener('mousedown', (e) => {
+//                 this.is_dragging = true;
+//             })
+//         });
+
+
+//         let isSelecting = false;
+//         let isScrolling = false;
+//         let startPosX = 0;
+//         let startPosY = 0;
+//         let endPosX = 0;
+//         let endPosY = 0;
+
+//         let scroll_timer;
+//         active_tab_content.addEventListener('scroll', (e) => {
+
+//             if (scroll_timer) {
+//                 clearTimeout(scroll_timer);
+//             }
+
+//             isScrolling = true;
+//             scroll_timer = setTimeout(() => {
+//                 isScrolling = false;
+//             }, 100);
+
+//         });
+
+//         active_tab_content.addEventListener('mousedown', (e) => {
+
+//             // console.log('cards', cards)
+
+//             if (e.button === 2) {
+//                 return;
+//             }
+
+//             isSelecting = true;
+//             startPosX = e.clientX;
+//             startPosY = e.clientY;
+
+//             selectionRectangle.style.left = startPosX + 'px';
+//             selectionRectangle.style.top = startPosY + 'px';
+//             selectionRectangle.style.width = '0';
+//             selectionRectangle.style.height = '0';
+//             selectionRectangle.style.display = 'block';
+
+//         });
+
+//         let allowClick = 1;
+//         active_tab_content.addEventListener('mousemove', (e) => {
+
+//             if (!isSelecting || this.is_dragging) {
+//                 return;
+//             }
+
+//             endPosX = e.clientX;
+//             endPosY = e.clientY;
+
+//             const rectWidth = endPosX - startPosX;
+//             const rectHeight = endPosY - startPosY;
+
+//             selectionRectangle.style.width = Math.abs(rectWidth) + 'px';
+//             selectionRectangle.style.height = Math.abs(rectHeight) + 'px';
+//             selectionRectangle.style.left = rectWidth > 0 ? startPosX + 'px' : endPosX + 'px';
+//             selectionRectangle.style.top = rectHeight > 0 ? startPosY + 'px' : endPosY + 'px';
+
+
+//             // Highlight selectable items within the selection area
+//             items.forEach(item => {
+
+//                 const itemRect = item.getBoundingClientRect();
+//                 const isSelected =
+//                     ((itemRect.left < endPosX && itemRect.right > startPosX) ||
+//                     (itemRect.left < startPosX && itemRect.right > endPosX)) &&
+//                     ((itemRect.top < endPosY && itemRect.bottom > startPosY) ||
+//                     (itemRect.top < startPosY && itemRect.bottom > endPosY));
+
+//                 if (isSelected) {
+//                     item.classList.add('highlight_select');
+//                 } else {
+//                     console.log('running');
+//                     if (!this.is_dragging && !e.ctrlKey) {
+//                         item.classList.remove('highlight_select');
+//                     }
+//                 }
+
+//             });
+
+//             allowClick = 0;
+
+//         });
+
+//         active_tab_content.addEventListener('mouseup', (e) => {
+//             isSelecting = false;
+//             selectionRectangle.style.display = 'none';
+//         });
+
+//         active_tab_content.addEventListener('click', (e) => {
+
+//             if (allowClick) {
+//                 utilities.clear();
+//             } else {
+//                 allowClick = 1;
+//             }
+
+//             this.is_dragging = false;
+
+//         })
+
+//     }
+
+// }
+
 class DragSelect {
-
     constructor() {
-
         this.is_dragging = false;
-        this.drag_select_arr = [];
-        this.c = 0;
-
-        this.is_dragging_divs = false;
-
+        this.is_selecting = false;
+        this.allow_click = false;
+        this.allow_add = false;
+        this.drag_select_arr = new Set();
+        this.startPosX = 0;
+        this.startPosY = 0;
+        this.endPosX = 0;
+        this.endPosY = 0;
     }
 
     // set is dragging
@@ -1078,257 +1235,145 @@ class DragSelect {
         this.is_dragging = is_dragging;
     }
 
-    // drag select
-    drag_select () {
-
-        if (this.is_dragging) {
-            console.log('is dragging');
-            return;
-        }
+    // Initialize the drag select functionality
+    initialize() {
 
         const selectionRectangle = document.querySelector('.selection-rectangle');
-        if (!selectionRectangle) {
-            console.log('no selection rectangle');
-            return;
-        }
+        const active_tab_content = document.querySelector('.active-tab-content');
 
-        let active_tab_content = document.querySelector('.active-tab-content');
-        if (!active_tab_content) {
-            console.log('no active tab content');
+        if (!selectionRectangle || !active_tab_content) {
+            console.error('Missing required elements.');
             return;
         }
 
         const items = active_tab_content.querySelectorAll('.tr, .card');
-        if (items.length === 0) {
-            console.log('no cards');
+        if (!items.length) {
+            console.log('No selectable items found.');
             return;
         }
 
-        items.forEach(item => {
-            item.addEventListener('mousedown', (e) => {
-                this.is_dragging = true;
-            })
-        });
+        // Event listeners
+        active_tab_content.addEventListener('mousedown', (e) => this.startSelection(e, selectionRectangle, active_tab_content));
+        active_tab_content.addEventListener('mousemove', (e) => this.updateSelection(e, selectionRectangle, items));
+        active_tab_content.addEventListener('mouseup', (e) => this.endSelection(e, selectionRectangle, items));
 
-
-        let isSelecting = false;
-        let isScrolling = false;
-        let startPosX = 0;
-        let startPosY = 0;
-        let endPosX = 0;
-        let endPosY = 0;
-
-        let scroll_timer;
-        active_tab_content.addEventListener('scroll', (e) => {
-
-            if (scroll_timer) {
-                clearTimeout(scroll_timer);
-            }
-
-            isScrolling = true;
-            scroll_timer = setTimeout(() => {
-                isScrolling = false;
-            }, 100);
-
-        });
-
-        active_tab_content.addEventListener('mousedown', (e) => {
-
-            // console.log('cards', cards)
-
-            if (e.button === 2) {
-                return;
-            }
-
-            isSelecting = true;
-            startPosX = e.clientX;
-            startPosY = e.clientY;
-
-            selectionRectangle.style.left = startPosX + 'px';
-            selectionRectangle.style.top = startPosY + 'px';
-            selectionRectangle.style.width = '0';
-            selectionRectangle.style.height = '0';
-            selectionRectangle.style.display = 'block';
-
-        });
-
-        let allowClick = 1;
-        active_tab_content.addEventListener('mousemove', (e) => {
-
-            if (!isSelecting || this.is_dragging) {
-                return;
-            }
-
-            endPosX = e.clientX;
-            endPosY = e.clientY;
-
-            const rectWidth = endPosX - startPosX;
-            const rectHeight = endPosY - startPosY;
-
-            selectionRectangle.style.width = Math.abs(rectWidth) + 'px';
-            selectionRectangle.style.height = Math.abs(rectHeight) + 'px';
-            selectionRectangle.style.left = rectWidth > 0 ? startPosX + 'px' : endPosX + 'px';
-            selectionRectangle.style.top = rectHeight > 0 ? startPosY + 'px' : endPosY + 'px';
-
-
-            // Highlight selectable items within the selection area
-            items.forEach(item => {
-
-                const itemRect = item.getBoundingClientRect();
-                const isSelected =
-                    ((itemRect.left < endPosX && itemRect.right > startPosX) ||
-                    (itemRect.left < startPosX && itemRect.right > endPosX)) &&
-                    ((itemRect.top < endPosY && itemRect.bottom > startPosY) ||
-                    (itemRect.top < startPosY && itemRect.bottom > endPosY));
-
-                if (isSelected) {
-                    item.classList.add('highlight_select');
-                } else {
-                    console.log('running');
-                    if (!this.is_dragging && !e.ctrlKey) {
-                        item.classList.remove('highlight_select');
-                    }
-                }
-
-            });
-
-            allowClick = 0;
-
-        });
-
-        active_tab_content.addEventListener('mouseup', (e) => {
-            isSelecting = false;
-            selectionRectangle.style.display = 'none';
-        });
-
-        active_tab_content.addEventListener('click', (e) => {
-
-            if (allowClick) {
-                utilities.clear();
-            } else {
-                allowClick = 1;
-            }
-
-            this.is_dragging = false;
-
-        })
+        active_tab_content.addEventListener('click', (e) => this.handleOutsideClick(e, items));
 
     }
 
+    // Start selection
+    startSelection(e, selectionRectangle, active_tab_content) {
+
+        if (e.button === 2) return; // Ignore right-click
+
+        console.log('allow click', this.allow_click);
+
+        this.is_selecting = true;
+
+        this.startPosX = e.clientX;
+        this.startPosY = e.clientY;
+
+        selectionRectangle.style.left = `${this.startPosX}px`;
+        selectionRectangle.style.top = `${this.startPosY}px`;
+        selectionRectangle.style.width = '0';
+        selectionRectangle.style.height = '0';
+        selectionRectangle.style.display = 'block';
+
+        // Prevent text selection
+        active_tab_content.style.userSelect = 'none';
+
+    }
+
+    // Update selection rectangle and highlight items
+    updateSelection(e, selectionRectangle, items) {
+
+        if (!this.is_selecting) return;
+
+        this.endPosX = e.clientX;
+        this.endPosY = e.clientY;
+
+        const rectWidth = this.endPosX - this.startPosX;
+        const rectHeight = this.endPosY - this.startPosY;
+
+        selectionRectangle.style.width = `${Math.abs(rectWidth)}px`;
+        selectionRectangle.style.height = `${Math.abs(rectHeight)}px`;
+        selectionRectangle.style.left = rectWidth > 0 ? `${this.startPosX}px` : `${this.endPosX}px`;
+        selectionRectangle.style.top = rectHeight > 0 ? `${this.startPosY}px` : `${this.endPosY}px`;
+
+        items.forEach(item => {
+            const itemRect = item.getBoundingClientRect();
+            const isWithinSelection = this.isWithinSelection(itemRect);
+
+            if (isWithinSelection) {
+                item.classList.add('highlight_select');
+                this.drag_select_arr.add(item);
+            } else  {
+                if (!e.ctrlKey) {
+                    item.classList.remove('highlight_select');
+                    this.drag_select_arr.delete(item);
+                }
+            }
+
+        });
+
+        this.allow_click = false;
+
+    }
+
+    // End selection
+    endSelection(e, selectionRectangle, items) {
+
+        this.is_selecting = false;
+        selectionRectangle.style.display = 'none';
+
+        // Restore text selection
+        document.querySelector('.active-tab-content').style.userSelect = '';
+
+        // Ensure selected items are kept highlighted
+        this.drag_select_arr.forEach(item => item.classList.add('highlight_select'));
+
+        setTimeout(() => {
+            this.allow_click = true;
+        } , 100);
+
+    }
+
+    // Check if an item is within the selection rectangle
+    isWithinSelection(itemRect) {
+        return (
+            ((itemRect.left < this.endPosX && itemRect.right > this.startPosX) ||
+                (itemRect.left < this.startPosX && itemRect.right > this.endPosX)) &&
+            ((itemRect.top < this.endPosY && itemRect.bottom > this.startPosY) ||
+                (itemRect.top < this.startPosY && itemRect.bottom > this.endPosY))
+        );
+    }
+
+    // Handle click outside selected items
+    handleOutsideClick(e, items) {
+
+        console.log('click outside');
+
+        if (!this.allow_click) {
+            return;
+        }
+
+        const clickedItem = e.target.closest('.tr, .card');
+        if (!clickedItem || !this.drag_select_arr.has(clickedItem)) {
+            this.clearSelection(items);
+        }
+
+
+    }
+
+    // Clear selection
+    clearSelection(items) {
+        items.forEach(item => {
+            item.classList.remove('highlight_select');
+        });
+        this.drag_select_arr.clear();
+    }
+
 }
-
-// class DragSelect {
-//     constructor() {
-//         this.is_dragging = false;
-//         this.is_selecting = false;
-//         this.drag_select_arr = new Set();
-//         this.startPosX = 0;
-//         this.startPosY = 0;
-//         this.endPosX = 0;
-//         this.endPosY = 0;
-//     }
-
-//     // Initialize the drag select functionality
-//     initialize() {
-//         const selectionRectangle = document.querySelector('.selection-rectangle');
-//         const active_tab_content = document.querySelector('.active-tab-content');
-
-//         if (!selectionRectangle || !active_tab_content) {
-//             console.error('Missing required elements.');
-//             return;
-//         }
-
-//         const items = active_tab_content.querySelectorAll('.tr, .card');
-//         if (!items.length) {
-//             console.log('No selectable items found.');
-//             return;
-//         }
-
-//         // Event listeners
-//         active_tab_content.addEventListener('mousedown', (e) => this.startSelection(e, selectionRectangle, active_tab_content));
-//         active_tab_content.addEventListener('mousemove', (e) => this.updateSelection(e, selectionRectangle, items));
-//         active_tab_content.addEventListener('mouseup', (e) => this.endSelection(e, selectionRectangle, items));
-//     }
-
-//     // Start selection
-//     startSelection(event, selectionRectangle, active_tab_content) {
-//         if (event.button === 2) return; // Ignore right-click
-
-//         this.is_selecting = true;
-//         this.startPosX = event.clientX;
-//         this.startPosY = event.clientY;
-
-//         selectionRectangle.style.left = `${this.startPosX}px`;
-//         selectionRectangle.style.top = `${this.startPosY}px`;
-//         selectionRectangle.style.width = '0';
-//         selectionRectangle.style.height = '0';
-//         selectionRectangle.style.display = 'block';
-
-//         // Prevent text selection
-//         active_tab_content.style.userSelect = 'none';
-//     }
-
-//     // Update selection rectangle and highlight items
-//     updateSelection(event, selectionRectangle, items) {
-//         if (!this.is_selecting) return;
-
-//         this.endPosX = event.clientX;
-//         this.endPosY = event.clientY;
-
-//         const rectWidth = this.endPosX - this.startPosX;
-//         const rectHeight = this.endPosY - this.startPosY;
-
-//         selectionRectangle.style.width = `${Math.abs(rectWidth)}px`;
-//         selectionRectangle.style.height = `${Math.abs(rectHeight)}px`;
-//         selectionRectangle.style.left = rectWidth > 0 ? `${this.startPosX}px` : `${this.endPosX}px`;
-//         selectionRectangle.style.top = rectHeight > 0 ? `${this.startPosY}px` : `${this.endPosY}px`;
-
-//         items.forEach(item => {
-//             const itemRect = item.getBoundingClientRect();
-//             const isWithinSelection = this.isWithinSelection(itemRect);
-
-//             if (isWithinSelection) {
-//                 if (event.ctrlKey) {
-//                     if (this.drag_select_arr.has(item)) {
-//                         item.classList.remove('highlight_select');
-//                         this.drag_select_arr.delete(item);
-//                     } else {
-//                         item.classList.add('highlight_select');
-//                         this.drag_select_arr.add(item);
-//                     }
-//                 } else {
-//                     item.classList.add('highlight_select');
-//                     this.drag_select_arr.add(item);
-//                 }
-//             } else if (!event.ctrlKey) {
-//                 item.classList.remove('highlight_select');
-//                 this.drag_select_arr.delete(item);
-//             }
-//         });
-//     }
-
-//     // End selection
-//     endSelection(event, selectionRectangle, items) {
-//         this.is_selecting = false;
-//         selectionRectangle.style.display = 'none';
-
-//         // Restore text selection
-//         document.querySelector('.active-tab-content').style.userSelect = '';
-
-//         // Ensure selected items are kept highlighted
-//         this.drag_select_arr.forEach(item => item.classList.add('highlight_select'));
-//     }
-
-//     // Check if an item is within the selection rectangle
-//     isWithinSelection(itemRect) {
-//         return (
-//             ((itemRect.left < this.endPosX && itemRect.right > this.startPosX) ||
-//                 (itemRect.left < this.startPosX && itemRect.right > this.endPosX)) &&
-//             ((itemRect.top < this.endPosY && itemRect.bottom > this.startPosY) ||
-//                 (itemRect.top < this.startPosY && itemRect.bottom > this.endPosY))
-//         );
-//     }
-// }
 
 class DeviceManager {
 
@@ -4096,8 +4141,11 @@ class FileManager {
                 if (idx === lazyItems.length - 1) {
                     utilities.set_msg(`Loaded ${files_arr.length} items`);
                     setTimeout(() => {
-                        dragSelect.set_is_dragging(false);
-                        dragSelect.drag_select();
+                        // dragSelect.set_is_dragging(false);
+                        // dragSelect.drag_select();
+
+                        dragSelect.initialize();
+
                     }, 100);
                 }
 
