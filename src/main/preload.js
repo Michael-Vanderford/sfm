@@ -1223,6 +1223,7 @@ class DragSelect {
         this.is_selecting = false;
         this.allow_click = false;
         this.allow_add = false;
+        this.initialSelectionState = null;
         this.drag_select_arr = new Set();
         this.startPosX = 0;
         this.startPosY = 0;
@@ -1251,6 +1252,21 @@ class DragSelect {
             console.log('No selectable items found.');
             return;
         }
+
+        items.forEach(item => {
+            item.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                if (e.ctrlKey) {
+                    item.classList.toggle('highlight_select');
+                    if (item.classList.contains('highlight_select')) {
+                        this.drag_select_arr.add(item);
+                    } else {
+                        this.drag_select_arr.delete(item);
+                    }
+                }
+            });
+        });
 
         // Event listeners
         active_tab_content.addEventListener('mousedown', (e) => this.startSelection(e, selectionRectangle, active_tab_content));
@@ -1300,21 +1316,44 @@ class DragSelect {
         selectionRectangle.style.left = rectWidth > 0 ? `${this.startPosX}px` : `${this.endPosX}px`;
         selectionRectangle.style.top = rectHeight > 0 ? `${this.startPosY}px` : `${this.endPosY}px`;
 
+        // Track the initial state of items when Ctrl is pressed
+        if (!this.initialSelectionState && e.ctrlKey) {
+            this.initialSelectionState = new Set();
+            items.forEach(item => {
+                if (item.classList.contains('highlight_select')) {
+                    this.initialSelectionState.add(item);
+                }
+            });
+        }
+
         items.forEach(item => {
             const itemRect = item.getBoundingClientRect();
             const isWithinSelection = this.isWithinSelection(itemRect);
 
-            if (isWithinSelection) {
-                item.classList.add('highlight_select');
-                this.drag_select_arr.add(item);
-            } else  {
-                if (!e.ctrlKey) {
+            if (e.ctrlKey) {
+                // Preserve initial state and toggle only for new selections
+                if (isWithinSelection && !this.initialSelectionState.has(item)) {
+                    item.classList.add('highlight_select');
+                    this.drag_select_arr.add(item);
+                } else if (!isWithinSelection && this.initialSelectionState.has(item)) {
+                    item.classList.add('highlight_select');
+                }
+            } else {
+                // Normal behavior: clear previous selection and select new items
+                if (isWithinSelection) {
+                    item.classList.add('highlight_select');
+                    this.drag_select_arr.add(item);
+                } else {
                     item.classList.remove('highlight_select');
                     this.drag_select_arr.delete(item);
                 }
             }
-
         });
+
+        // Reset the initial state once selection is complete
+        if (!e.ctrlKey) {
+            this.initialSelectionState = null;
+        }
 
         this.allow_click = false;
 
@@ -1352,6 +1391,14 @@ class DragSelect {
     handleOutsideClick(e, items) {
 
         console.log('click outside');
+
+        if (e.ctrlKey) {
+            console.log('allow add true');
+            this.allow_add = true;
+        } else {
+            console.log('allow add false');
+            this.allow_add = false;
+        }
 
         if (!this.allow_click) {
             return;
@@ -4023,11 +4070,13 @@ class FileManager {
         }
 
         // handle tr click
-        tr.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            tr.classList.toggle('highlight_select');
-        });
+        // tr.addEventListener('click', (e) => {
+        //     e.preventDefault();
+        //     e.stopPropagation();
+        //     if (e.ctrlKey) {
+        //         tr.classList.toggle('highlight_select');
+        //     }
+        // });
 
         // handle mouseover
         tr.addEventListener('mouseover', function () {
