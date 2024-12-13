@@ -1254,6 +1254,8 @@ class DragSelect {
         }
 
         items.forEach(item => {
+
+            // handle click
             item.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -1264,8 +1266,69 @@ class DragSelect {
                     } else {
                         this.drag_select_arr.delete(item);
                     }
+                } else {
+                    this.clearSelection(items);
+                    item.classList.add('highlight_select');
+                    this.drag_select_arr.add(item);
                 }
             });
+
+            // handle dragstart
+            item.draggable = true;
+            item.addEventListener('dragstart', (e) => {
+                e.stopPropagation();
+                console.log('is dragging true');
+                this.set_is_dragging(true);
+                this.is_dragging_divs = true;
+            });
+
+            // handle dragover
+            item.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                // e.stopPropagation();
+                if (item.dataset.is_dir) {
+                    item.classList.add('highlight_target');
+                    if (e.ctrlKey) {
+                        e.dataTransfer.dropEffect = "copy";
+                        utilities.set_msg(`Copy items to ${item.dataset.href}`);
+                    } else {
+                        e.dataTransfer.dropEffect = "move";
+                        utilities.set_msg(`Move items to ${item.dataset.href}`);
+                    }
+                    utilities.set_destination(item.dataset.href);
+                    utilities.set_msg(`Destination: ${item.dataset.href}`);
+                } else {
+                    // handle drag/drop on active tab content
+                }
+            });
+
+            // handle drop leave
+            item.addEventListener('dragleave', (e) => {
+                item.classList.remove('highlight_target');
+            });
+
+            // handle drop
+            item.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                ipcRenderer.send('is_main', 0);
+                if (!item.classList.contains('highlight') && item.classList.contains('highlight_target')) {
+                    utilities.copy();
+                    if (e.ctrlKey) {
+                        utilities.paste();
+                    } else {
+                        utilities.move();
+                    }
+                } else {
+                    console.log('did not find target')
+                    ipcRenderer.send('is_main', 1);
+                    utilities.copy();
+                    utilities.paste();
+                }
+                utilities.clear();
+                this.set_is_dragging(true);
+            });
+
         });
 
         // Event listeners
@@ -1390,7 +1453,7 @@ class DragSelect {
     // Handle click outside selected items
     handleOutsideClick(e, items) {
 
-        console.log('click outside');
+        if (this.is_dragging) return;
 
         if (e.ctrlKey) {
             console.log('allow add true');
@@ -1408,7 +1471,6 @@ class DragSelect {
         if (!clickedItem || !this.drag_select_arr.has(clickedItem)) {
             this.clearSelection(items);
         }
-
 
     }
 
@@ -2936,10 +2998,12 @@ class FileManager {
 
             // focus item
             tr.classList.add('highlight_select');
-            let href = tr.querySelector('input');
+            // let href = tr.querySelector('input');
+            console.log(f)
+            let href = tr.querySelector('a');
             href.focus();
 
-            dragSelect.drag_select();
+            dragSelect.initialize();
 
         });
 
@@ -4089,60 +4153,61 @@ class FileManager {
             tr.classList.remove('highlight');
         });
 
-        // handle dragstart
-        tr.draggable = true;
-        tr.addEventListener('dragstart', (e) => {
-            e.stopPropagation();
-            dragSelect.set_is_dragging(true);
-            dragSelect.is_dragging_divs = true;
-        });
+        // // handle dragstart
+        // tr.draggable = true;
+        // tr.addEventListener('dragstart', (e) => {
+        //     e.stopPropagation();
+        //     console.log('is dragging true');
+        //     dragSelect.set_is_dragging(true);
+        //     dragSelect.is_dragging_divs = true;
+        // });
 
-        // handle dragover
-        tr.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            // e.stopPropagation();
-            if (f.is_dir) {
-                tr.classList.add('highlight_target');
-                if (e.ctrlKey) {
-                    e.dataTransfer.dropEffect = "copy";
-                    utilities.set_msg(`Copy items to ${f.href}`);
-                } else {
-                    e.dataTransfer.dropEffect = "move";
-                    utilities.set_msg(`Move items to ${f.href}`);
-                }
-                utilities.set_destination(f.href);
-                utilities.set_msg(`Destination: ${f.href}`);
-            } else {
-                // handle drag/drop on active tab content
-            }
-        });
+        // // handle dragover
+        // tr.addEventListener('dragover', (e) => {
+        //     e.preventDefault();
+        //     // e.stopPropagation();
+        //     if (f.is_dir) {
+        //         tr.classList.add('highlight_target');
+        //         if (e.ctrlKey) {
+        //             e.dataTransfer.dropEffect = "copy";
+        //             utilities.set_msg(`Copy items to ${f.href}`);
+        //         } else {
+        //             e.dataTransfer.dropEffect = "move";
+        //             utilities.set_msg(`Move items to ${f.href}`);
+        //         }
+        //         utilities.set_destination(f.href);
+        //         utilities.set_msg(`Destination: ${f.href}`);
+        //     } else {
+        //         // handle drag/drop on active tab content
+        //     }
+        // });
 
-        // handle drop leave
-        tr.addEventListener('dragleave', (e) => {
-            tr.classList.remove('highlight_target');
-        });
+        // // handle drop leave
+        // tr.addEventListener('dragleave', (e) => {
+        //     tr.classList.remove('highlight_target');
+        // });
 
-        // handle drop
-        tr.addEventListener('drop', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            ipcRenderer.send('is_main', 0);
-            if (!tr.classList.contains('highlight') && tr.classList.contains('highlight_target')) {
-                utilities.copy();
-                if (e.ctrlKey) {
-                    utilities.paste();
-                } else {
-                    utilities.move();
-                }
-            } else {
-                console.log('did not find target')
-                ipcRenderer.send('is_main', 1);
-                utilities.copy();
-                utilities.paste();
-            }
-            utilities.clear();
-            dragSelect.set_is_dragging(true);
-        });
+        // // handle drop
+        // tr.addEventListener('drop', (e) => {
+        //     e.preventDefault();
+        //     e.stopPropagation();
+        //     ipcRenderer.send('is_main', 0);
+        //     if (!tr.classList.contains('highlight') && tr.classList.contains('highlight_target')) {
+        //         utilities.copy();
+        //         if (e.ctrlKey) {
+        //             utilities.paste();
+        //         } else {
+        //             utilities.move();
+        //         }
+        //     } else {
+        //         console.log('did not find target')
+        //         ipcRenderer.send('is_main', 1);
+        //         utilities.copy();
+        //         utilities.paste();
+        //     }
+        //     utilities.clear();
+        //     dragSelect.set_is_dragging(true);
+        // });
 
         // tr.addEventListener('keydown', (e) => {
         //     if (e.key === 'F2') {
