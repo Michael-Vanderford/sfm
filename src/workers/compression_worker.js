@@ -464,6 +464,11 @@ if (!isMainThread) {
                         filename = source.replace('.bz2', '');
                         cmd = 'cd "' + location + '"; /usr/bin/bzip2 -dk "' + source + '"'
                         break;
+                    case source.indexOf('.7z') > -1:
+                        ext = '.7z';
+                        filename = source.replace('.7z', '');
+                        cmd = `cd "${location}"; /usr/bin/7z x "${source}" -o"${filename}"`;
+                        break;
                 }
 
                 if (make_dir) {

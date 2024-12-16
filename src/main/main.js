@@ -1695,7 +1695,15 @@ class MenuManager {
                 this.convert_audio_menu(menu, f.href);
             }
 
-            if (ext == '.xz' || ext == '.gz' || ext == '.zip' || ext == '.img' || ext == '.tar') {
+            if (
+                    ext == '.xz'
+                    || ext == '.gz'
+                    || ext == '.zip'
+                    || ext == '.img'
+                    || ext == '.tar'
+                    || ext == '.7z'
+                )
+            {
                 this.extract_menu(menu, e);
             }
 

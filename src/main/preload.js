@@ -277,10 +277,10 @@ class Utilities {
         return this.home_dir;
     }
 
-    // set is dragging
-    set_is_dragging(is_dragging) {
-        this.is_dragging = is_dragging;
-    }
+    // // set is dragging
+    // set_is_dragging(is_dragging) {
+    //     this.is_dragging = is_dragging;
+    // }
 
     // get destination
     get_destination() {
@@ -495,7 +495,7 @@ class Utilities {
 
     // create a breadcrumbs from location
     get_breadcrumbs(location) {
-        console.log('location', location);
+        // console.log('location', location);
         let breadcrumbs = location.split('/');
         let breadcrumb_div = document.querySelector('.breadcrumbs');
 
@@ -952,7 +952,7 @@ class Utilities {
         });
 
         // set is dragging to false
-        dragSelect.set_is_dragging(false);
+        // dragSelect.set_is_dragging(false);
 
         // this.set_msg('');
     }
@@ -1218,7 +1218,9 @@ class Utilities {
 // }
 
 class DragSelect {
+
     constructor() {
+
         this.is_dragging = false;
         this.is_selecting = false;
         this.allow_click = false;
@@ -1229,6 +1231,7 @@ class DragSelect {
         this.startPosY = 0;
         this.endPosX = 0;
         this.endPosY = 0;
+
     }
 
     // set is dragging
@@ -1253,12 +1256,31 @@ class DragSelect {
             return;
         }
 
+        // handle events for tr and card elements
         items.forEach(item => {
+
+            // prevent active_tab_content event from firing on mouse down
+            item.addEventListener('mousedown', (e) => {
+                e.stopPropagation();
+            });
+
+            // handle mouseover
+            item.addEventListener('mouseover', function () {
+                item.classList.add('highlight');
+                // link.focus();
+            });
+
+            // handle mouseout
+            item.addEventListener('mouseout', function () {
+                item.classList.remove('highlight');
+            });
+
 
             // handle click
             item.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
+                console.log('click');
                 if (e.ctrlKey) {
                     item.classList.toggle('highlight_select');
                     if (item.classList.contains('highlight_select')) {
@@ -1277,17 +1299,21 @@ class DragSelect {
             item.draggable = true;
             item.addEventListener('dragstart', (e) => {
                 e.stopPropagation();
-                console.log('is dragging true');
-                this.set_is_dragging(true);
+                console.log('dragstart');
+                this.is_dragging = true;
                 this.is_dragging_divs = true;
             });
 
             // handle dragover
             item.addEventListener('dragover', (e) => {
                 e.preventDefault();
-                // e.stopPropagation();
-                if (item.dataset.is_dir) {
-                    item.classList.add('highlight_target');
+                if (item.dataset.is_dir === 'true') {
+                    // Add highlight only if not already highlighted
+                    if (!item.dataset.dragover) {
+                        item.dataset.dragover = 'true';
+                        item.classList.add('highlight_target');
+                    }
+
                     if (e.ctrlKey) {
                         e.dataTransfer.dropEffect = "copy";
                         utilities.set_msg(`Copy items to ${item.dataset.href}`);
@@ -1302,9 +1328,12 @@ class DragSelect {
                 }
             });
 
-            // handle drop leave
+            // handle dragleave
             item.addEventListener('dragleave', (e) => {
-                item.classList.remove('highlight_target');
+                if (item.dataset.dragover === 'true') {
+                    delete item.dataset.dragover;
+                    item.classList.remove('highlight_target');
+                }
             });
 
             // handle drop
@@ -1335,7 +1364,6 @@ class DragSelect {
         active_tab_content.addEventListener('mousedown', (e) => this.startSelection(e, selectionRectangle, active_tab_content));
         active_tab_content.addEventListener('mousemove', (e) => this.updateSelection(e, selectionRectangle, items));
         active_tab_content.addEventListener('mouseup', (e) => this.endSelection(e, selectionRectangle, items));
-
         active_tab_content.addEventListener('click', (e) => this.handleOutsideClick(e, items));
 
     }
@@ -1343,11 +1371,12 @@ class DragSelect {
     // Start selection
     startSelection(e, selectionRectangle, active_tab_content) {
 
+        e.stopPropagation();
+
         if (e.button === 2) return; // Ignore right-click
 
-        console.log('allow click', this.allow_click);
-
         this.is_selecting = true;
+        this.is_dragging = false;
 
         this.startPosX = e.clientX;
         this.startPosY = e.clientY;
@@ -1366,7 +1395,11 @@ class DragSelect {
     // Update selection rectangle and highlight items
     updateSelection(e, selectionRectangle, items) {
 
-        if (!this.is_selecting) return;
+        if (!this.is_selecting || this.is_dragging) return;
+
+        this.allow_click = false;
+
+        // console.log('mousemove');
 
         this.endPosX = e.clientX;
         this.endPosY = e.clientY;
@@ -1418,12 +1451,12 @@ class DragSelect {
             this.initialSelectionState = null;
         }
 
-        this.allow_click = false;
-
     }
 
     // End selection
     endSelection(e, selectionRectangle, items) {
+
+        e.stopPropagation();
 
         this.is_selecting = false;
         selectionRectangle.style.display = 'none';
@@ -1436,6 +1469,7 @@ class DragSelect {
 
         setTimeout(() => {
             this.allow_click = true;
+            this.is_dragging = false;
         } , 100);
 
     }
@@ -1456,10 +1490,10 @@ class DragSelect {
         if (this.is_dragging) return;
 
         if (e.ctrlKey) {
-            console.log('allow add true');
+            // console.log('allow add true');
             this.allow_add = true;
         } else {
-            console.log('allow add false');
+            // console.log('allow add false');
             this.allow_add = false;
         }
 
@@ -1661,7 +1695,7 @@ class DeviceManager {
             let width = (parseInt(device.size_used) / parseInt(device.size_total)) * 100;
             device_progress.style = `width: ${width}%`;
 
-            console.log('device', device.name, device.size_total, device.size_used, width);
+            // console.log('device', device.name, device.size_total, device.size_used, width);
 
             device_progress_container.append(device_progress);
             this.device_view.append(device_progress_container);
@@ -2001,10 +2035,10 @@ class WorkspaceManager {
 
 class SideBarManager {
 
-    constructor(Utilities, FileManager) {
+    constructor() {
 
-        this.utilities = Utilities;
-        this.fileManager = FileManager;
+        // this.utilities = Utilities;
+        // this.fileManager = FileManager;
 
         this.sidebar = document.querySelector('.sidebar');
         if (!this.sidebar) {
@@ -2018,34 +2052,35 @@ class SideBarManager {
             return;
         }
 
+        // Get references to the resize handle element
+        this.drag_handle = document.querySelector(".sidebar_draghandle");
+
+        // Get the initial mouse position
+        this.initialMousePos;
+        this.initialSidebarWidth = this.sidebar.offsetWidth;
+        this.initialMainWidth = this.main.offsetWidth;
+
+        this.distanceMoved = 0;
+        this.newSidebarWidth = 0;
+        this.newMainWidth = 0;
+
+        this.is_resizing = false;
+        // console.log('is_resizing', this.is_resizing)
+
         this.home_view = utilities.add_div(['home_view']);
         this.workspace_view = utilities.add_div(['workspace_view']);
         this.device_view = utilities.add_div(['device_view']);
 
         this.init_sidebar();
 
-        // Get references to the resize handle element
-        const resizeHandle = document.querySelector(".sidebar_draghandle");
-
-        // Add event listener to the resize handle
-        resizeHandle.addEventListener("mousedown", this.resize_sidebar);
-
-    }
-
-    init_sidebar() {
-
-        // resize sidebar width
-        let window_settings = ipcRenderer.sendSync('get_window_settings');
-        if (window_settings.sidebar_width) {
-            this.sidebar.style.width = `${window_settings.sidebar_width}px`;
-            // this.main.style.width = `${window_settings.main_width}px`;
-        }
-
         this.sidebar.append(this.home_view, this.workspace_view, this.device_view);
         this.get_home();
+
     }
 
+    // get home
     get_home() {
+
         // create array for bootstrap icons
         let icons = ['house', 'folder', 'file-earmark', 'image', 'music-note', 'camera-video', 'clock-history', 'hdd'];
         let home_dirs = ['Home', 'Documents', 'Downloads', 'Music', 'Pictures', 'Videos', 'Recent', 'File System'];
@@ -2070,14 +2105,14 @@ class SideBarManager {
             this.home_view.append(home_view_item);
 
             home_view_item.addEventListener('click', (e) => {
-                let home_dir = `${this.utilities.home_dir}`;
+                let home_dir = `${utilities.home_dir}`;
                 switch (dir) {
                     case 'Home':
                         if (e.ctrlKey) {
                             tabManager.add_tab(home_dir);
-                            this.fileManager.get_files(`${home_dir}`);
+                            fileManager.get_files(`${home_dir}`);
                         } else {
-                            this.fileManager.get_files(`${home_dir}`);
+                            fileManager.get_files(`${home_dir}`);
                         }
                         break;
                     case 'Recent':
@@ -2091,17 +2126,17 @@ class SideBarManager {
                     case 'File System':
                         if (e.ctrlKey) {
                             tabManager.add_tab('/');
-                            this.fileManager.get_files(`/`);
+                            fileManager.get_files(`/`);
                         } else {
-                            this.fileManager.get_files(`/`);
+                            fileManager.get_files(`/`);
                         }
                         break;
                     default:
                         if (e.ctrlKey) {
                             tabManager.add_tab(home_dir);
-                            this.fileManager.get_files(`${home_dir}/${dir}`);
+                            fileManager.get_files(`${home_dir}/${dir}`);
                         } else {
-                            this.fileManager.get_files(`${home_dir}/${dir}`);
+                            fileManager.get_files(`${home_dir}/${dir}`);
                         }
                         break;
                 }
@@ -2114,60 +2149,88 @@ class SideBarManager {
 
     }
 
+    // init sidebar
+    init_sidebar() {
+
+        // Get references to the resize handle element
+        this.drag_handle = document.querySelector(".sidebar_draghandle");
+
+        // Add event listener to the resize handle
+        document.addEventListener("mousedown", this.start_resize);
+        document.addEventListener("mousemove", this.resize);
+        document.addEventListener("mouseup", this.stop_resize);
+
+        // resize sidebar width
+        let window_settings = ipcRenderer.sendSync('get_window_settings');
+        if (window_settings.sidebar_width) {
+            // console.log('sidebar width', window_settings.sidebar_width);
+            this.sidebar.style.width = `${window_settings.sidebar_width}px`;
+            this.main.style.width = `${window_settings.main_width}px`;
+        }
+
+    }
+
     // handle sidebar resize
-    resize_sidebar(e) {
+    start_resize(e) {
 
-        let sidebar = document.querySelector('.sidebar');
-        let main = document.querySelector('.main');
+        this.is_resizing = true;
 
-        // Get the initial mouse position
-        const initialMousePos = e.clientX;
+        this.sidebar = document.querySelector('.sidebar');
+        this.main = document.querySelector('.main');
 
         // Get the initial widths of sidebar and main divs
-        console.log('sidebar', sidebar)
-        const initialSidebarWidth = sidebar.offsetWidth;
-        const initialMainWidth = main.offsetWidth;
+        this.initialSidebarWidth = this.sidebar.offsetWidth;
+        this.initialMainWidth = this.main.offsetWidth;
 
-        // Add event listeners for mousemove and mouseup events
-        document.addEventListener("mousemove", resize);
-        document.addEventListener("mouseup", stopResize);
+        // Get the initial mouse position
+        this.initialMousePos = e.clientX;
+        this.main.classList.add('margin_left');
 
-        main.classList.add('margin_left');
+        // console.log('start resizing', this.is_resizing, this.initialSidebarWidth, this.initialMainWidth);
 
-        let distanceMoved = 0;
-        let newSidebarWidth = 0;
-        let newMainWidth = 0;
+    }
 
-        // Function to handle the resizing logic
-        function resize(e) {
-            // Calculate the distance moved by the mouse
-            distanceMoved = e.clientX - initialMousePos;
+    // resize sidebar
+    resize(e) {
 
-            // Calculate the new widths of sidebar and main divs
-            newSidebarWidth = initialSidebarWidth + distanceMoved;
-            newMainWidth = initialMainWidth - distanceMoved;
+        // console.log('test', this.is_resizing);
 
-            if (newSidebarWidth < 500) {
-                // Set the new widths
-                sidebar.style.width = newSidebarWidth + "px";
-                // main.style.width = newMainWidth + "px";
-            }
+        if (!this.is_resizing) return;
 
+        // Calculate the distance the mouse has been moved
+        this.distanceMoved = e.clientX - this.initialMousePos;
+
+        // Update the sidebar width
+        this.newSidebarWidth = this.initialSidebarWidth + this.distanceMoved;
+        this.newMainWidth = this.initialMainWidth - this.distanceMoved;
+
+        // Update the sidebar width
+        this.sidebar.style.width = `${this.newSidebarWidth}px`;
+
+        // Update the main width
+        if (this.newSidebarWidth < 500) {
+            this.main.style.width = `${this.newMainWidth}px`;
         }
 
-        // Function to stop the resizing action
-        async function stopResize(e) {
+        // console.log('resizing', this.distanceMoved, this.newSidebarWidth, this.newMainWidth);
 
-            document.removeEventListener("mousemove", resize);
-            document.removeEventListener("mouseup", stopResize);
+    }
 
-            let window_settings = ipcRenderer.sendSync('get_window_settings');
-            window_settings.sidebar_width = newSidebarWidth;
-            window_settings.main_width = newMainWidth;
-            ipcRenderer.send('update_window_settings', window_settings);
+    // stop the resizing
+    stop_resize(e) {
+
+        this.is_resizing = false;
+
+        // console.log('stop resizing', this.newSidebarWidth, this.newMainWidth);
+
+        let window_settings = ipcRenderer.sendSync('get_window_settings');
+        console.log('window settings', window_settings);
+        window_settings.sidebar_width = this.newSidebarWidth;
+        window_settings.main_width = this.newMainWidth;
+        ipcRenderer.send('update_window_settings', window_settings);
 
 
-        }
+
     }
 
 }
@@ -2413,7 +2476,7 @@ class TabManager {
             }
             this.tab_data_arr.push(this.tab_data);
         }
-        console.log('tab data arr', this.tab_data_arr);
+        // console.log('tab data arr', this.tab_data_arr);
 
     }
 
@@ -2652,7 +2715,12 @@ class TabManager {
         tab_content.addEventListener('drop', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            console.log('dropping on tab content', e);
+            if (e.ctrlKey) {
+                alert('2680 fix me - tab_content.addEventListener drop');
+                console.log('2680 fix me - tab_content.addEventListener drop');
+                // utilities.copy();
+                // console.log('dropping on tab content', e);
+            }
         })
 
         // navigation.getCardCount(); // get new card count for navigation
@@ -2983,6 +3051,7 @@ class FileManager {
             let table = active_tab_content.querySelector('.table');
             let tbody = table.querySelector('tbody');
             let items = active_tab_content.querySelectorAll('.tr')
+
             // convert items to array and get number of directories
             let idx = Array.from(items).filter(item => item.dataset.is_dir === 'true').length;
             console.log('get item', idx);
@@ -2998,10 +3067,11 @@ class FileManager {
 
             // focus item
             tr.classList.add('highlight_select');
-            // let href = tr.querySelector('input');
             console.log(f)
             let href = tr.querySelector('a');
             href.focus();
+
+            // tr.dataset.id = utilities.stob(href.innerText);
 
             dragSelect.initialize();
 
@@ -3035,11 +3105,10 @@ class FileManager {
             let item = active_tab_content.querySelector(`[data-id="${f.id}"]`);
 
             if (item) {
-
                 // replace item with new item
                 let tr = fileManager.get_list_view_item(f);
                 item.replaceWith(tr);
-
+                dragSelect.initialize();
             }
 
 
@@ -3740,7 +3809,7 @@ class FileManager {
     // get list view
     get_list_view (files_arr) {
 
-        console.log('running get list view');
+        // console.log('running get list view');
 
         utilities.clear_filter();
 
@@ -4142,16 +4211,16 @@ class FileManager {
         //     }
         // });
 
-        // handle mouseover
-        tr.addEventListener('mouseover', function () {
-            tr.classList.add('highlight');
-            link.focus();
-        });
+        // // handle mouseover
+        // tr.addEventListener('mouseover', function () {
+        //     tr.classList.add('highlight');
+        //     link.focus();
+        // });
 
-        // handle mouseout
-        tr.addEventListener('mouseout', function () {
-            tr.classList.remove('highlight');
-        });
+        // // handle mouseout
+        // tr.addEventListener('mouseout', function () {
+        //     tr.classList.remove('highlight');
+        // });
 
         // // handle dragstart
         // tr.draggable = true;
@@ -4282,7 +4351,7 @@ class FileManager {
                 if (id) {
                     let f = files_arr.find(f => f.id === id);
 
-                    console.log('lazy load view', this.view);
+                    // console.log('lazy load view', this.view);
 
                     if (this.view === 'list_view') {
                         let tr = this.get_list_view_item(f);
@@ -4351,7 +4420,7 @@ class FileManager {
     // request files from location
     get_files(location) {
 
-        console.log('getting files', location);
+        // console.log('getting files', location);
 
         utilities.set_msg(`<img src="../renderer/icons/spinner.gif" style="width: 12px; height: 12px" alt="loading" /> Loading...`);
 
@@ -4411,7 +4480,7 @@ class FileManager {
             }
             tr.classList.add('highlight_select');
         })
-        dragSelect.drag_select();
+        dragSelect.initialize();
         copy_arr = [];
     }
 
@@ -4612,7 +4681,7 @@ class WindowManager {
             console.log('window_settings', window_settings);
 
             if (window_settings.main_width !== 0) {
-                // main.style.width = window.innerWidth + 'px';
+                main.style.width = window.innerWidth + 'px';
                 window_settings.main_width = window.innerWidth;
                 ipcRenderer.send('update_window_settings', window_settings);
             }
