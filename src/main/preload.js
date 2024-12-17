@@ -1223,6 +1223,7 @@ class DragSelect {
 
         this.is_dragging = false;
         this.is_selecting = false;
+        this.is_scrolling = false;
         this.allow_click = false;
         this.allow_add = false;
         this.initialSelectionState = null;
@@ -1366,6 +1367,16 @@ class DragSelect {
         active_tab_content.addEventListener('mouseup', (e) => this.endSelection(e, selectionRectangle, items));
         active_tab_content.addEventListener('click', (e) => this.handleOutsideClick(e, items));
 
+        active_tab_content.addEventListener('scroll', (e) => {
+            console.log('scroll');
+            if (this.is_selecting) {
+                this.is_scrolling = true;
+                // setTimeout(() => {
+                //     this.is_scrolling = false;
+                // }, 100);
+            }
+        });
+
     }
 
     // Start selection
@@ -1413,7 +1424,7 @@ class DragSelect {
         selectionRectangle.style.top = rectHeight > 0 ? `${this.startPosY}px` : `${this.endPosY}px`;
 
         // Track the initial state of items when Ctrl is pressed
-        if (!this.initialSelectionState && e.ctrlKey) {
+        if (!this.initialSelectionState && (e.ctrlKey || this.is_scrolling)) {
             this.initialSelectionState = new Set();
             items.forEach(item => {
                 if (item.classList.contains('highlight_select')) {
@@ -1426,7 +1437,7 @@ class DragSelect {
             const itemRect = item.getBoundingClientRect();
             const isWithinSelection = this.isWithinSelection(itemRect);
 
-            if (e.ctrlKey) {
+            if (e.ctrlKey || this.is_scrolling) {
                 // Preserve initial state and toggle only for new selections
                 if (isWithinSelection && !this.initialSelectionState.has(item)) {
                     item.classList.add('highlight_select');
@@ -1805,7 +1816,7 @@ class WorkspaceManager {
                 utilities.clear()
             })
 
-            workspace_accordion.addEventListener('click', (e) => {
+            workspace_accordion_toggle.addEventListener('click', (e) => {
 
                 workspace_accordion_container.classList.toggle('hidden');
                 if (workspace_accordion_container.classList.contains('hidden')) {
@@ -1893,6 +1904,31 @@ class WorkspaceManager {
                         ipcRenderer.send('open', file.href);
                     });
                 }
+
+                // re order table rows using drag and drop
+                tr.draggable = true;
+                tr.addEventListener('dragstart', (e) => {
+                    e.stopPropagation();
+                });
+
+                tr.addEventListener('dragover', (e) => {
+                    tr.classList.add('dragover');
+                });
+
+                // tr.addEventListener('dragleave', (e) => {
+                //     e.preventDefault();
+                //     e.stopPropagation();
+                //     tr.classList.remove('dragover');
+                // });
+
+                // tr.addEventListener('drop', (e) => {
+                //     e.preventDefault();
+                //     e.stopPropagation();
+                //     tr.classList.remove('dragover');
+                //     tr.insertAdjacentElement('beforebegin', document.querySelector('.dragging'));
+                // });
+
+
 
                 // iconManager.get_icons();
 
@@ -2046,11 +2082,27 @@ class SideBarManager {
             return;
         }
 
+        // handle mousedown for sidebar
+        this.sidebar.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+        })
+
         this.main = document.querySelector('.main');
         if (!this.main) {
             console.log('error getting main');
             return;
         }
+
+        // mouse down for main
+        this.main.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+        });
+
+        // handle mousedown for nav menu
+        let nav_menu = document.querySelector('.navigation');
+        nav_menu.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
+        })
 
         // Get references to the resize handle element
         this.drag_handle = document.querySelector(".sidebar_draghandle");
@@ -2219,16 +2271,16 @@ class SideBarManager {
     // stop the resizing
     stop_resize(e) {
 
+        if (!this.is_resizing) return;
+
         this.is_resizing = false;
 
-        // console.log('stop resizing', this.newSidebarWidth, this.newMainWidth);
-
         let window_settings = ipcRenderer.sendSync('get_window_settings');
-        console.log('window settings', window_settings);
         window_settings.sidebar_width = this.newSidebarWidth;
         window_settings.main_width = this.newMainWidth;
         ipcRenderer.send('update_window_settings', window_settings);
 
+        console.log('window settings', window_settings);
 
 
     }
