@@ -136,7 +136,7 @@ class Utilities {
 
         this.byteUnits = [' kB', ' MB', ' GB', ' TB', 'PB', 'EB', 'ZB', 'YB'];
 
-        this.ls_worker = new worker.Worker('./src/workers/ls_worker.js');
+        this.ls_worker = new worker.Worker(path.join(__dirname, '../workers/ls_worker.js'));
         this.ls_worker.on('message', (data) => {
             if (data.cmd === 'folder_size_done') {
                 let folder_data = {
@@ -188,7 +188,7 @@ class Utilities {
         })
 
         // listen for message from worker
-        this.paste_worker = new worker.Worker('./src/workers/paste_worker.js');
+        this.paste_worker = new worker.Worker(path.join(__dirname, '../workers/paste_worker.js'));
         this.paste_worker.on('message', (data) => {
             const cmd = data.cmd;
             switch (cmd) {
@@ -210,7 +210,7 @@ class Utilities {
         });
 
         // init move worker
-        this.move_worker = new worker.Worker('./src/workers/move_worker.js');
+        this.move_worker = new worker.Worker(path.join(__dirname, '../workers/move_worker.js'));
         this.move_worker.on('message', (data) => {
             const cmd = data.cmd;
             switch (cmd) {
@@ -254,7 +254,7 @@ class Utilities {
                     continue;
                 }
 
-                let compression_worker = new worker.Worker('./src/workers/compression_worker.js');
+                let compression_worker = new worker.Worker(path.join(__dirname, '../workers/compression_worker.js'));
                 compression_worker.on('message', (data) => {
 
                     if (data.cmd === 'set_msg') {
@@ -298,7 +298,7 @@ class Utilities {
 
             let progress_id = 0;
 
-            let compression_worker = new worker.Worker('./src/workers/compression_worker.js');
+            let compression_worker = new worker.Worker(path.join(__dirname, '../workers/compression_worker.js'));
             compression_worker.on('message', (data) => {
                 if (data.cmd === 'set_msg') {
                     win.send('set_msg', data.msg, data.has_timeout);
@@ -826,7 +826,7 @@ class DeviceManager {
 
     constructor() {
 
-        this.device_worker = new worker.Worker('./src/workers/device_worker.js');
+        this.device_worker = new worker.Worker(path.join(__dirname, '../workers/device_worker.js'));
 
         // Get Devices
         ipcMain.on('get_devices', (e) => {
@@ -926,7 +926,7 @@ class FileManager {
         this.watcher_enabled = true;
 
         // send location to worker
-        this.ls_worker = new worker.Worker('./src/workers/ls_worker.js');
+        this.ls_worker = new worker.Worker(path.join(__dirname, '../workers/ls_worker.js'));
 
         // listen for ls event
         ipcMain.on('ls', (e, location) => {
@@ -1256,7 +1256,7 @@ class MenuManager {
     constructor() {
 
         // for template creation
-        this.paste_worker = new worker.Worker('./src/workers/paste_worker.js');
+        this.paste_worker = new worker.Worker(path.join(__dirname, '../workers/paste_worker.js'));
         this.paste_worker.on('message', (data) => {
             switch (data.cmd) {
                 case 'cp_template_done':
