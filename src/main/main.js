@@ -4,11 +4,9 @@ const worker = require('worker_threads');
 const { execSync } = require('child_process');
 const exec = require('child_process').exec;
 const fs = require('fs');
-const electronReload = require('electron-reload');
 const path = require('path');
 const os = require('os');
 const gio = require('../gio/bin/linux-x64-125/gio');
-const { XMLParser } = require('fast-xml-parser');
 
 // // Configure electron-reload
 // electronReload(__dirname, {
