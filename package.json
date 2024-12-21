@@ -2,6 +2,7 @@
     "name": "sfm",
     "version": "1.0.0",
     "description": "String File Manager",
+    "homepage": "https://github.com/michael-vanderford/sfm",
     "main": "src/main/main.js",
     "scripts": {
         "start": "electron .",
