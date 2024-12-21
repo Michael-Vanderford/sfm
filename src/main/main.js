@@ -641,7 +641,8 @@ class WorkspaceManager {
 
             selected_files_arr.forEach(f => {
                 let file = gio.get_file(f.href);
-                workspace_data.push(file)
+                // add to top of array
+                workspace_data.unshift(file);
             })
             fs.writeFileSync(workspace_file, JSON.stringify(workspace_data, null, 4));
             win.send('get_workspace');
@@ -690,6 +691,39 @@ class WorkspaceManager {
             }
 
         })
+
+        ipcMain.on('reorder_workspace', (e, files_arr) => {
+
+            let workspace_file = path.join(app.getPath('userData'), 'workspace.json');
+
+            try {
+                // Read and parse the current workspace file
+                const workspace_data = JSON.parse(fs.readFileSync(workspace_file, 'utf8'));
+
+                // Create a new array based on the order in files_arr
+                const reordered_data = files_arr.map((f, i) => {
+                    const entry = workspace_data.find(data => data.href === f);
+
+                    if (entry) {
+                        // Update the order if required
+                        return { ...entry, order: i };
+                    } else {
+                        console.error("Workspace entry not found with href:", f);
+                        return null; // Handle missing entries gracefully
+                    }
+                }).filter(entry => entry !== null); // Remove null entries (if any)
+
+                // Write the reordered array back to the file
+                fs.writeFileSync(workspace_file, JSON.stringify(reordered_data, null, 4));
+                console.log('Workspace reordered successfully.');
+
+                // Notify the renderer to refresh the workspace
+                win.send('get_workspace');
+            } catch (error) {
+                console.error("Failed to reorder workspace:", error.message);
+            }
+
+        });
 
     }
 

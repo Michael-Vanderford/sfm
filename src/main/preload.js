@@ -951,6 +951,21 @@ class Utilities {
             item.classList.remove('highlight_select', 'highlight');
         });
 
+        // clear workspace
+        let workspace_items = document.querySelectorAll('.workspace_item');
+        if (workspace_items) {
+            workspace_items.forEach(i => {
+                let input_div = i.querySelector('.input_div');
+                let href_div = i.querySelector('.href_div');
+                if (input_div) {
+                    input_div.classList.add('hidden');
+                }
+                if (href_div) {
+                    href_div.classList.remove('hidden');
+                }
+            });
+        }
+
         // set is dragging to false
         // dragSelect.set_is_dragging(false);
 
@@ -1733,6 +1748,9 @@ class WorkspaceManager {
 
     constructor () {
 
+        this.is_moving = false;
+        this.draggedRow = null;
+
         this.sidebar = document.querySelector('.sidebar');
         if (!this.sidebar) {
             return;
@@ -1766,6 +1784,11 @@ class WorkspaceManager {
 
         ipcRenderer.invoke('get_workspace').then(res => {
 
+            let table = document.createElement('table');
+            let tbody = document.createElement('tbody');
+            table.classList.add('workspace_table');
+            table.append(tbody);
+
             // add toggle for workspace items
             let workspace_accordion = utilities.add_div(['workspace_accordion']);
             let workspace_accordion_container = utilities.add_div(['workspace_accordion_container']);
@@ -1787,7 +1810,6 @@ class WorkspaceManager {
             }
             workspace.innerHTML = '';
             this.sidebar.append(workspace);
-            // workspace.append(add_header('Workspace'));
             workspace.append(document.createElement('hr'));
 
             if (res.length == 0) {
@@ -1798,23 +1820,37 @@ class WorkspaceManager {
                 workspace.classList.remove('active')
             })
 
-            workspace.addEventListener('dragover', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
+            // let drop_tr = document.createElement('tr');
+            // // drop_tr.style = 'border-bottom: 2px solid blue; height: 0px;';
 
-                workspace.classList.add('active')
-            })
+            // workspace.addEventListener('dragover', (e) => {
 
-            // workspace.addEventListener('dragleave', (e) => {
-            //     workspace.classList.remove('active')
+            //     e.preventDefault();
+            //     e.stopPropagation();
+
+            //     // insert drop_tr at mouse position position
+            //     let x = e.clientX;
+            //     let y = e.clientY;
+            //     let elem = document.elementFromPoint(x, y);
+            //     if (elem) {
+            //         elem.insertAdjacentElement('beforebegin', drop_tr);
+            //     }
+
             // })
 
-            workspace.addEventListener('drop', (e) => {
-                let selected_files_arr = utilities.get_selected_files()
-                ipcRenderer.send('add_workspace', selected_files_arr);
-                selected_files_arr = [];
-                utilities.clear()
-            })
+            // workspace.addEventListener('dragleave', (e) => {
+            //     if (!this.is_moving) {
+            //         table.removeChild(drop_tr);
+            //     }
+            // });
+
+            // // workspace drop
+            // workspace.addEventListener('drop', (e) => {
+            //     let selected_files_arr = utilities.get_selected_files()
+            //     ipcRenderer.send('add_workspace', selected_files_arr);
+            //     selected_files_arr = [];
+            //     utilities.clear()
+            // })
 
             workspace_accordion_toggle.addEventListener('click', (e) => {
 
@@ -1829,13 +1865,9 @@ class WorkspaceManager {
 
             })
 
-            let table = document.createElement('table');
-            let tbody = document.createElement('tbody');
-            table.classList.add('workspace_table');
-            table.append(tbody);
-
-
             res.forEach(file => {
+
+                console.log('file', file);
 
                 let tr = document.createElement('tr');
                 tr.classList.add('item', 'workspace_item');
@@ -1849,35 +1881,24 @@ class WorkspaceManager {
 
                 let a = document.createElement('a');
                 a.href = file.href;
-                a.preventDefault;
 
                 let input = document.createElement('input');
-                input.classList.add('input', 'hidden');
+                input.value = file.name;
+                input.classList.add('input');
 
                 a.innerHTML = file.name;
                 a.preventDefault = true;
 
+                let href_div = utilities.add_div(['href_div']);
+                href_div.append(a);
+
+                let input_div = utilities.add_div(['input_div', 'hidden']);
+                input_div.append(input);
+
                 td1.append(img);
-                td2.append(a, input);
+                td2.append(href_div, input_div);
                 tr.append(td1, td2);
                 tbody.append(tr);
-
-                // let workspace_div = utilities.add_div(['flex', 'item', 'workspace_div']);
-                // let workspace_item = utilities.add_div(['workspace_item']);
-                // let workspace_item_input = document.createElement('input');
-                // let img = document.createElement('img')
-
-                // img.classList.add('icon', 'icon16')
-                // let a = document.createElement('a');
-                // a.href = file.href;
-                // a.innerHTML = file.name;
-                // a.preventDefault = true;
-                // workspace_item_input.classList.add('input', 'hidden');
-                // workspace_item_input.spellcheck = false;
-
-                // workspace_div.dataset.href = file.href;
-                // workspace_div.dataset.id = file.id;
-                // workspace_item_input.value = file.name;
 
                 if (file.content_type === 'inode/directory') {
                     tr.dataset.is_dir = true;
@@ -1894,7 +1915,8 @@ class WorkspaceManager {
                         }
                     });
                 } else {
-                    tr.dataset.is_dir = false;
+
+                    // tr.dataset.is_dir = false;
                     ipcRenderer.invoke('get_icon', (file.href)).then(res => {
                         img.src = res;
                     });
@@ -1903,119 +1925,152 @@ class WorkspaceManager {
                         e.stopPropagation();
                         ipcRenderer.send('open', file.href);
                     });
+
                 }
 
-                // re order table rows using drag and drop
+                // Reorder table rows using drag and drop
                 tr.draggable = true;
+                this.draggedRow = null; // Keep track of the dragged row
+
                 tr.addEventListener('dragstart', (e) => {
                     e.stopPropagation();
+                    this.draggedRow = tr; // Set the currently dragged row
+                    this.is_moving = true;
+                    tr.classList.add('dragging');
+                    console.log('dragstart', tr);
                 });
 
                 tr.addEventListener('dragover', (e) => {
-                    tr.classList.add('dragover');
+                    e.preventDefault(); // Allow the drop event
+                    e.stopPropagation();
+                    tr.classList.add('drag_over'); // Highlight potential drop target
                 });
 
-                // tr.addEventListener('dragleave', (e) => {
-                //     e.preventDefault();
-                //     e.stopPropagation();
-                //     tr.classList.remove('dragover');
-                // });
+                tr.addEventListener('dragleave', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    tr.classList.remove('drag_over'); // Remove highlight after leaving
+                });
 
-                // tr.addEventListener('drop', (e) => {
-                //     e.preventDefault();
-                //     e.stopPropagation();
-                //     tr.classList.remove('dragover');
-                //     tr.insertAdjacentElement('beforebegin', document.querySelector('.dragging'));
-                // });
+                // Show Workspace Context Menu
+                tr.addEventListener('contextmenu', (e) => {
+                    e.preventDefault();
+                    ipcRenderer.send('workspace_menu', file);
+                    tr.classList.add('highlight_select');
+                });
 
+                tr.addEventListener('mouseover', (e) => {
+                    a.focus();
+                })
 
+                // Edit workspace item
+                tr.addEventListener('keyup', (e) => {
 
-                // iconManager.get_icons();
+                    console.log(e.key);
+                    e.preventDefault();
+                    e.stopPropagation();
 
-                // workspace_div.addEventListener('mouseover', (e) => {
-                //     workspace_div.title = `${file.href} \n Rename (F2)`;
-                //     a.focus();
-                // })
+                    if (e.key === 'F2') {
+                        input_div.classList.remove('hidden');
+                        href_div.classList.add('hidden');
+                        input.focus();
+                        input.select();
+                    }
 
-                // // Show Workspace Context Menu
-                // workspace_div.addEventListener('contextmenu', (e) => {
-                //     e.preventDefault();
-                //     ipcRenderer.send('workspace_menu', file);
-                //     workspace_div.classList.add('highlight_select');
-                // });
+                    if (e.key === 'Escape') {
+                        // e.preventDefault();
+                        // e.stopPropagation();
+                        input_div.classList.add('hidden');
+                        href_div.classList.remove('hidden');
+                    }
 
-                // // Open Workspace Item
-                // workspace_div.addEventListener('click', (e) => {
+                })
 
-                //     e.preventDefault();
-                //     e.stopPropagation();
+                input.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                })
 
-                //     // handle click
-                //     if (file.is_dir) {
-                //         if (e.ctrlKey) {
-                //             // tabManager.addTabHistory();
-                //             tabManager.add_tab(file.href);
-                //             fileManager.get_files(file.href);
-                //         } else {
-                //             // clear active tab content
-                //             // utilities.clearActiveTabContent();
-                //             // viewManager.getView(file.href);
-                //             fileManager.get_files(file.href);
-                //         }
-                //     } else {
-                //         ipcRenderer.send('open', file.href);
-                //     }
+                input.addEventListener('keydown', (e) => {
 
-                //     // add to history
-                //     tabManager.addTabHistory(file.href);
+                    if (e.key === 'Escape') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        input_div.classList.add('hidden');
+                        href_div.classList.remove('hidden');
+                    }
 
-                //     // handle highlight
-                //     let items = this.sidebar.querySelectorAll('.item');
-                //     items.forEach(item => {
-                //         item.classList.remove('sidebar_active');
-                //     })
-                //     workspace_div.classList.add('sidebar_active')
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        ipcRenderer.send('rename_workspace', file.href, input.value);
+                        input_div.classList.add('hidden');
+                        href_div.classList.remove('hidden');
+                    }
 
-                // })
-
-                // // Edit workspace item
-                // workspace_div.addEventListener('keyup', (e) => {
-
-                //     e.preventDefault();
-                //     e.stopPropagation();
-
-                //     if (e.key === 'F2') {
-                //         workspace_item_input.classList.remove('hidden');
-                //         workspace_item.classList.add('hidden');
-                //         workspace_item_input.focus();
-                //         workspace_item_input.select();
-                //     }
-                //     if (e.key === 'Escape') {
-                //         e.preventDefault();
-                //         e.stopPropagation();
-                //         workspace_item_input.classList.add('hidden');
-                //         workspace_item.classList.remove('hidden');
-                //     }
-
-                // })
-
-                // workspace_item_input.addEventListener('click', (e) => {
-                //     e.stopPropagation();
-                // })
-
-                // workspace_item_input.addEventListener('keydown', (e) => {
-                //     if (e.key === 'Enter') {
-                //         ipcRenderer.send('rename_workspace', file.href, e.target.value)
-                //     }
-                // })
-
-                // workspace_item.append(img, a);
-                // workspace_accordion_container.append(workspace_div);
+                })
 
                 workspace.append(workspace_accordion);
                 this.workspace_view.append(workspace);
 
             })
+
+            // add drop event listeners for tbody
+            tbody.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+
+                if (this.is_moving && this.draggedRow) {
+                    // Get the element at the drop position
+                    const x = e.clientX;
+                    const y = e.clientY;
+                    const targetElem = document.elementFromPoint(x, y);
+
+                    if (targetElem && targetElem.closest('tr') && targetElem.closest('tbody')) {
+                        const targetRow = targetElem.closest('tr');
+
+                        if (targetRow !== this.draggedRow) {
+                            // Insert the dragged row before the target row
+                            targetRow.insertAdjacentElement('beforebegin', this.draggedRow);
+                            console.log('Row moved:', this.draggedRow, 'before', targetRow);
+                        }
+                    }
+
+                    // get all workspace items
+                    let workspace_items = tbody.querySelectorAll('.workspace_item');
+                    let workspace_arr = [];
+                    workspace_items.forEach(item => {
+                        workspace_arr.push(item.dataset.href);
+                    })
+
+                    ipcRenderer.send('reorder_workspace', workspace_arr);
+
+                    // Clean up
+                    this.is_moving = false;
+                    this.draggedRow.classList.remove('dragging');
+                    tbody.querySelectorAll('.drag_over').forEach((row) => row.classList.remove('drag_over'));
+                    this.draggedRow = null;
+
+                } else if (!this.is_moving) {
+
+                    let selected_files_arr = utilities.get_selected_files();
+                    ipcRenderer.send('add_workspace', selected_files_arr);
+
+                    selected_files_arr = [];
+                    utilities.clear();
+
+                }
+
+                console.log(this.is_moving, this.draggedRow)
+
+            });
+
+            // Ensure rows don't have leftover 'dragover' styles
+            tbody.addEventListener('dragend', () => {
+                tbody.querySelectorAll('.drag_over').forEach((row) => row.classList.remove('dragover'));
+                if (this.draggedRow) this.draggedRow.classList.remove('dragging');
+                this.is_moving = false;
+                this.draggedRow = null;
+            });
 
             workspace_accordion_container.append(table);
 
