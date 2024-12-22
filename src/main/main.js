@@ -809,12 +809,31 @@ class IconManager {
     // get folder icon
     get_folder_icon(e, href) {
         try {
-            let folder_icon = `${path.join(this.theme_path, 'default-folder.svg')}`
-            if (!fs.existsSync(folder_icon)) {
-                folder_icon = `${path.join(this.theme_path, 'folder.png')}`
-            }
+            // let folder_icon = `${path.join(this.theme_path, 'folder.svg')}`
+            // if (!fs.existsSync(folder_icon)) {
+            //     folder_icon = `${path.join(this.theme_path, 'folder.png')}`
+            // }
+            // check for folder icons
+            let folder_icon = '';
+            let folder_icons = [
+                'folder.svg',
+                'folder.png',
+                'default-folder.svg',
+                'default-folder.png'
+            ]
+
+            folder_icons.every(icon => {
+                let icon_path = path.join(this.theme_path, icon);
+                if (fs.existsSync(icon_path)) {
+                    folder_icon = icon_path;
+                    return false;
+                } else {
+                    folder_icon = path.join(__dirname, 'assets/icons/default-folder.svg');
+                    return true;
+                }
+            })
             e.sender.send('set_folder_icon', href, folder_icon);
-            // console.log(folder_icon);
+            console.log(folder_icon);
         } catch (err) {
             console.log(err);
         }
