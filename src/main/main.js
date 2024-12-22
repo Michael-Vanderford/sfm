@@ -829,7 +829,7 @@ class IconManager {
                     folder_icon = icon_path;
                     return false;
                 } else {
-                    folder_icon = path.join(__dirname, '../assets/icons/default-folder.svg');
+                    folder_icon = path.join(__dirname, 'assets/icons/folder.svg');
                     return true;
                 }
             })
