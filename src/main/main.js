@@ -788,7 +788,8 @@ class IconManager {
                 path.join(icon_dir, 'places/48/'),
                 path.join(icon_dir, 'places/64/'),
                 path.join(icon_dir, 'places/128/'),
-                path.join(icon_dir, 'places/symbolic/')
+                path.join(icon_dir, 'places/symbolic/'),
+                path.join(icon_dir, 'scalable/')
             ];
             icon_dirs.every(icon_dir => {
                 if (fs.existsSync(icon_dir)) {
