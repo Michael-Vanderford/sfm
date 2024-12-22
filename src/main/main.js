@@ -1413,7 +1413,8 @@ class MenuManager {
                     label: 'Disk Usage Analyzer',
                     // icon: path.join(__dirname, 'assets/icons/menu/diskusage.png'),
                     click: () => {
-                        exec(`baobab ${destination}`);
+                        exec(`baobab '${destination}'`);
+                        win.send('clear_highlight');
                     }
 
                 }
@@ -1578,7 +1579,8 @@ class MenuManager {
                     label: 'Disk Usage Analyzer',
                     // icon: path.join(__dirname, 'assets/icons/menu/diskusage.png'),
                     click: () => {
-                        exec(`baobab ${f.href}`);
+                        exec(`baobab '${f.href}'`);
+                        win.send('clear_highlight');
                     }
 
                 },
@@ -1795,7 +1797,12 @@ class MenuManager {
                     click: () => {
                         let cmd = settings['disk_utility']
                         exec(cmd, (err) => {
-                            console.log(err)
+                            if (err) {
+                                win.send('msg', 'Error: ' + err.message);
+                            }
+
+                            win.send('clear_highlight');
+
                         });
                     }
                 }

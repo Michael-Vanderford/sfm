@@ -240,7 +240,7 @@ class Utilities {
             this.set_msg(msg);
         });
 
-        ipcRenderer.on('clear_selection', (e) => {
+        ipcRenderer.on('clear_highlight', (e) => {
             this.clear_highlight();
         });
 
@@ -1482,7 +1482,7 @@ class DragSelect {
     // End selection
     endSelection(e, selectionRectangle, items) {
 
-        e.stopPropagation();
+        // e.stopPropagation();
 
         this.is_selecting = false;
         selectionRectangle.style.display = 'none';
@@ -2263,9 +2263,9 @@ class SideBarManager {
         this.drag_handle = document.querySelector(".sidebar_draghandle");
 
         // Add event listener to the resize handle
-        document.addEventListener("mousedown", this.start_resize);
-        document.addEventListener("mousemove", this.resize);
-        document.addEventListener("mouseup", this.stop_resize);
+        document.addEventListener('mousedown', this.start_resize);
+        document.addEventListener('mousemove', this.resize);
+        document.addEventListener('mouseup', this.stop_resize);
 
         // resize sidebar width
         let window_settings = ipcRenderer.sendSync('get_window_settings');
@@ -3073,7 +3073,6 @@ class FileManager {
         this.location = '';
 
         this.tab_data_arr = [];
-
         this.drag_handle = null;
 
         // get view settings
@@ -3110,10 +3109,11 @@ class FileManager {
         this.startX = 0;
         this.startWidth = 0;
 
-        this.isResizing = false;
+        this.is_resizing = false;
 
         this.sort_by_column = this.sort_by_column.bind(this);
-        this.init_col_resize = this.init_col_resize.bind(this);
+
+        // this.init_col_resize = this.init_col_resize.bind(this);
         this.resize_col = this.resize_col.bind(this);
         this.stop_col_resize = this.stop_col_resize.bind(this);
         //
@@ -3252,12 +3252,91 @@ class FileManager {
 
     }
 
+    //
+
+    // init_col_resize(e) {
+
+    //     e.stopPropagation();
+    //     e.preventDefault();
+
+    //     this.dragHandle = e.target;
+    //     this.currentColumn = e.target.parentElement;
+    //     this.startX = e.pageX;
+    //     this.startWidth = this.currentColumn.offsetWidth;
+
+    //     document.addEventListener('mousemove', this.resize_col);
+    //     document.addEventListener('mouseup', this.stop_col_resize);
+
+    //     this.currentColumn.classList.add('resizing');
+    //     this.isResizing = true;
+
+    //     this.list_view_settings.col_width[this.currentColumn.dataset.col_name] = this.startWidth;
+
+    //     console.log('current column', this.currentColumn);
+    //     this.currentColumn.removeEventListener('click', this.sort_by_column);
+    // }
+
+    // resize_col(e) {
+
+    //     if (!this.isResizing) return;
+
+    //     requestAnimationFrame(() => {
+    //         e.stopPropagation();
+    //         e.preventDefault();
+
+    //         const newWidth = Math.max(
+    //             50, // Minimum width
+    //             this.startWidth + (e.pageX - this.startX)
+    //         );
+
+    //         this.currentColumn.style.width = `${newWidth}px`;
+    //         this.list_view_settings.col_width[this.currentColumn.dataset.col_name] = newWidth;
+
+    //         console.log(`Resizing: ${this.currentColumn.dataset.col_name}, Width: ${newWidth}`);
+    //     });
+    // }
+
+    // stop_col_resize(e) {
+
+    //     if (!this.isResizing) return;
+
+    //     e.stopPropagation();
+    //     e.preventDefault();
+
+    //     this.isResizing = false;
+
+    //     document.removeEventListener('mousemove', this.resize_col);
+    //     document.removeEventListener('mouseup', this.stop_col_resize);
+
+    //     this.currentColumn.classList.remove('resizing');
+    //     this.currentColumn.style.cursor = 'default';
+
+    //     // Ensure all column widths are updated
+    //     const ths = document.querySelectorAll('th');
+    //     ths.forEach(th => {
+    //         if (th.dataset.col_name && th.dataset.col_name !== 'count') {
+    //             this.list_view_settings.col_width[th.dataset.col_name] = th.offsetWidth;
+    //         }
+    //     });
+
+    //     // Debounce the update to the settings
+    //     clearTimeout(this.updateTimeout);
+    //     this.updateTimeout = setTimeout(() => {
+    //         ipcRenderer.send('update_list_view_settings', this.list_view_settings);
+    //     }, 200);
+
+    //     // Re-add click listener
+    //     setTimeout(() => {
+    //         this.currentColumn.addEventListener('click', this.sort_by_column);
+    //     }, 100);
+
+    //     console.log(`Resize stopped: ${this.currentColumn.dataset.col_name}`);
+    // }
+
     init_col_resize(e) {
 
-        e.stopPropagation();
-        e.preventDefault();
+        this.is_resizing = true;
 
-        this.dragHandle = e.target;
         this.currentColumn = e.target.parentElement;
         this.startX = e.pageX;
         this.startWidth = this.currentColumn.offsetWidth;
@@ -3265,71 +3344,35 @@ class FileManager {
         document.addEventListener('mousemove', this.resize_col);
         document.addEventListener('mouseup', this.stop_col_resize);
 
-        this.currentColumn.classList.add('resizing');
-        this.isResizing = true;
-
-        this.list_view_settings.col_width[this.currentColumn.dataset.col_name] = this.startWidth;
-
-        console.log('current column', this.currentColumn);
-        this.currentColumn.removeEventListener('click', this.sort_by_column);
-
-
     }
 
     resize_col(e) {
 
-        if (this.isResizing) {
+        if (!this.is_resizing) return;
 
-            requestAnimationFrame(() => {
+        // disable drag select
+        dragSelect.set_is_dragging(true);
 
-                e.stopPropagation();
-                e.preventDefault();
-                const newWidth = this.startWidth + (e.pageX - this.startX);
-                this.dragHandle.parentElement.style.width = `${newWidth}px`;
-                this.isResizing = true;
-                this.currentColumn.style.cursor = 'col-resize';
-                this.list_view_settings.col_width[this.currentColumn.dataset.col_name] = newWidth;
-
-            });
-
-        }
+        const width = this.startWidth + (e.pageX - this.startX);
+        this.currentColumn.style.width = `${width}px`;
 
     }
 
     stop_col_resize(e) {
 
-        e.stopPropagation();
-        e.preventDefault();
-        e.stopImmediatePropagation();
+        document.removeEventListener('mousemove', this.resize_col);
+        document.removeEventListener('mouseup', this.stop_col_resize);
 
-        if (this.isResizing) {
+        // update column size in settings
+        this.list_view_settings.col_width[this.currentColumn.dataset.col_name] = this.currentColumn.offsetWidth;
+        ipcRenderer.send('update_list_view_settings', this.list_view_settings);
 
-            this.currentColumn.style.cursor = 'default';
-            this.isResizing = false;
-
-            document.removeEventListener('mousemove', this.resize_col);
-            document.removeEventListener('mouseup', this.stop_col_resize);
-
-            this.currentColumn.classList.remove('resizing');
-
-            // update width of all columns
-            let ths = document.querySelectorAll('th');
-            ths.forEach(th => {
-                if (th.dataset.col_name !== 'count') {
-                    this.list_view_settings.col_width[th.dataset.col_name] = th.offsetWidth;
-                }
-            })
-            ipcRenderer.send('update_list_view_settings', this.list_view_settings);
-
-            setTimeout(() => {
-                console.log('current column', this.currentColumn);
-                this.currentColumn.addEventListener('click', this.sort_by_column);
-            }, 100);
-
-        }
+        this.is_resizing = false;
 
     }
 
+
+    // init filter
     init_filter() {
 
         if (!this.filter) {
@@ -3904,6 +3947,8 @@ class FileManager {
     // sort event
     sort_by_column(e) {
 
+        e.stopPropagation();
+
         console.log('running sort by column', e.target);
 
         // let settings = settingsManager.get_settings();
@@ -4016,7 +4061,12 @@ class FileManager {
 
                 }
 
-                drag_handle.addEventListener('mousedown', this.init_col_resize)
+
+
+                // init resize column
+                drag_handle.addEventListener('mousedown', (e) => {
+                    this.init_col_resize(e);
+                });
 
             }
         }
@@ -4036,8 +4086,6 @@ class FileManager {
         thead.appendChild(tr);
         table.appendChild(thead);
         table.appendChild(tbody);
-
-        thead.addEventListener('click', this.sort_by_column);
 
         // sort files array
         files_arr = utilities.sort(files_arr, settings.sort_by, settings.sort_direction);
@@ -4769,7 +4817,7 @@ class MenuManager {
 
             }
 
-            // clearHighlight();
+            utilities.clearHighlight();
 
         })
 
