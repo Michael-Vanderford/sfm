@@ -2248,9 +2248,13 @@ class SideBarManager {
                         break;
                 }
 
-
-
             });
+
+            home_view_item.addEventListener('contextmenu', (e) => {
+                ipcRenderer.send('home_menu', dir);
+                home_view_item.classList.add('highlight_select');
+            });
+
 
         });
 
@@ -3108,6 +3112,8 @@ class FileManager {
         this.dragHandle = null;
         this.startX = 0;
         this.startWidth = 0;
+        this.minWidth = 50; // Minimum column width
+        this.maxWidth = 1000; // Maximum column width
 
         this.is_resizing = false;
 
@@ -3338,7 +3344,7 @@ class FileManager {
         this.is_resizing = true;
 
         this.currentColumn = e.target.parentElement;
-        this.startX = e.pageX;
+        this.startX = e.clientX;
         this.startWidth = this.currentColumn.offsetWidth;
 
         document.addEventListener('mousemove', this.resize_col);
@@ -3350,15 +3356,28 @@ class FileManager {
 
         if (!this.is_resizing) return;
 
-        // disable drag select
+        // change cursor
+        document.body.style.cursor = 'col-resize';
+
+
+        requestAnimationFrame(() => {
+            const dx = e.clientX - this.startX;
+            let width = this.startWidth + dx;
+            // let width = this.startWidth + (e.clientX - this.startX);
+            width = Math.max(this.minWidth, Math.min(width, this.maxWidth)); // Constrain width
+            this.currentColumn.style.width = `${width}px`;
+
+        });
+
+        // // disable drag select
         dragSelect.set_is_dragging(true);
 
-        const width = this.startWidth + (e.pageX - this.startX);
-        this.currentColumn.style.width = `${width}px`;
 
     }
 
     stop_col_resize(e) {
+
+        document.body.style.cursor = 'default';
 
         document.removeEventListener('mousemove', this.resize_col);
         document.removeEventListener('mouseup', this.stop_col_resize);
@@ -3366,6 +3385,10 @@ class FileManager {
         // update column size in settings
         this.list_view_settings.col_width[this.currentColumn.dataset.col_name] = this.currentColumn.offsetWidth;
         ipcRenderer.send('update_list_view_settings', this.list_view_settings);
+
+        const drag_handle = this.currentColumn.querySelector('.drag_handle');
+        drag_handle.style.width = '10px';
+        drag_handle.style.right = '-5px';
 
         this.is_resizing = false;
 

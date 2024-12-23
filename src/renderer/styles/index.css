@@ -440,7 +440,7 @@ tr {
 }
 
 .active-tab-content {
-    overflow-x: auto;
+    overflow-x: hidden;
     overflow-y: auto;
     box-sizing: border-box;
     border: none;
@@ -610,10 +610,10 @@ tr {
 }
 
 .table {
+    table-layout: fixed;
     width: 100%;
     overflow-x: auto;
     border-collapse: separate;
-    table-layout: fixed !important;
     border-spacing: 0 5px;
     margin-top: -5px;
 }
@@ -636,6 +636,15 @@ tr {
     height: 100%;
     width: 4px;
     cursor: col-resize;
+    user-select: none;
+}
+
+.table .drag_handle {
+    user-select: none;
+}
+
+.table .drag_handle:hover {
+    background-color: #3794ff !important;
 }
 
 .table th.resizing {
@@ -650,13 +659,6 @@ tr {
     /* padding-left: 5px; */
 }
 
-.table .drag_handle {
-    user-select: none;
-}
-
-.table .drag_handle:hover {
-    background-color: #3794ff !important;
-}
 
 .table th, .table td {
     text-align: left;

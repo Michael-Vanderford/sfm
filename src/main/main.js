@@ -759,84 +759,84 @@ class IconManager {
     }
 
     get_theme_path() {
-        let icon_theme = execSync('gsettings get org.gnome.desktop.interface icon-theme').toString().replace(/'/g, '').trim();
+        const icon_theme = execSync('gsettings get org.gnome.desktop.interface icon-theme').toString().replace(/'/g, '').trim();
         let icon_dir = path.join(__dirname, 'assets', 'icons');
-        let theme_path = ''
-        try {
-            let search_path = [];
-            search_path.push(path.join(this.home, '.local/share/icons'),
-                path.join(this.home, '.icons'),
-                '/usr/share/icons')
+        let theme_path = '';
 
-            search_path.every(icon_path => {
-                let theme_path = path.join(icon_path, icon_theme);
-                if (fs.existsSync(theme_path)) {
-                    icon_dir = path.join(icon_path, icon_theme);
-                    return false;
-                } else {
-                    icon_dir = path.join(__dirname, 'assets', 'icons', 'kora');
-                    return true;
-                }
-            })
-            let icon_dirs = [
-                path.join(icon_dir, 'places@2x/48/'),
-                path.join(icon_dir, '32x32/places/'),
-                path.join(icon_dir, '64x64/places/'),
-                path.join(icon_dir, 'places/scalable/'),
-                path.join(icon_dir, 'scalable@2x/places/'),
-                path.join(icon_dir, 'places/32/'),
-                path.join(icon_dir, 'places/48/'),
-                path.join(icon_dir, 'places/64/'),
-                path.join(icon_dir, 'places/128/'),
-                path.join(icon_dir, 'places/symbolic/'),
-                path.join(icon_dir, 'scalable/')
+        try {
+            const search_paths = [
+                path.join(this.home, '.local/share/icons'),
+                path.join(this.home, '.icons'),
+                '/usr/share/icons'
             ];
-            icon_dirs.every(icon_dir => {
-                if (fs.existsSync(icon_dir)) {
-                    theme_path = icon_dir
-                    return false;
-                } else {
-                    theme_path = path.join(__dirname, 'assets/icons/');
-                    return true;
-                }
-            })
-            console.log(theme_path);
+
+            // Find the first existing icon theme path
+            const found_path = search_paths.find(icon_path => {
+                const theme_path = path.join(icon_path, icon_theme);
+                return fs.existsSync(theme_path);
+            });
+
+            if (found_path) {
+                icon_dir = path.join(found_path, icon_theme);
+            } else {
+                icon_dir = path.join(__dirname, 'assets', 'icons', 'kora');
+            }
+
+            const icon_dirs = [
+                'places@2x/48/',
+                '32x32/places/',
+                '64x64/places/',
+                'places/scalable/',
+                'scalable@2x/places/',
+                'places/32/',
+                'places/48/',
+                'places/64/',
+                'places/128/',
+                'places/symbolic/',
+                'scalable/'
+            ].map(dir => path.join(icon_dir, dir));
+
+            // Find the first existing icon directory
+            theme_path = icon_dirs.find(dir => fs.existsSync(dir));
+
+            // If no theme path found, use the fallback
+            if (!theme_path) {
+                theme_path = path.join(__dirname, 'assets/icons/');
+            }
+
             return theme_path;
-        } catch (err) {
-            console.log(err);
+        } catch (error) {
+            console.error('Error in getIconThemePath:', error);
+            return path.join(__dirname, 'assets/icons/');
         }
     }
 
     // get folder icon
     get_folder_icon(e, href) {
         try {
-            // let folder_icon = `${path.join(this.theme_path, 'folder.svg')}`
-            // if (!fs.existsSync(folder_icon)) {
-            //     folder_icon = `${path.join(this.theme_path, 'folder.png')}`
-            // }
-            // check for folder icons
-            let folder_icon = '';
-            let folder_icons = [
+
+            const folder_icons = [
                 'folder.svg',
                 'folder.png',
                 'default-folder.svg',
                 'default-folder.png'
-            ]
+            ];
 
-            folder_icons.every(icon => {
-                let icon_path = path.join(this.theme_path, icon);
-                if (fs.existsSync(icon_path)) {
-                    folder_icon = icon_path;
-                    return false;
-                } else {
-                    folder_icon = path.join(__dirname, '../assets/icons/folder.svg');
-                    return true;
-                }
-            })
-            e.sender.send('set_folder_icon', href, folder_icon);
-            console.log(folder_icon);
+            // Find the first existing folder icon
+            const folder_icon = folder_icons.reduce((found, icon) => {
+                if (found) return found; // If we've already found an icon, return it
+                const icon_path = path.join(this.theme_path, icon);
+                return fs.existsSync(icon_path) ? icon_path : null;
+            }, null);
+
+            // If no icon found in theme_path, use the fallback
+            const final_icon = folder_icon || path.join(__dirname, '../assets/icons/folder.svg');
+
+            e.sender.send('set_folder_icon', href, final_icon);
+
         } catch (err) {
-            console.log(err);
+            console.error('Error in folder icon selection:', err);
+            e.sender.send('set_folder_icon', href, path.join(__dirname, '../assets/icons/folder.svg'));
         }
     }
 
@@ -1297,6 +1297,11 @@ class MenuManager {
         // get template folder
         ipcMain.handle('get_templates_folder', (e) => {
             return path.join(utilities.home_dir, 'Templates');
+        })
+
+        // sidebar menu
+        ipcMain.on('home_menu', (e, location) => {
+            this.home_menu(e, location);
         })
 
         // Main Menu
@@ -1881,6 +1886,30 @@ class MenuManager {
         })
 
     }
+
+    // Sidebar Menu
+    home_menu(e, location) {
+
+        let template = [
+            {
+                label: 'Open in New Tab',
+                click: () => {
+                    win.send('get_files', location);
+                }
+            },
+            {
+                label: 'Open in New Window',
+                click: () => {
+                    createWindow(location);
+                }
+            }
+        ]
+
+        let menu = Menu.buildFromTemplate(template)
+        menu.popup(BrowserWindow.fromWebContents(e.sender))
+
+    }
+
 
     connect_dialog() {
 
