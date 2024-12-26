@@ -6,7 +6,8 @@ const exec = require('child_process').exec;
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const gio = require('../gio/bin/linux-x64-125/gio');
+const gio = require('../gio/build/Release/gio.node');
+
 
 // // Configure electron-reload
 // electronReload(__dirname, {
@@ -15,36 +16,38 @@ const gio = require('../gio/bin/linux-x64-125/gio');
 //     hardResetMethod: 'exit'
 // });
 
+/**
+ * Class to watch for changes in the file system
+ */
 class Watcher {
 
-    // listen for changes to a directory
     constructor() {
-        this.location = '';
-        this.watcher = null;
+
     }
 
-    // watch a directory using node fs.watch
-    watch(directory, callback) {
+    // watch
+    watch(path) {
 
-        if (this.watcher) {
-            this.watcher.close();
-        }
+        const monitor = gio.watch(path, (event) => {
 
-        this.watcher = fs.watch
-        this.watcher(directory, { recursive: true }, (event, filename) => {
-            callback(event, filename);
+            switch (event.event) {
+                case 'created':
+                    console.log('File created:', event.filename);
+                    break;
+                case 'deleted':
+                    console.log('File deleted:', event.filename);
+                    break;
+                case 'modified':
+                    console.log('File modified:', event.filename);
+                    break;
+                default:
+                    break;
+            }
+
         });
-        this.location = directory;
+
     }
 
-    // close the watcher
-    close() {
-        if (this.watcher) {
-            this.watcher.close();
-            this.watcher = null;
-            this.location = '';
-        }
-    }
 }
 
 class SettingsManager {
@@ -723,6 +726,11 @@ class WorkspaceManager {
 
         });
 
+        ipcMain.on('get_workspace_folder_icon', (e, href) => {
+            let icon = iconManager.get_folder_icon(e, href);
+            e.sender.send('set_workspace_folder_icon', href, icon);
+        });
+
     }
 
 }
@@ -753,8 +761,44 @@ class IconManager {
 
         // listen for get_folder_icon event
         ipcMain.on('get_folder_icon', (e, href) => {
-            this.get_folder_icon(e, href);
+            let folder_icon = this.get_folder_icon(e, href);
+            e.sender.send('set_folder_icon', href, folder_icon);
         })
+
+        ipcMain.handle('get_symlink_icon', (e) => {
+            let icon_theme = execSync('gsettings get org.gnome.desktop.interface icon-theme').toString().replace(/'/g, '').trim();
+            let icon_dir = path.join(__dirname, 'assets', 'icons');
+            try {
+                const search_paths = [
+                    path.join(this.home, '.local/share/icons'),
+                    path.join(this.home, '.icons'),
+                    '/usr/share/icons'
+                ];
+
+                // Find the first existing icon theme path
+                const found_path = search_paths.find(icon_path =>
+                    fs.existsSync(path.join(icon_path, icon_theme))
+                );
+
+                icon_dir = found_path ? path.join(found_path, icon_theme) : path.join(__dirname, '../assets', 'icons');
+
+                const icon_dirs = [
+                    path.join(icon_dir, 'emblems@2x/16/emblem-symbolic-link.svg'),
+                    path.join(icon_dir, '16x16/emblems/emblem-symbolic-link.svg'),
+                    path.join(icon_dir, 'emblems/scalable/emblem-symbolic-link.svg'),
+                    path.join(icon_dir, 'emblems/16/emblem-symbolic-link.svg')
+                ];
+
+                // Find the first existing symlink icon
+                const folder_icon_path = icon_dirs.find(dir => fs.existsSync(dir)) ||
+                                         path.join(__dirname, 'assets/icons/emblem-symbolic-link.svg');
+
+                return folder_icon_path;
+            } catch (err) {
+                console.error('Error in symlink_icon:', err);
+                return path.join(__dirname, 'assets/icons/emblem-symbolic-link.svg');
+            }
+        });
 
     }
 
@@ -813,31 +857,63 @@ class IconManager {
 
     // get folder icon
     get_folder_icon(e, href) {
+
         try {
 
-            const folder_icons = [
-                'folder.svg',
-                'folder.png',
-                'default-folder.svg',
-                'default-folder.png'
-            ];
+            const baseName = path.basename(href);
 
-            // Find the first existing folder icon
-            const folder_icon = folder_icons.reduce((found, icon) => {
-                if (found) return found; // If we've already found an icon, return it
-                const icon_path = path.join(this.theme_path, icon);
-                return fs.existsSync(icon_path) ? icon_path : null;
-            }, null);
+            const specialFolders = {
+                'Documents': ['folder-documents', 'folder-document'],
+                'Music': ['folder-music'],
+                'Pictures': ['folder-pictures', 'folder-image'],
+                'Videos': ['folder-videos', 'folder-video'],
+                'Downloads': ['folder-downloads', 'folder-download'],
+                'Desktop': ['folder-desktop']
+            };
 
-            // If no icon found in theme_path, use the fallback
-            const final_icon = folder_icon || path.join(__dirname, '../assets/icons/folder.svg');
+            const folderType = specialFolders[baseName] || ['folder', 'default-folder'];
+            const extensions = ['.svg', '.png'];
 
-            e.sender.send('set_folder_icon', href, final_icon);
+            // Try to find a special folder icon first
+            let final_icon = null;
+            for (const type of folderType) {
+                for (const ext of extensions) {
+                    const iconPath = path.join(this.theme_path, `${type}${ext}`);
+                    if (fs.existsSync(iconPath)) {
+                        final_icon = iconPath;
+                        break;
+                    }
+                }
+                if (final_icon) break;
+            }
+
+            // If no special icon found, fall back to generic folder icons
+            if (!final_icon) {
+                const folder_icons = [
+                    'folder.svg',
+                    'folder.png',
+                    'default-folder.svg',
+                    'default-folder.png'
+                ];
+
+                final_icon = folder_icons.reduce((found, icon) => {
+                    if (found) return found;
+                    const icon_path = path.join(this.theme_path, icon);
+                    return fs.existsSync(icon_path) ? icon_path : null;
+                }, null);
+            }
+
+            // If still no icon found, use the ultimate fallback
+            final_icon = final_icon || path.join(__dirname, '../assets/icons/folder.svg');
+            return final_icon;
+            // e.sender.send('set_folder_icon', href, final_icon);
 
         } catch (err) {
             console.error('Error in folder icon selection:', err);
-            e.sender.send('set_folder_icon', href, path.join(__dirname, '../assets/icons/folder.svg'));
+            // e.sender.send('set_folder_icon', href, path.join(__dirname, '../assets/icons/folder.svg'));
+            return path.join(__dirname, '../assets/icons/folder.svg');
         }
+
     }
 
 }
@@ -955,39 +1031,9 @@ class FileManager {
                 cmd: 'ls',
                 location: this.location
             }
+
             this.ls_worker.postMessage(ls_data);
-            watcherManager.close();
-            // watcherManager.watch(location, (event, filename) => {
-                // this.watcher_failed = 0;
-                // console.log(event, filename);
-                // if (event === 'rename') {
-                //     if (fs.existsSync(filename)) {
-                //         // win.send('get_item', gio.get_file(filename));
-                //     } else {
-                //         win.send('remove_item', filename);
-                //     }
-                // }
-                // if (event !== 'unknown') {
-                //     if (event === 'moved') {
-                //         win.send('remove_card', filename);
-                //     }
-                //     if (event === 'deleted') {
-                //         win.send('remove_card', filename);
-                //     }
-                //     if (event === 'created' || event === 'changed') {
-                //         // let f = gio.get_file(filename);
-                //         // if (f) {
-                //         //     win.send('get_item', f);
-                //         //     if (f.is_dir) {
-                //         //         win.send('get_folder_count', filename);
-                //         //         win.send('get_folder_size', filename);
-                //         //     }
-                //         // }
-                //     }
-                //     // win.send('clear_folder_size', path.dirname(filename));
-                //     // get_disk_space(href);
-                // }
-            // })
+
         })
 
         // listen for message from worker
@@ -996,6 +1042,7 @@ class FileManager {
             switch (cmd) {
                 case 'ls':
                     win.send('ls', data.files_arr);
+                    // watcherManager.watch(this.location);
                     break;
                 case 'set_msg':
                     win.send('set_msg', data.msg);
@@ -1115,6 +1162,53 @@ class FileManager {
 
 }
 
+class PropertiesManager {
+
+    constructor() {
+
+        // setup properties worker
+        this.properties_worker = new worker.Worker(path.join(__dirname, '../workers/properties_worker.js'));
+
+        // listen for message from properties worker
+        this.properties_worker.on('message', (data) => {
+            switch (data.cmd) {
+                case 'properties':
+                    // call send_properties method
+                    this.send_properties(data.properties_arr);
+                    break;
+                case 'set_msg':
+                    win.send('set_msg', data.msg);
+                    break;
+                default:
+                    break;
+            }
+        });
+
+        // listen for get properties from preload.js
+        ipcMain.on('get_properties', (e, selected_files_arr) => {
+            this.get_properties(selected_files_arr);
+        })
+
+    }
+
+    // get properties
+    get_properties(selected_files_arr) {
+
+        let cmd = {
+            cmd: 'get_properties',
+            selected_files_arr: selected_files_arr
+        }
+        this.properties_worker.postMessage(cmd);
+
+    }
+
+    // send properties array to renderer
+    send_properties(properties_arr) {
+        win.send('properties', properties_arr);
+    }
+
+}
+
 class WindowManager {
 
     constructor() {
@@ -1209,6 +1303,8 @@ class WindowManager {
             },
             icon: path.join(__dirname, '../renderer/icons/icon.png')
         });
+
+        // window.removeMenu();
 
         // listen for window move
         window.on('move', (e) => {
@@ -2216,6 +2312,7 @@ const windowManager = new WindowManager();
 const utilities = new Utilities();
 const iconManager = new IconManager();
 const fileManager = new FileManager();
+const propertiesManager = new PropertiesManager();
 const workspaceManager = new WorkspaceManager();
 const deviceManager = new DeviceManager();
 const dialogManager = new DialogManager();

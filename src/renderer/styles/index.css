@@ -1,13 +1,12 @@
 * {
     box-sizing: border-box;
     /* font-family: Verdana, Geneva, Tahoma, sans-serif; */
-    font-size: 14px;
+    font-size: 12px;
     outline: none;
 }
 
 body {
     font-family: Arial, Helvetica, sans-serif;
-    /* font-size: 10px; */
     color: var(--text);
     background-color: var(--main);
     margin: 0;
@@ -271,10 +270,6 @@ hr {
     color: var(--text);
 }
 
-.workspace_div {
-    /* margin-xleft:15px; */
-}
-
 .workspace.active {
     box-sizing: border-box;
     border: 1px solid var(--highlight);
@@ -476,6 +471,72 @@ tr {
     z-index: 0;
 }
 
+.properties_view {
+    display: flex;
+    flex-direction: column;
+    padding: 10px;
+    background-color: var(--sidebar);
+    border: 1px solid var(--border);
+    border-radius: 5px;
+    margin-top: 5px;
+}
+
+.properties .content {
+    display: grid;
+    grid-template-columns: 75px 1fr;
+    line-height: 24px;
+}
+
+.properties .item {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.properties_view .permissions {
+    padding-top: 30px;
+}
+
+.properties_view .row {
+    display: table-row;
+}
+
+.properties_view .td {
+    display: table-cell;
+    padding: 2px;
+}
+
+.properties_view .td:first-child {
+    width: 50px;
+}
+
+/* .properties {
+    padding: 5px;
+    border-radius: 5px;
+    margin-top: 5px;
+} */
+
+/* .properties_table {
+    width: 100%;
+    margin-bottom: 20px;
+}
+
+.properties_table .th {
+    text-align: left;
+    padding: 5px;
+    background-color: var(--sidebar);
+    border-bottom: 1px solid var(--border);
+    font-weight: bold;
+}
+
+.properties_table td {
+    padding: 5px;
+    border-bottom: 1px solid var(--border);
+}
+
+.properties_table tr:hover {
+    background-color: var(--highlight);
+} */
+
 .progress {
     background-color: var(--progress);
     width: 100%;
@@ -581,7 +642,7 @@ tr {
     /* width: 100%; */
 }
 
-.grid2 .iten {
+.grid2 .item {
     overflow-wrap: break-word;
 }
 
@@ -754,6 +815,34 @@ td .div_name a {
     /* border: 1px solid var(--border); */
 }
 
+.video {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-around;
+    padding: 5px;
+    width: 32px !important;
+    height: 32px !important;
+    border-radius: 5px;
+    /* border: 1px solid var(--border); */
+}
+
+.symlink {
+    display: block;
+    position: relative;
+    height: 22px !important;
+    width: 22px !important;
+    margin-left: 5px;
+    margin-top: -22px;
+}
+
+.readonly {
+    display: block;
+    height: 12px;
+    position: relative;
+    margin-left: 5px;
+    margin-top: -20px;
+}
+
 .selection-rectangle {
     position: absolute;
     border: 1px solid #000;
@@ -899,7 +988,7 @@ span {
 
 /* Style for scrollbar */
 ::-webkit-scrollbar {
-    width: 4px;
+    width: 1px;
 }
 
 ::-webkit-scrollbar-track {

@@ -1553,6 +1553,88 @@ namespace gio {
 
     }
 
+     // Helper function to get event name
+    static const char* get_event_name(GFileMonitorEvent event_type) {
+        switch (event_type) {
+            case G_FILE_MONITOR_EVENT_CHANGED:
+                return "changed";
+            case G_FILE_MONITOR_EVENT_CHANGES_DONE_HINT:
+                return "changes_done_hint";
+            case G_FILE_MONITOR_EVENT_DELETED:
+                return "deleted";
+            case G_FILE_MONITOR_EVENT_CREATED:
+                return "created";
+            case G_FILE_MONITOR_EVENT_ATTRIBUTE_CHANGED:
+                return "attribute_changed";
+            case G_FILE_MONITOR_EVENT_PRE_UNMOUNT:
+                return "pre_unmount";
+            case G_FILE_MONITOR_EVENT_UNMOUNTED:
+                return "unmounted";
+            case G_FILE_MONITOR_EVENT_MOVED:
+                return "moved";
+            case G_FILE_MONITOR_EVENT_RENAMED:
+                return "renamed";
+            case G_FILE_MONITOR_EVENT_MOVED_IN:
+                return "moved_in";
+            case G_FILE_MONITOR_EVENT_MOVED_OUT:
+                return "moved_out";
+            default:
+                return "unknown";
+        }
+    }
+
+    // Callback function for file changes
+    static void on_file_changed(GFileMonitor* monitor, GFile* file, GFile* other_file, GFileMonitorEvent event_type, gpointer user_data) {
+
+        Nan::Callback* callback = static_cast<Nan::Callback*>(user_data);
+
+        const char* eventName = get_event_name(event_type);
+        char* filename = g_file_get_path(file);
+
+        v8::Local<v8::Object> eventObj = Nan::New<v8::Object>();
+        Nan::Set(eventObj, Nan::New("event").ToLocalChecked(), Nan::New(eventName).ToLocalChecked());
+        Nan::Set(eventObj, Nan::New("filename").ToLocalChecked(), Nan::New(filename).ToLocalChecked());
+
+        g_free(filename);
+
+        const unsigned argc = 1;
+        v8::Local<v8::Value> argv[argc] = { eventObj };
+        Nan::AsyncResource async("FileWatcher::OnChanged");
+        callback->Call(argc, argv, &async);
+    }
+
+    // NAN_METHOD(watch) {
+    //     if (info.Length() < 2 || !info[0]->IsString() || !info[1]->IsFunction()) {
+    //         return Nan::ThrowTypeError("Invalid arguments. Expected a path (string) and a callback function.");
+    //     }
+
+    //     v8::String::Utf8Value path(info.GetIsolate(), info[0]);
+    //     Nan::Callback* callback = new Nan::Callback(info[1].As<v8::Function>());
+
+    //     // Implement your file watching logic here
+    //     // This is a simplified example; you'll need to adapt it to your specific implementation
+    //     GFile* file = g_file_new_for_path(*path);
+    //     GFileMonitor* monitor = g_file_monitor_directory(file, G_FILE_MONITOR_NONE, NULL, NULL);
+
+    //     g_signal_connect(monitor, "changed", G_CALLBACK(on_file_changed), callback);
+
+    //     g_object_unref(file);
+
+    //     info.GetReturnValue().Set(Nan::New<v8::External>(monitor));
+    // }
+
+    NAN_METHOD(stop_watch) {
+        if (info.Length() < 1 || !info[0]->IsExternal()) {
+            return Nan::ThrowTypeError("Invalid arguments. Expected a monitor handle.");
+        }
+
+        GFileMonitor* monitor = static_cast<GFileMonitor*>(info[0].As<v8::External>()->Value());
+        g_file_monitor_cancel(monitor);
+        g_object_unref(monitor);
+
+        info.GetReturnValue().SetUndefined();
+    }
+
     void directory_changed(GFileMonitor* monitor, GFile* file, GFile* other_file, GFileMonitorEvent event_type, gpointer user_data) {
         Nan::HandleScope scope;
 
@@ -1613,10 +1695,8 @@ namespace gio {
 
     }
 
-    std::vector<std::string> watcher_dir;
-    GFileMonitor* fileMonitor0 = NULL;
-    NAN_METHOD(watcher) {
-
+    std::vector<std::pair<std::string, GFileMonitor*>> watchers;
+    NAN_METHOD(watch) {
         Nan::HandleScope scope;
 
         if (info.Length() < 2 || !info[0]->IsString() || !info[1]->IsFunction()) {
@@ -1626,17 +1706,24 @@ namespace gio {
 
         v8::Local<v8::String> sourceString = Nan::To<v8::String>(info[0]).ToLocalChecked();
         Nan::Utf8String utf8Str(sourceString);
-        const char* cstring = *utf8Str;
+        std::string watchPath(*utf8Str);
 
-        v8::Isolate* isolate = info.GetIsolate();
-        v8::Local<v8::Context> context = isolate->GetCurrentContext();
-        v8::String::Utf8Value sourceFile(context->GetIsolate(), sourceString);
+        // Check if we're already watching this directory
+        auto it = std::find_if(watchers.begin(), watchers.end(),
+                            [&watchPath](const auto& pair) { return pair.first == watchPath; });
 
-        GFile* src = g_file_new_for_path(*sourceFile);
-        const char *src_scheme = g_uri_parse_scheme(*sourceFile);
+        // If we're already watching this directory, cancel the old monitor and remove it from the vector
+        if (it != watchers.end()) {
+            g_file_monitor_cancel(it->second);
+            g_object_unref(it->second);
+            watchers.erase(it);
+        }
+
+        GFile* src = g_file_new_for_path(watchPath.c_str());
+        const char* src_scheme = g_uri_parse_scheme(watchPath.c_str());
 
         if (src_scheme != NULL) {
-            src = g_file_new_for_uri(*sourceFile);
+            src = g_file_new_for_uri(watchPath.c_str());
         }
 
         Nan::Callback* callback = new Nan::Callback(info[1].As<v8::Function>());
@@ -1645,35 +1732,94 @@ namespace gio {
                                                             NULL,
                                                             NULL);
 
-        if (fileMonitor0 != NULL) {
-            g_file_monitor_cancel(fileMonitor0);
-        }
-        fileMonitor0 = fileMonitor;
-
         if (fileMonitor == NULL) {
-            // Nan::ThrowError("Failed to create file monitor for the directory.");
+            Nan::ThrowError("Failed to create file monitor for the directory.");
+            g_object_unref(src);
             return;
         }
 
         gboolean connectResult = g_signal_connect(fileMonitor,
                                                 "changed",
                                                 G_CALLBACK(directory_changed),
-                                                new Nan::Callback(info[1].As<v8::Function>()));
+                                                callback);
 
         if (connectResult == 0) {
             Nan::ThrowError("Failed to connect to the 'changed' signal.");
             g_object_unref(fileMonitor);
+            g_object_unref(src);
+            delete callback;
             return;
         }
 
-        if (src != nullptr) {
-            g_object_unref(src);
-        }
+        // Add the new watcher to the vector
+        watchers.emplace_back(watchPath, fileMonitor);
 
+        g_object_unref(src);
 
         info.GetReturnValue().SetUndefined();
-
     }
+
+    // std::vector<std::string> watcher_dir;
+    // GFileMonitor* fileMonitor0 = NULL;
+    // NAN_METHOD(watch) {
+
+    //     Nan::HandleScope scope;
+
+    //     if (info.Length() < 2 || !info[0]->IsString() || !info[1]->IsFunction()) {
+    //         Nan::ThrowTypeError("Invalid arguments. Expected a directory path as a string and a watcher object.");
+    //         return;
+    //     }
+
+    //     v8::Local<v8::String> sourceString = Nan::To<v8::String>(info[0]).ToLocalChecked();
+    //     Nan::Utf8String utf8Str(sourceString);
+    //     const char* cstring = *utf8Str;
+
+    //     v8::Isolate* isolate = info.GetIsolate();
+    //     v8::Local<v8::Context> context = isolate->GetCurrentContext();
+    //     v8::String::Utf8Value sourceFile(context->GetIsolate(), sourceString);
+
+    //     GFile* src = g_file_new_for_path(*sourceFile);
+    //     const char *src_scheme = g_uri_parse_scheme(*sourceFile);
+
+    //     if (src_scheme != NULL) {
+    //         src = g_file_new_for_uri(*sourceFile);
+    //     }
+
+    //     Nan::Callback* callback = new Nan::Callback(info[1].As<v8::Function>());
+    //     GFileMonitor* fileMonitor = g_file_monitor_directory(src,
+    //                                                         G_FILE_MONITOR_NONE,
+    //                                                         NULL,
+    //                                                         NULL);
+
+    //     if (fileMonitor0 != NULL) {
+    //         g_file_monitor_cancel(fileMonitor0);
+    //     }
+    //     fileMonitor0 = fileMonitor;
+
+    //     if (fileMonitor == NULL) {
+    //         // Nan::ThrowError("Failed to create file monitor for the directory.");
+    //         return;
+    //     }
+
+    //     gboolean connectResult = g_signal_connect(fileMonitor,
+    //                                             "changed",
+    //                                             G_CALLBACK(directory_changed),
+    //                                             new Nan::Callback(info[1].As<v8::Function>()));
+
+    //     if (connectResult == 0) {
+    //         Nan::ThrowError("Failed to connect to the 'changed' signal.");
+    //         g_object_unref(fileMonitor);
+    //         return;
+    //     }
+
+    //     if (src != nullptr) {
+    //         g_object_unref(src);
+    //     }
+
+
+    //     info.GetReturnValue().SetUndefined();
+
+    // }
 
     // This handles mtp connections
     void on_mount_added(GVolumeMonitor* monitor, GMount* mount, gpointer user_data) {
@@ -2480,7 +2626,8 @@ namespace gio {
         Nan::Export(target, "rm", rm);
         Nan::Export(target, "is_writable", is_writable);
         Nan::Export(target, "monitor", monitor);
-        Nan::Export(target, "watcher", watcher);
+        Nan::Export(target, "watch", watch);
+        Nan::Export(target, "stop_watch", stop_watch);
         Nan::Export(target, "get_mounts", get_mounts);
         Nan::Export(target, "get_drives", get_drives);
         Nan::Export(target, "connect_network_drive", gio::connect_network_drive);

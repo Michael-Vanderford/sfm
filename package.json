@@ -35,6 +35,7 @@
         "wdio-electron-service": "^7.0.5"
     },
     "dependencies": {
-        "archiver": "^7.0.1"
+        "archiver": "^7.0.1",
+        "nan": "^2.22.0"
     }
 }

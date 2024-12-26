@@ -338,8 +338,8 @@ ifeq ($(strip $(foreach prefix,$(NO_LOAD),\
 endif
 
 quiet_cmd_regen_makefile = ACTION Regenerating $@
-cmd_regen_makefile = cd $(srcdir); /home/michael/.npm/_npx/c78fbb4f3949be78/node_modules/node-gyp/gyp/gyp_main.py -fmake --ignore-environment "-Dlibrary=shared_library" "-Dvisibility=default" "-Dnode_root_dir=/home/michael/.electron-gyp/31.0.0" "-Dnode_gyp_dir=/home/michael/.npm/_npx/c78fbb4f3949be78/node_modules/node-gyp" "-Dnode_lib_file=/home/michael/.electron-gyp/31.0.0/<(target_arch)/node.lib" "-Dmodule_root_dir=/home/michael/source/repos/sfm/src/gio" "-Dnode_engine=v8" "--depth=." "-Goutput_dir=." "--generator-output=build" -I/home/michael/source/repos/sfm/src/gio/build/config.gypi -I/home/michael/.npm/_npx/c78fbb4f3949be78/node_modules/node-gyp/addon.gypi -I/home/michael/.electron-gyp/31.0.0/include/node/common.gypi "--toplevel-dir=." binding.gyp
-Makefile: $(srcdir)/binding.gyp $(srcdir)/../../../../../.npm/_npx/c78fbb4f3949be78/node_modules/node-gyp/addon.gypi $(srcdir)/build/config.gypi $(srcdir)/../../../../../.electron-gyp/31.0.0/include/node/common.gypi
+cmd_regen_makefile = cd $(srcdir); /usr/local/lib/node_modules/node-gyp/gyp/gyp_main.py -fmake --ignore-environment "-Dlibrary=shared_library" "-Dvisibility=default" "-Dnode_root_dir=/home/michael/.cache/node-gyp/31.3.1" "-Dnode_gyp_dir=/usr/local/lib/node_modules/node-gyp" "-Dnode_lib_file=/home/michael/.cache/node-gyp/31.3.1/<(target_arch)/node.lib" "-Dmodule_root_dir=/home/michael/source/repos/sfm/src/gio" "-Dnode_engine=v8" "--depth=." "-Goutput_dir=." "--generator-output=build" -I/home/michael/source/repos/sfm/src/gio/build/config.gypi -I/usr/local/lib/node_modules/node-gyp/addon.gypi -I/home/michael/.cache/node-gyp/31.3.1/include/node/common.gypi "--toplevel-dir=." binding.gyp
+Makefile: $(srcdir)/build/config.gypi $(srcdir)/../../../../../../../usr/local/lib/node_modules/node-gyp/addon.gypi $(srcdir)/binding.gyp $(srcdir)/../../../../../.cache/node-gyp/31.3.1/include/node/common.gypi
 	$(call do_cmd,regen_makefile)
 
 # "all" is a concatenation of the "all" targets from all the included

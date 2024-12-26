@@ -1,1 +1,0 @@
-cmd_Debug/obj.target/gio.node := g++ -o Debug/obj.target/gio.node -shared -pthread -rdynamic -m64  -Wl,-soname=gio.node -Wl,--start-group Debug/obj.target/gio/src/gio.o -Wl,--end-group -lgio-2.0 -lgobject-2.0 -lglib-2.0 -lgdk_pixbuf-2.0 -larchive

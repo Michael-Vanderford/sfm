@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "*.php": "php",
+        "*.mbs": "vb",
+        "functional": "cpp"
+    }
+}

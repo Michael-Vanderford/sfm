@@ -602,6 +602,13 @@ class Utilities {
         return div
     }
 
+    add_item(text) {
+        let item = this.add_div();
+        item.classList.add('item');
+        item.append(text);
+        return item;
+    }
+
     // add link
     add_link(href, text) {
 
@@ -1075,162 +1082,6 @@ class Utilities {
     }
 
 }
-
-// class DragSelect {
-
-//     constructor() {
-
-//         this.is_dragging = false;
-//         this.drag_select_arr = [];
-//         this.c = 0;
-
-//         this.is_dragging_divs = false;
-
-//     }
-
-//     // set is dragging
-//     set_is_dragging(is_dragging) {
-//         this.is_dragging = is_dragging;
-//     }
-
-//     // drag select
-//     drag_select () {
-
-//         if (this.is_dragging) {
-//             console.log('is dragging');
-//             return;
-//         }
-
-//         const selectionRectangle = document.querySelector('.selection-rectangle');
-//         if (!selectionRectangle) {
-//             console.log('no selection rectangle');
-//             return;
-//         }
-
-//         let active_tab_content = document.querySelector('.active-tab-content');
-//         if (!active_tab_content) {
-//             console.log('no active tab content');
-//             return;
-//         }
-
-//         const items = active_tab_content.querySelectorAll('.tr, .card');
-//         if (items.length === 0) {
-//             console.log('no cards');
-//             return;
-//         }
-
-//         items.forEach(item => {
-//             item.addEventListener('mousedown', (e) => {
-//                 this.is_dragging = true;
-//             })
-//         });
-
-
-//         let isSelecting = false;
-//         let isScrolling = false;
-//         let startPosX = 0;
-//         let startPosY = 0;
-//         let endPosX = 0;
-//         let endPosY = 0;
-
-//         let scroll_timer;
-//         active_tab_content.addEventListener('scroll', (e) => {
-
-//             if (scroll_timer) {
-//                 clearTimeout(scroll_timer);
-//             }
-
-//             isScrolling = true;
-//             scroll_timer = setTimeout(() => {
-//                 isScrolling = false;
-//             }, 100);
-
-//         });
-
-//         active_tab_content.addEventListener('mousedown', (e) => {
-
-//             // console.log('cards', cards)
-
-//             if (e.button === 2) {
-//                 return;
-//             }
-
-//             isSelecting = true;
-//             startPosX = e.clientX;
-//             startPosY = e.clientY;
-
-//             selectionRectangle.style.left = startPosX + 'px';
-//             selectionRectangle.style.top = startPosY + 'px';
-//             selectionRectangle.style.width = '0';
-//             selectionRectangle.style.height = '0';
-//             selectionRectangle.style.display = 'block';
-
-//         });
-
-//         let allowClick = 1;
-//         active_tab_content.addEventListener('mousemove', (e) => {
-
-//             if (!isSelecting || this.is_dragging) {
-//                 return;
-//             }
-
-//             endPosX = e.clientX;
-//             endPosY = e.clientY;
-
-//             const rectWidth = endPosX - startPosX;
-//             const rectHeight = endPosY - startPosY;
-
-//             selectionRectangle.style.width = Math.abs(rectWidth) + 'px';
-//             selectionRectangle.style.height = Math.abs(rectHeight) + 'px';
-//             selectionRectangle.style.left = rectWidth > 0 ? startPosX + 'px' : endPosX + 'px';
-//             selectionRectangle.style.top = rectHeight > 0 ? startPosY + 'px' : endPosY + 'px';
-
-
-//             // Highlight selectable items within the selection area
-//             items.forEach(item => {
-
-//                 const itemRect = item.getBoundingClientRect();
-//                 const isSelected =
-//                     ((itemRect.left < endPosX && itemRect.right > startPosX) ||
-//                     (itemRect.left < startPosX && itemRect.right > endPosX)) &&
-//                     ((itemRect.top < endPosY && itemRect.bottom > startPosY) ||
-//                     (itemRect.top < startPosY && itemRect.bottom > endPosY));
-
-//                 if (isSelected) {
-//                     item.classList.add('highlight_select');
-//                 } else {
-//                     console.log('running');
-//                     if (!this.is_dragging && !e.ctrlKey) {
-//                         item.classList.remove('highlight_select');
-//                     }
-//                 }
-
-//             });
-
-//             allowClick = 0;
-
-//         });
-
-//         active_tab_content.addEventListener('mouseup', (e) => {
-//             isSelecting = false;
-//             selectionRectangle.style.display = 'none';
-//         });
-
-//         active_tab_content.addEventListener('click', (e) => {
-
-//             if (allowClick) {
-//                 utilities.clear();
-//             } else {
-//                 allowClick = 1;
-//             }
-
-//             this.is_dragging = false;
-
-//         })
-
-//     }
-
-// }
 
 class DragSelect {
 
@@ -1770,9 +1621,14 @@ class WorkspaceManager {
 
         // Rename Workspace
         ipcRenderer.on('edit_workspace', (e, href) => {
-            // Edit workspace
             editWorkspace(href);
+        })
 
+        // get workspace folder icon
+        ipcRenderer.on('set_workspace_folder_icon', (e, href, icon) => {
+            let tr = document.querySelector(`.workspace_item[data-href="${href}"]`);
+            let img = tr.querySelector('img');
+            img.src = icon;
         })
 
         this.get_workspace(() => {});
@@ -1819,38 +1675,6 @@ class WorkspaceManager {
             workspace.addEventListener('mouseout', (e) => {
                 workspace.classList.remove('active')
             })
-
-            // let drop_tr = document.createElement('tr');
-            // // drop_tr.style = 'border-bottom: 2px solid blue; height: 0px;';
-
-            // workspace.addEventListener('dragover', (e) => {
-
-            //     e.preventDefault();
-            //     e.stopPropagation();
-
-            //     // insert drop_tr at mouse position position
-            //     let x = e.clientX;
-            //     let y = e.clientY;
-            //     let elem = document.elementFromPoint(x, y);
-            //     if (elem) {
-            //         elem.insertAdjacentElement('beforebegin', drop_tr);
-            //     }
-
-            // })
-
-            // workspace.addEventListener('dragleave', (e) => {
-            //     if (!this.is_moving) {
-            //         table.removeChild(drop_tr);
-            //     }
-            // });
-
-            // // workspace drop
-            // workspace.addEventListener('drop', (e) => {
-            //     let selected_files_arr = utilities.get_selected_files()
-            //     ipcRenderer.send('add_workspace', selected_files_arr);
-            //     selected_files_arr = [];
-            //     utilities.clear()
-            // })
 
             workspace_accordion_toggle.addEventListener('click', (e) => {
 
@@ -1901,8 +1725,9 @@ class WorkspaceManager {
                 tbody.append(tr);
 
                 if (file.content_type === 'inode/directory') {
+
                     tr.dataset.is_dir = true;
-                    img.src = 'icons/folder.svg';
+                    // img.src = 'icons/folder.svg';
                     tr.addEventListener('click', (e) => {
                         e.preventDefault();
                         e.stopPropagation();
@@ -1914,6 +1739,9 @@ class WorkspaceManager {
                             fileManager.get_files(file.href);
                         }
                     });
+
+                    ipcRenderer.send('get_workspace_folder_icon', file.href);
+
                 } else {
 
                     // tr.dataset.is_dir = false;
@@ -2501,15 +2329,21 @@ class IconManager {
     // set folder icon
     set_folder_icon(href, icon) {
 
-        let active_tab_content = tabManager.get_active_tab_content();
-        let icon_div = active_tab_content.querySelector(`[data-href="${href}"]`);
-        if (!icon_div) {
-            console.log('Error: Setting folder icon div');
-            return;
-        }
-        let img = icon_div.querySelector('img');
-        if (img) {
-            img.src = icon;
+        try {
+
+            let active_tab_content = tabManager.get_active_tab_content();
+            let icon_div = active_tab_content.querySelector(`[data-href="${href}"]`);
+            if (!icon_div) {
+                console.log('Error: Setting folder icon div');
+                return;
+            }
+            let img = icon_div.querySelector('img');
+            if (img) {
+                img.src = icon;
+            }
+
+        } catch (err) {
+            utilities.set_msg('Error setting folder icon', err);
         }
 
     }
@@ -3258,86 +3092,6 @@ class FileManager {
 
     }
 
-    //
-
-    // init_col_resize(e) {
-
-    //     e.stopPropagation();
-    //     e.preventDefault();
-
-    //     this.dragHandle = e.target;
-    //     this.currentColumn = e.target.parentElement;
-    //     this.startX = e.pageX;
-    //     this.startWidth = this.currentColumn.offsetWidth;
-
-    //     document.addEventListener('mousemove', this.resize_col);
-    //     document.addEventListener('mouseup', this.stop_col_resize);
-
-    //     this.currentColumn.classList.add('resizing');
-    //     this.isResizing = true;
-
-    //     this.list_view_settings.col_width[this.currentColumn.dataset.col_name] = this.startWidth;
-
-    //     console.log('current column', this.currentColumn);
-    //     this.currentColumn.removeEventListener('click', this.sort_by_column);
-    // }
-
-    // resize_col(e) {
-
-    //     if (!this.isResizing) return;
-
-    //     requestAnimationFrame(() => {
-    //         e.stopPropagation();
-    //         e.preventDefault();
-
-    //         const newWidth = Math.max(
-    //             50, // Minimum width
-    //             this.startWidth + (e.pageX - this.startX)
-    //         );
-
-    //         this.currentColumn.style.width = `${newWidth}px`;
-    //         this.list_view_settings.col_width[this.currentColumn.dataset.col_name] = newWidth;
-
-    //         console.log(`Resizing: ${this.currentColumn.dataset.col_name}, Width: ${newWidth}`);
-    //     });
-    // }
-
-    // stop_col_resize(e) {
-
-    //     if (!this.isResizing) return;
-
-    //     e.stopPropagation();
-    //     e.preventDefault();
-
-    //     this.isResizing = false;
-
-    //     document.removeEventListener('mousemove', this.resize_col);
-    //     document.removeEventListener('mouseup', this.stop_col_resize);
-
-    //     this.currentColumn.classList.remove('resizing');
-    //     this.currentColumn.style.cursor = 'default';
-
-    //     // Ensure all column widths are updated
-    //     const ths = document.querySelectorAll('th');
-    //     ths.forEach(th => {
-    //         if (th.dataset.col_name && th.dataset.col_name !== 'count') {
-    //             this.list_view_settings.col_width[th.dataset.col_name] = th.offsetWidth;
-    //         }
-    //     });
-
-    //     // Debounce the update to the settings
-    //     clearTimeout(this.updateTimeout);
-    //     this.updateTimeout = setTimeout(() => {
-    //         ipcRenderer.send('update_list_view_settings', this.list_view_settings);
-    //     }, 200);
-
-    //     // Re-add click listener
-    //     setTimeout(() => {
-    //         this.currentColumn.addEventListener('click', this.sort_by_column);
-    //     }, 100);
-
-    //     console.log(`Resize stopped: ${this.currentColumn.dataset.col_name}`);
-    // }
 
     init_col_resize(e) {
 
@@ -3393,7 +3147,6 @@ class FileManager {
         this.is_resizing = false;
 
     }
-
 
     // init filter
     init_filter() {
@@ -3689,9 +3442,9 @@ class FileManager {
                 '\n' +
                 'Size: ' + utilities.get_file_size(f.size) +
                 '\n' +
-                'Accessed: ' + utilities.get_file_size(f.atime) +
+                'Accessed: ' + utilities.get_date_time(f.atime) +
                 '\n' +
-                'Modified: ' + utilities.get_file_size(f.mtime) +
+                'Modified: ' + utilities.get_date_time(f.mtime) +
                 // '\n' +
                 // 'Created: ' + getDateTime(file.ctime) +
                 '\n' +
@@ -4165,16 +3918,16 @@ class FileManager {
         link.draggable = false;
         link.classList.add('href');
 
-        // tr.dataset.id = f.id;
-        // tr.dataset.href = f.href;
-        // tr.dataset.name = f.name;
-        // tr.dataset.size = f.size;
-        // tr.dataset.mtime = f.mtime;
-        // tr.dataset.content_type = f.content_type;
-        // tr.dataset.is_dir = f.is_dir;
-        // tr.dataset.location = f.location;
-        // tr.dataset.ctime = f.ctime;
-        // tr.dataset.atime = f.atime;
+        // add symlink icon
+        if (f.is_symlink) {
+            let symlink_img = document.createElement('img');
+            ipcRenderer.invoke('get_symlink_icon', f.href).then(symlink_icon => {
+                symlink_img.src = symlink_icon;
+                symlink_img.classList.add('symlink');
+                div_icon.append(symlink_img);
+            })
+        }
+
 
         let settings = settingsManager.get_settings();
         for (const key in settings.columns) {
@@ -4198,9 +3951,9 @@ class FileManager {
                     '\n' +
                     'Size: ' + utilities.get_file_size(f.size) +
                     '\n' +
-                    'Accessed: ' + utilities.get_file_size(f.atime) +
+                    'Accessed: ' + utilities.get_date_time(f.atime) +
                     '\n' +
-                    'Modified: ' + utilities.get_file_size(f.mtime) +
+                    'Modified: ' + utilities.get_date_time(f.mtime) +
                     // '\n' +
                     // 'Created: ' + getDateTime(file.ctime) +
                     '\n' +
@@ -4278,6 +4031,14 @@ class FileManager {
                                 img.src = f.href;
                             }
 
+
+                        } else if (f.content_type.includes('video/')) {
+
+                            let video = document.createElement('video');
+                            video.src = f.href;
+                            video.classList.add('video');
+                            div_icon.innerHTML = '';
+                            div_icon.append(video);
 
                         } else {
                             img.classList.add('lazy');
@@ -4678,6 +4439,334 @@ class FileManager {
 
 }
 
+class PropertiesManager {
+
+    constructor() {
+
+        ipcRenderer.on('properties', (e, properties_arr) => {
+            this.show_properties(properties_arr);
+        })
+
+    }
+
+    // show_properties(properties_arr) {
+
+    //     console.log('properties_arr', properties_arr);
+    //     tabManager.add_tab('Properties');
+    //     const active_tab_content = document.querySelector('.active-tab-content');
+    //     let properties_div = utilities.add_div(['properties']);
+    //     active_tab_content.appendChild(properties_div);
+
+    //     if (properties_arr.length > 0) {
+    //         properties_arr.forEach((properties, index) => {
+    //             let properties_table = this.get_properties_table(properties);
+    //             properties_div.appendChild(properties_table);
+    //         });
+    //     }
+
+    // }
+
+    show_properties(properties_arr) {
+
+        tabManager.add_tab('Properties');
+        let active_tab_content = document.querySelector('.active-tab-content');
+
+        if (properties_arr.length > 0) {
+
+            properties_arr.forEach(file => {
+
+                console.log('file', file);
+
+                let properties_div1 = utilities.add_div();
+                let basic_content = utilities.add_div();
+                let permissions_content = utilities.add_div();
+
+                properties_div1.classList.add('properties_view', 'grid2');
+                basic_content.classList.add('basic');
+                permissions_content.classList.add('permissions');
+
+                properties_div1.append(basic_content, permissions_content);
+                active_tab_content.append(properties_div1);
+                // tab_content.append(properties_div1);
+
+                // Basic Tab
+                let card = utilities.add_div();
+                let content = utilities.add_div();
+
+                card.dataset.properties_href = file.href;
+
+                let close_btn = utilities.add_div();
+                let close_icon = document.createElement('i');
+                close_icon.classList.add('bi', 'bi-x');
+                close_btn.classList.add('float', 'right', 'pointer');
+                close_btn.append(close_icon);
+                close_btn.addEventListener('click', (e) => {
+                    card.remove()
+                    let cards = document.querySelectorAll('.properties')
+                    if (cards.length === 0) {
+                        utilities.clear()
+                        // navigation.sidebarHome();
+                    }
+                })
+
+                content.classList.add('content');
+                card.classList.add('properties');
+
+                let icon = utilities.add_div();
+                icon.classList.add('icon');
+                card.append(icon);
+
+                content.append(utilities.add_item('Name:'), utilities.add_item(file.display_name));
+
+                let folder_count = utilities.add_div();
+                folder_count.classList.add('item', 'folder_count');
+
+                let size =utilities.add_div();
+                size.classList.add('size');
+                // size.append('Calculating..');
+
+                content.append(utilities.add_item('Type:'), utilities.add_item(file.content_type));
+                content.append(utilities.add_item(`Contents:`), folder_count);
+
+                let location = utilities.add_item(file.location);
+                location.title = file.location;
+
+                content.append(utilities.add_item('Location:'), location);
+
+                if (file.is_dir) {
+
+                    // utilities.getFolderIcon(file).then(folder_icon => {
+                    //     // console.log('folder_icon', folder_icon)
+                    //     let icon_img = utilities.add_img(folder_icon);
+                    //     icon_img.classList.add('icon48');
+                    //     icon.append(icon_img);
+                    // });
+
+                    content.append(utilities.add_item('Size:'), utilities.add_item(size));
+
+                    if (file.is_readable) {
+
+                        // // Calculate Folder Count
+                        // let spinner = utilities.add_img('assets/icons/spinner.gif');
+                        // spinner.style = 'width: 12px; height: 12px;'
+
+                        // size.append(spinner, ` Calculating...`);
+                        // ipcRenderer.send('get_folder_count', file.href);
+
+                        // // Calculate Folder Size
+                        // spinner = utilities.add_img('assets/icons/spinner.gif');
+                        // spinner.style = 'width: 12px; height: 12px;'
+
+                        // folder_count.append(spinner, ` Calculating...`);
+                        // // console.log('getting folder size')
+                        // ipcRenderer.send('get_folder_size', file.href);
+
+                    } else {
+
+                        size.append('Unknown')
+                        folder_count.append('Unknown')
+
+                    }
+
+
+                } else {
+
+                    folder_count.append('1');
+                    content.append(utilities.add_item('Size:'), utilities.add_item(getFileSize(file.size)));
+
+                    ipcRenderer.invoke('get_icon', (file.href)).then(res => {
+
+                        let icon_img;
+                        if (file.content_type.indexOf('image/') > -1) {
+                            icon_img = utilities.add_img(file.href);
+                            icon_img.classList.add('icon48');
+                            icon.append(icon_img);
+                        } else {
+                            icon_img = utilities.add_img(res);
+                            icon_img.classList.add('icon48');
+                            icon.append(icon_img);
+                        }
+                    })
+
+                }
+
+                if (!file.mtime) {
+                    file.mtime = "";
+                }
+                if (!file.atime) {
+                    file.atime = "";
+                }
+                if (!file.ctime) {
+                    file.ctime = "";
+                }
+
+                content.append(utilities.add_item(`Modified:`), utilities.add_item(utilities.get_date_time(file.mtime)));
+                content.append(utilities.add_item(`Accessed:`), utilities.add_item(utilities.get_date_time(file.atime)));
+                content.append(utilities.add_item(`Created:`), utilities.add_item(utilities.get_date_time(file.ctime)));
+
+                card.append(content);
+                basic_content.append(card)
+
+                // Permissions Tab
+                let permissions = this.getPermissions(file.permissions);
+                let rows = ['Owner', 'Access', 'Group', 'Access', 'Other', 'Access']
+                let perm_key;
+
+                if (!file.is_dir) {
+                    rows.push('Execute')
+                }
+
+                for (let i = 0; i < rows.length; i++) {
+
+                    let row = utilities.add_div(['flex', 'row']);
+                    for (let ii = 0; ii < 2; ii++) {
+                        let col = utilities.add_div();
+                        if (ii == 0) {
+                            col.classList.add('td');
+                            col.append(rows[i]);
+                        } else {
+                            if (i % 2 === 0) {
+                                perm_key = rows[i].toLowerCase();
+                                if (file[perm_key]) {
+                                    col.append(file[perm_key]);
+                                }
+                            } else {
+                                col.append(this.getMappedPermissions(permissions[perm_key]));
+                            }
+
+                            if (rows[i] === 'Execute' && !file.is_dir) {
+
+                                let chk_execute = document.createElement('input');
+                                let label_execute = document.createElement('label');
+
+                                label_execute.innerText = ' Allow executing file as program';
+                                label_execute.htmlFor = 'chk_execute';
+
+                                chk_execute.id = 'chk_execute';
+                                chk_execute.type = 'checkbox';
+                                col.append(chk_execute, label_execute);
+
+                                if (file.is_execute) {
+                                    chk_execute.checked = true;
+                                }
+
+                                chk_execute.addEventListener('click', (e) => {
+                                    if (chk_execute.checked) {
+                                        ipcRenderer.send('set_execute', file.href);
+                                    } else {
+                                        ipcRenderer.send('clear_execute', file.href);
+                                    }
+                                })
+
+                            }
+                        }
+
+                        row.append(col);
+                    }
+
+                    if (i % 2 === 1) {
+                        row.append(document.createElement('br'));
+                    }
+                    permissions_content.append(row);
+                }
+
+            })
+
+        } else {
+            active_tab_content.innerHTML = "Unable to get properties";
+        }
+
+    //     let properties_table = document.createElement('table');
+    //     properties_table.classList.add('properties_table');
+
+    //     for (const key in properties) {
+    //         if (properties[key]) {
+    //             let tr = document.createElement('tr');
+    //             let td_key = document.createElement('td');
+    //             let td_value = document.createElement('td');
+    //             td_key.classList.add('th');
+    //             td_key.innerHTML =  key.charAt(0).toUpperCase() + key.slice(1);
+
+    //             switch (key) {
+    //                 case 'size':
+    //                     td_value.innerHTML = utilities.get_file_size(properties[key]);
+    //                     break;
+    //                 case 'mtime':
+    //                     td_value.innerHTML = utilities.get_date_time(properties[key]);
+    //                     break;
+    //                 case 'ctime':
+    //                     td_value.innerHTML = utilities.get_date_time(properties[key]);
+    //                     break;
+    //                 case 'atime':
+    //                     td_value.innerHTML = utilities.get_date_time(properties[key]);
+    //                     break;
+    //                 case 'is_dir':
+    //                     td_value.innerHTML = properties[key] === true ? 'Yes' : 'No';
+    //                     break;
+    //                 case 'is_readable':
+    //                     td_value.innerHTML = properties[key] === true ? 'Yes' : 'No';
+    //                     break;
+    //                 case 'is_writable':
+    //                     td_value.innerHTML = properties[key] === true ? 'Yes' : 'No';
+    //                     break;
+    //                 case 'is_symlink':
+    //                     td_value.innerHTML = properties[key] === true ? 'Yes' : 'No';
+    //                     break;
+    //                 case 'is_execute':
+    //                     td_value.innerHTML = properties[key] === true ? 'Yes' : 'No';
+    //                     break;
+    //                 default:
+    //                     td_value.innerHTML = properties[key];
+    //                     break;
+    //             }
+    //             tr.appendChild(td_key);
+    //             tr.appendChild(td_value);
+    //             properties_table.appendChild(tr);
+    //         }
+    //     }
+
+    //     return properties_table;
+
+    }
+
+    getPermissions(unixMode) {
+
+        // const special = unixMode & 0xF000;
+        const user = (unixMode >> 6) & 0x7;
+        const group = (unixMode >> 3) & 0x7;
+        const other = unixMode & 0x7;
+
+        // let p_arr = []
+        // p_arr.push(user)
+        // p_arr.push(group)
+        // p_arr.push(other)
+
+        // return p_arr;
+
+        return {
+            // special: special.toString(8),
+            owner: user.toString(8),
+            group: group.toString(8),
+            other: other.toString(8)
+        };
+    }
+
+    getMappedPermissions(permissionValue) {
+        const symbolicMap = {
+            0: 'None', //'---',
+            1: '--x',
+            2: '-w-',
+            3: '-wx',
+            4: 'Read-Only', // 'r--',
+            5: 'Access Files', //r-x
+            6: 'Read and Write', //'rw-',
+            7: 'Create and Delete Files' //'rwx'
+        };
+        return symbolicMap[permissionValue];
+    }
+
+}
+
 class Navigation {
 
     constructor(FileManager) {
@@ -4808,7 +4897,10 @@ class MenuManager {
                     break;
                 }
                 case 'properties': {
-                    fileOperations.fileInfo();
+                    let selected_files_arr = utilities.get_selected_files();
+                    ipcRenderer.send('get_properties', selected_files_arr);
+                    selected_files_arr = [];
+                    utilities.clear();
                     break;
                 }
                 case 'sidebar_properties': {
@@ -4840,7 +4932,7 @@ class MenuManager {
 
             }
 
-            utilities.clearHighlight();
+            utilities.clear_highlight();
 
         })
 
@@ -4877,6 +4969,7 @@ let iconManager;
 let tabManager;
 let dragSelect;
 let fileManager;
+let propertiesManager;
 let menuManager;
 let deviceManager;
 let workspaceManager;
@@ -4900,6 +4993,7 @@ init = () => {
     tabManager = new TabManager();
     dragSelect = new DragSelect();
     fileManager = new FileManager(tabManager,iconManager);
+    propertiesManager = new PropertiesManager();
     menuManager = new MenuManager();
     windowManager = new WindowManager();
     const navigation = new Navigation(FileManager);

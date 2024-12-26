@@ -49,16 +49,16 @@ CFLAGS_CC_Debug := \
 	-std=gnu++17
 
 INCS_Debug := \
-	-I/home/michael/.electron-gyp/31.0.0/include/node \
-	-I/home/michael/.electron-gyp/31.0.0/src \
-	-I/home/michael/.electron-gyp/31.0.0/deps/openssl/config \
-	-I/home/michael/.electron-gyp/31.0.0/deps/openssl/openssl/include \
-	-I/home/michael/.electron-gyp/31.0.0/deps/uv/include \
-	-I/home/michael/.electron-gyp/31.0.0/deps/zlib \
-	-I/home/michael/.electron-gyp/31.0.0/deps/v8/include \
+	-I/home/michael/.cache/node-gyp/31.3.1/include/node \
+	-I/home/michael/.cache/node-gyp/31.3.1/src \
+	-I/home/michael/.cache/node-gyp/31.3.1/deps/openssl/config \
+	-I/home/michael/.cache/node-gyp/31.3.1/deps/openssl/openssl/include \
+	-I/home/michael/.cache/node-gyp/31.3.1/deps/uv/include \
+	-I/home/michael/.cache/node-gyp/31.3.1/deps/zlib \
+	-I/home/michael/.cache/node-gyp/31.3.1/deps/v8/include \
 	-I/usr/include/glib-2.0 \
 	-I/usr/include/gdk-pixbuf-2.0 \
-	-I$(srcdir)/node_modules/nan
+	-I$(srcdir)/../../node_modules/nan
 
 DEFS_Release := \
 	'-DNODE_GYP_MODULE_NAME=gio' \
@@ -105,16 +105,16 @@ CFLAGS_CC_Release := \
 	-std=gnu++17
 
 INCS_Release := \
-	-I/home/michael/.electron-gyp/31.0.0/include/node \
-	-I/home/michael/.electron-gyp/31.0.0/src \
-	-I/home/michael/.electron-gyp/31.0.0/deps/openssl/config \
-	-I/home/michael/.electron-gyp/31.0.0/deps/openssl/openssl/include \
-	-I/home/michael/.electron-gyp/31.0.0/deps/uv/include \
-	-I/home/michael/.electron-gyp/31.0.0/deps/zlib \
-	-I/home/michael/.electron-gyp/31.0.0/deps/v8/include \
+	-I/home/michael/.cache/node-gyp/31.3.1/include/node \
+	-I/home/michael/.cache/node-gyp/31.3.1/src \
+	-I/home/michael/.cache/node-gyp/31.3.1/deps/openssl/config \
+	-I/home/michael/.cache/node-gyp/31.3.1/deps/openssl/openssl/include \
+	-I/home/michael/.cache/node-gyp/31.3.1/deps/uv/include \
+	-I/home/michael/.cache/node-gyp/31.3.1/deps/zlib \
+	-I/home/michael/.cache/node-gyp/31.3.1/deps/v8/include \
 	-I/usr/include/glib-2.0 \
 	-I/usr/include/gdk-pixbuf-2.0 \
-	-I$(srcdir)/node_modules/nan
+	-I$(srcdir)/../../node_modules/nan
 
 OBJS := \
 	$(obj).target/$(TARGET)/src/gio.o
