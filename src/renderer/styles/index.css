@@ -549,6 +549,28 @@ tr {
     width: 100%;
 }
 
+.empty_msg {
+    /* border: 1px solid var(--border); */
+    color: var(--text);
+    position: fixed;
+    top: 40%;
+    left: 50%;
+    font-size: 24px;
+    font-weight: bold;
+    text-align: center;
+
+}
+
+.empty_msg i {
+    font-size: 48px;
+    color: var(--text);
+}
+
+.empty_msg .msg {
+    font-size: 24px;
+    color: var(--text);
+}
+
 .footer {
     position: absolute;
     background: var(--menu);

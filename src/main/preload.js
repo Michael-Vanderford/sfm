@@ -2984,6 +2984,11 @@ class FileManager {
             tabManager.set_tab_data_arr(files_arr);
             ipcRenderer.send('get_disk_space', this.location);
 
+            if (files_arr.length === 0) {
+                utilities.set_msg('No files found.');
+                this.folder_is_empty();
+            }
+
         });
 
         // add items
@@ -3089,6 +3094,27 @@ class FileManager {
         ipcRenderer.on('recent_files', (e, files_arr) => {
             this.get_list_view(files_arr);
         })
+
+    }
+
+    // Folder is Empty
+    folder_is_empty() {
+
+
+        let active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
+        let div = document.createElement('div');
+        div.classList.add('empty_msg');
+
+        let i = document.createElement('i');
+        i.classList.add('bi', 'bi-folder-x');
+
+        let msg = document.createElement('div');
+        msg.classList.add('msg');
+        msg.innerHTML = 'Folder is Empty';
+
+        div.append(i, msg);
+
+        active_tab_content.append(div);
 
     }
 
