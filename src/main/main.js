@@ -1026,6 +1026,13 @@ class FileManager {
 
         // listen for ls event
         ipcMain.on('ls', (e, location) => {
+
+            // check if location is valid
+            if (fs.existsSync(location) === false && !location.startsWith('mtp://')) {
+                win.send('set_msg', `Error: Could not find ${location}`);
+                return;
+            }
+
             this.location = location;
             let ls_data = {
                 cmd: 'ls',

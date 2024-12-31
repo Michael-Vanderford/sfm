@@ -576,7 +576,8 @@ class Utilities {
     set_msg(msg) {
 
         try {
-            let msg_div = document.querySelector('.msg');
+            let footer = document.querySelector('.footer');
+            let msg_div = footer.querySelector('.msg');
             // check if message contains error
             if (msg.toLocaleLowerCase().includes('error')) {
                 msg_div.classList.add('error');
@@ -3099,7 +3100,6 @@ class FileManager {
 
     // Folder is Empty
     folder_is_empty() {
-
 
         let active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
         let div = document.createElement('div');
