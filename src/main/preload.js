@@ -4598,7 +4598,7 @@ class PropertiesManager {
                 } else {
 
                     folder_count.append('1');
-                    content.append(utilities.add_item('Size:'), utilities.add_item(getFileSize(file.size)));
+                    content.append(utilities.add_item('Size:'), utilities.add_item(utilities.get_file_size(file.size)));
 
                     ipcRenderer.invoke('get_icon', (file.href)).then(res => {
 
