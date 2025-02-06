@@ -3918,6 +3918,10 @@ class FileManager {
             ipcRenderer.send('columns_menu');
         })
 
+        active_tab_content.addEventListener('mouseover', (e) => {
+            e.target.focus();
+        });
+
     }
 
     // add_list_view_item(f) {

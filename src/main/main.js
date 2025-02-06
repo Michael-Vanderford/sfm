@@ -1300,7 +1300,7 @@ class WindowManager {
             x: this.window_settings.window.x,
             y: this.window_settings.window.y,
             webPreferences: {
-                sandbox: true,
+                sandbox: false,
                 nodeIntegration: false, // is default value after Electron v5
                 contextIsolation: true, // protect against prototype pollution
                 enableRemoteModule: false, // turn off remote
