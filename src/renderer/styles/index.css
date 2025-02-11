@@ -761,7 +761,7 @@ tr {
 }
 
 .table td {
-    padding: 5px;
+    /* padding: 5px; */
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
