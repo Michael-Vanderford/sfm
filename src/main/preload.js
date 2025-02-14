@@ -3778,6 +3778,7 @@ class FileManager {
             active_tab_content = document.querySelector('.active-tab-content');
         }
         active_tab_content.innerHTML = '';
+        active_tab_content.scrollTop = 0;
 
         // update tab label when location changes
         tabManager.update_tab(utilities.get_location());
@@ -3862,8 +3863,6 @@ class FileManager {
                     th.style.width = list_view_settings.col_width[key] + 'px';
 
                 }
-
-
 
                 // init resize column
                 drag_handle.addEventListener('mousedown', (e) => {
