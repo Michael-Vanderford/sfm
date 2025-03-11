@@ -367,7 +367,14 @@ class Utilities {
     open(e, href) {
         shell.openPath(href)
         .then((error) => {
-            console.log(error);
+
+            // clear high lighted item
+            e.sender.send('clear_highlight');
+
+
+            if (error) {
+                e.sender.send('set_msg', error);
+            }
         })
     }
 

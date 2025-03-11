@@ -689,6 +689,7 @@ class Utilities {
         ipcRenderer.send('set_copy_arr', this.copy_arr, this.location);
 
         this.set_msg(`Copied ${this.copy_arr.length} items at ${this.location}`);
+
     }
 
     // cut
@@ -945,12 +946,13 @@ class Utilities {
 
         // clear highlighted all highlighted items
         // let active_tab_content = document.querySelector('.active-tab-content');
-        let main = document.querySelector('.main');
-        let items = main.querySelectorAll('.highlight, .highlight_select, .highlight_target');
-        items.forEach(item => {
-            item.classList.remove('highlight_select', 'highlight', 'highlight_target');
-        });
-        items = null;
+        // let main = document.querySelector('.main');
+        // let items = main.querySelectorAll('.highlight, .highlight_select, .highlight_target');
+        // items.forEach(item => {
+        //     item.classList.remove('highlight_select', 'highlight', 'highlight_target');
+        // });
+        // items = null;
+        this.clear_highlight();
 
         // clear sidebar highlight
         let sidebar = document.querySelector('.sidebar');
@@ -1003,9 +1005,12 @@ class Utilities {
 
     // get selected files
     get_selected_files() {
+
         let selected_files = [];
         let active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
         let items = active_tab_content.querySelectorAll('.highlight, .highlight_select');
+        console.log('items', items.length)
+
         items.forEach(item => {
             let files_obj = {
                 id: item.dataset.id,
@@ -1020,11 +1025,9 @@ class Utilities {
                 location: item.dataset.location
             }
             selected_files.push(files_obj);
-
             this.selected_files_size += parseInt(item.dataset.size);
-
         });
-        items = null;
+
         return selected_files;
     }
 
@@ -1365,7 +1368,10 @@ class DragSelect {
     // Handle click outside selected items
     handleOutsideClick(e, items) {
 
-        if (this.is_dragging) return;
+        if (this.is_dragging) {
+            console.log('is dragging');
+            return;
+        }
 
         if (e.ctrlKey) {
             // console.log('allow add true');
@@ -4077,26 +4083,34 @@ class FileManager {
                         }
 
                         // handle icon click
-                        img.addEventListener('click', (e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            let selected_files = utilities.get_selected_files();
-                            selected_files.forEach(f => {
-                                ipcRenderer.send('open', f.href);
-                            });
-                            selected_files = [];
-                        });
+                        // img.addEventListener('click', (e) => {
+                        //     e.preventDefault();
+                        //     e.stopPropagation();
+                        //     let selected_files = utilities.get_selected_files();
+                        //     selected_files.forEach(f => {
+                        //         ipcRenderer.send('open', f.href);
+                        //     });
+                        //     selected_files = [];
+                        // });
 
                         // handle link click
-                        link.addEventListener('click', (e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            let selected_files = utilities.get_selected_files();
-                            selected_files.forEach(f => {
-                                ipcRenderer.send('open', f.href);
-                            });
-                            selected_files = [];
-                        });
+                        this.handleClick(link, f);
+                        // link.addEventListener('click', (e) => {
+                        //     e.preventDefault();
+                        //     e.stopPropagation();
+
+                        //     let selected_files = utilities.get_selected_files();
+                        //     console.log('running open', selected_files);
+                        //     // selected_files.forEach(f => {
+                        //     //     console.log('running open', f.href);
+
+                        //     //     ipcRenderer.send('open', f.href);
+                        //     // });
+
+                        //     utilities.clear_highlight();
+                        //     selected_files = [];
+
+                        // });
 
                     }
 
@@ -4170,91 +4184,37 @@ class FileManager {
             })
         }
 
-        // handle tr click
-        // tr.addEventListener('click', (e) => {
-        //     e.preventDefault();
-        //     e.stopPropagation();
-        //     if (e.ctrlKey) {
-        //         tr.classList.toggle('highlight_select');
-        //     }
-        // });
-
-        // // handle mouseover
-        // tr.addEventListener('mouseover', function () {
-        //     tr.classList.add('highlight');
-        //     link.focus();
-        // });
-
-        // // handle mouseout
-        // tr.addEventListener('mouseout', function () {
-        //     tr.classList.remove('highlight');
-        // });
-
-        // // handle dragstart
-        // tr.draggable = true;
-        // tr.addEventListener('dragstart', (e) => {
-        //     e.stopPropagation();
-        //     console.log('is dragging true');
-        //     dragSelect.set_is_dragging(true);
-        //     dragSelect.is_dragging_divs = true;
-        // });
-
-        // // handle dragover
-        // tr.addEventListener('dragover', (e) => {
-        //     e.preventDefault();
-        //     // e.stopPropagation();
-        //     if (f.is_dir) {
-        //         tr.classList.add('highlight_target');
-        //         if (e.ctrlKey) {
-        //             e.dataTransfer.dropEffect = "copy";
-        //             utilities.set_msg(`Copy items to ${f.href}`);
-        //         } else {
-        //             e.dataTransfer.dropEffect = "move";
-        //             utilities.set_msg(`Move items to ${f.href}`);
-        //         }
-        //         utilities.set_destination(f.href);
-        //         utilities.set_msg(`Destination: ${f.href}`);
-        //     } else {
-        //         // handle drag/drop on active tab content
-        //     }
-        // });
-
-        // // handle drop leave
-        // tr.addEventListener('dragleave', (e) => {
-        //     tr.classList.remove('highlight_target');
-        // });
-
-        // // handle drop
-        // tr.addEventListener('drop', (e) => {
-        //     e.preventDefault();
-        //     e.stopPropagation();
-        //     ipcRenderer.send('is_main', 0);
-        //     if (!tr.classList.contains('highlight') && tr.classList.contains('highlight_target')) {
-        //         utilities.copy();
-        //         if (e.ctrlKey) {
-        //             utilities.paste();
-        //         } else {
-        //             utilities.move();
-        //         }
-        //     } else {
-        //         console.log('did not find target')
-        //         ipcRenderer.send('is_main', 1);
-        //         utilities.copy();
-        //         utilities.paste();
-        //     }
-        //     utilities.clear();
-        //     dragSelect.set_is_dragging(true);
-        // });
-
-        // tr.addEventListener('keydown', (e) => {
-        //     if (e.key === 'F2') {
-        //         utilities.edit();
-        //     }
-        // })
-
-
         return tr;
 
+    }
+
+    // handle click event
+    handleClick(link, f) {
+
+        link.addEventListener('click', (e) => {
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            let active_tab_content = document.querySelector('.main');
+            let selected_files = active_tab_content.querySelectorAll('.highlight, .highlight_select');
+
+            ipcRenderer.send('open', f.href);
+            // });
+
+            this.clearHighlight();
+            selected_files = [];
+
+        });
+
+    }
+
+    clearHighlight() {
+        let active_tab_content = document.querySelector('.main');
+        let items = active_tab_content.querySelectorAll('.highlight, .highlight_select');
+        items.forEach((item) => {
+            item.classList.remove('highlight', 'highlight_select');
+        })
     }
 
     // lazy load files
