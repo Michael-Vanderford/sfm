@@ -33,8 +33,6 @@ class FileManager {
         // populate file_obj with file data
         let files_arr = [];
 
-
-
         gio.ls(location, (err, dirents) => {
             if (err) {
 

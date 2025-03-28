@@ -46,6 +46,27 @@ hr {
     border: 1px solid var(--border);
 }
 
+.menu {
+    display: flex;
+    padding: 5px;
+    background-color: var(--menu);
+    border-bottom: var(--border);
+}
+.menu .item {
+    padding: 5px;
+    margin-left: 5px;
+    border-radius: 5px;
+    color: var(--text);
+}
+.menu .item:hover {
+    cursor: pointer;
+    background-color: var(--highlight);
+}
+.menu .item.active {
+    background-color: var(--highlight);
+    color: var(--text);
+}
+
 .navigation {
     display: flex;
     padding: 5px;
@@ -205,7 +226,7 @@ hr {
     display: flex;
     padding: 5px;
     border-radius: 5px;
-    margin-left: 5px;
+    margin-left: 15px;
     margin-bottom: 5px;
     cursor: pointer;
 }
@@ -302,9 +323,14 @@ hr {
     color: var(--text);
     text-decoration: none;
     width: 100%;
+    padding-right: 5px;
 }
 
-.workspace img {
+.workspace td:first-child {
+    padding-right: 5px;
+}
+
+.workspace tr .icon {
     /* width: 16px;
     height: 16px; */
     padding: 5px;
@@ -318,6 +344,7 @@ hr {
     display: block;
     padding-left: 5px;
     white-space: nowrap;
+    margin-left: 5px !important;
 }
 
 .workspace a {

@@ -732,6 +732,7 @@ class Utilities {
         this.copy_arr = [];
         this.cut_arr = [];
         this.clear_highlight();
+        this.clear_empty_folder();
     }
 
     // move
@@ -828,6 +829,7 @@ class Utilities {
             this.set_msg('Nothing to delete');
         }
         delete_arr = [];
+        // fileManager.check_for_empty_folder();
     }
 
     //
@@ -1000,6 +1002,14 @@ class Utilities {
         if (filter) {
             filter.innerHTML = '';
             filter.classList.remove('active');
+        }
+    }
+
+    // clear empty folder message
+    clear_empty_folder() {
+        let empty_folder = document.querySelector('.empty_msg');
+        if (empty_folder) {
+            empty_folder.innerHTML = '';
         }
     }
 
@@ -2991,16 +3001,19 @@ class FileManager {
             tabManager.set_tab_data_arr(files_arr);
             ipcRenderer.send('get_disk_space', this.location);
 
-            if (files_arr.length === 0) {
-                utilities.set_msg('No files found.');
-                this.folder_is_empty();
-            }
+            // if (files_arr.length === 0) {
+            //     utilities.set_msg('No files found.');
+            //     this.folder_is_empty();
+            // }
+
+            this.check_for_empty_folder();
 
         });
 
         // add items
         ipcRenderer.on('add_items', (e, copy_arr) => {
             this.add_items(copy_arr);
+            this.check_for_empty_folder();
         });
 
         // get list view item
@@ -3034,6 +3047,8 @@ class FileManager {
 
             dragSelect.initialize();
 
+            this.check_for_empty_folder();
+
         });
 
         // edit item mode
@@ -3052,6 +3067,8 @@ class FileManager {
 
             input.focus();
             input.setSelectionRange(0, input.value.lastIndexOf('.'));
+
+            this.check_for_empty_folder();
 
         });
 
@@ -3092,6 +3109,7 @@ class FileManager {
                 let item = active_tab_content.querySelector(`[data-id="${f.id}"]`);
                 item.remove();
             })
+            this.check_for_empty_folder();
         });
 
         ipcRenderer.on('overwrite', (e, overwrite_arr) => {
@@ -3104,10 +3122,29 @@ class FileManager {
 
     }
 
+    check_for_empty_folder() {
+
+        let active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
+        let items = active_tab_content.querySelectorAll('.card, .tr');
+
+        console.log('check for empty folder', items.length);
+
+        if (items.length === 0) {
+            this.folder_is_empty();
+        } else {
+            let empty_msg = active_tab_content.querySelector('.empty_msg');
+            if (empty_msg) {
+                empty_msg.remove();
+            }
+        }
+
+    }
+
     // Folder is Empty
     folder_is_empty() {
 
         let active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
+
         let div = document.createElement('div');
         div.classList.add('empty_msg');
 
@@ -3119,8 +3156,9 @@ class FileManager {
         msg.innerHTML = 'Folder is Empty';
 
         div.append(i, msg);
-
         active_tab_content.append(div);
+
+        utilities.set_msg('Folder is Empty');
 
     }
 

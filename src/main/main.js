@@ -1318,7 +1318,8 @@ class WindowManager {
             icon: path.join(__dirname, '../renderer/icons/icon.png')
         });
 
-        // window.removeMenu();
+        // hide menu
+        window.setMenuBarVisibility(false);
 
         // listen for window move
         window.on('move', (e) => {
@@ -1565,7 +1566,7 @@ class MenuManager {
                     label: 'Open with Code',
                     click: () => {
                         exec(`cd "${f.href}"; code .`, (err) => {
-                            win.send('clear');
+                            win.send('clear_highlight');
                             if (err) {
                                 return;
                             }
@@ -2120,7 +2121,7 @@ class MenuManager {
                         exec(cmd);
 
                         // shell.openPath(file.href);
-                        win.send('clear');
+                        win.send('clear_highlight');
 
                     }
                 }))
