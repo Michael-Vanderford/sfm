@@ -9,14 +9,26 @@
         <link rel="stylesheet" href="../assets/bootstrap-icons/font/bootstrap-icons.css">
     </head>
     <body>
-        <div class="navigation">
-            <button id="btn_back" class="back button"><i class="bi bi-chevron-left"></i></button>
-            <button id="btn_forward" class="forward button"><i class="bi bi-chevron-right"></i></button>
-            <div class="breadcrumbs"></div>
-            <input type="text" spellcheck="false" class="location hidden"></input>
-            <div class="filter" contenteditable="true"></div>
-            <input type="text" class="placeholder" style="width: 0; position: absolute; z-index: -1;"></input>
-            <div class="disk_space"></div>
+        <div class="menu">
+            <div class="header hidden">
+                <button class="button new folder"><i class="bi bi-folder-plus"></i></button>
+                <button class="button cut"><i class="bi bi-scissors"></i></button>
+                <button class="button copy"><i class="bi bi-copy"></i></button>
+                <button class="button paste"><i class="bi bi-clipboard-check"></i></button>
+                <button class="button delete"><i class="bi bi-trash"></i></button>
+
+                <button class="button settings"><i class="bi bi-sliders right"></i></button>
+
+            </div>
+            <div class="navigation">
+                <button id="btn_back" class="back button"><i class="bi bi-chevron-left"></i></button>
+                <button id="btn_forward" class="forward button"><i class="bi bi-chevron-right"></i></button>
+                <div class="breadcrumbs"></div>
+                <input type="text" spellcheck="false" class="location hidden"></input>
+                <div class="filter" contenteditable="true"></div>
+                <input type="text" class="placeholder" style="width: 0; position: absolute; z-index: -1;"></input>
+                <div class="disk_space"></div>
+            </div>
         </div>
         <div class="container">
             <div class="sidebar"></div>

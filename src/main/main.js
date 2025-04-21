@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell, screen, dialog, Menu, MenuItem } = require('electron');
+const { app, Tray, BrowserWindow, ipcMain, shell, screen, dialog, Menu, MenuItem } = require('electron');
 const window = require('electron').BrowserWindow;
 const worker = require('worker_threads');
 const { execSync } = require('child_process');
@@ -7,6 +7,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const gio = require('../gio/build/Release/gio.node');
+const iconManager = require('./lib/IconManager');
 
 
 // // Configure electron-reload
@@ -68,6 +69,10 @@ class SettingsManager {
             this.updateSettings(settings);
         });
 
+        ipcMain.handle('update_settings', (e, settings) => {
+            this.updateSettings(settings);
+        });
+
         // init list view settings
         this.list_view_file = path.join(app.getPath('userData'), 'list_view.json');
         this.list_view_settings = {};
@@ -98,9 +103,12 @@ class SettingsManager {
 
     // Update settings
     updateSettings(settings) {
+
+        console.log('update settings', settings);
+
         this.settings = settings;
         fs.writeFileSync(this.settings_file, JSON.stringify(this.settings, null, 4));
-        win.send('settings', this.settings);
+        win.send('settings_updated', this.settings);
     }
 
     // Toggle Menubar
@@ -381,15 +389,63 @@ class Utilities {
     // poste
     paste(e, copy_arr, location) {
 
+        // check if copy_arr is empty
+        if (copy_arr.length === 0) {
+            win.send('set_msg', 'Error: Copy array is empty.');
+            return;
+        }
+
+        // check if location is empty
+        if (location == '' || location == undefined) {
+            win.send('set_msg', 'No location to paste files.');
+            return;
+        }
+
         let paste_arr = [];
         let overwrite_arr = [];
 
+        win.send('set_msg', 'Pasting files...');
+
         copy_arr.forEach(f => {
+
+            if (f.location === '' || f.location === undefined) {
+                win.send('set_msg', 'Error: No location to paste files.');
+                return;
+            }
+
+            if (f.is_dir === null || f.is_dir === undefined) {
+                win.send('set_msg', 'Error: No file type to paste files.');
+                return;
+            }
+
+            if (f.name === '' || f.name === undefined) {
+                win.send('set_msg', 'Error: No file name to paste files.');
+                return;
+            }
+
+            if (f.href === '' || f.href === undefined) {
+                win.send('set_msg', 'Error: No file href to paste files.');
+                return;
+            }
+
+            if (f.display_name === '' || f.display_name === undefined) {
+                win.send('set_msg', 'Error: No file display name to paste files.');
+                return;
+            }
+
+            if (f.is_hidden === null || f.is_hidden === undefined) {
+                win.send('set_msg', 'Error: No file hidden status to paste files.');
+                return;
+            }
 
             f.destination = this.sanitize_file_name(path.join(location, f.name));
             f.source = f.href;
             f.name = path.basename(f.destination);
+            f.display_name = f.name;
+            f.is_hidden = f.is_hidden;
             f.href = f.destination;
+
+            console.log('paste', f.location, f.destination);
 
             // handle duplicate file names
             if (f.location == location && fs.existsSync(f.destination)) {
@@ -405,6 +461,7 @@ class Utilities {
                 }
                 // update additional attributes so the new files have the correct data
                 f.name = path.basename(f.destination);
+                f.display_name = f.name;
                 f.href = f.destination;
 
                 paste_arr.push(f);
@@ -445,7 +502,6 @@ class Utilities {
         paste_arr = [];
         overwrite_arr = [];
         copy_arr = [];
-
 
         this.is_main = true;
     }
@@ -538,6 +594,8 @@ class Utilities {
     // rename
     rename(e, source, destination, id) {
 
+        console.log('rename', source, destination);
+
         if (fs.existsSync(destination)) {
             win.send('set_msg', 'Error: File name already exists.');
             return;
@@ -607,6 +665,9 @@ class Utilities {
 
     // get file size
     get_file_size(bytes) {
+
+        if (bytes === 0) return 0;
+
         let i = -1;
         do {
             bytes = bytes / 1024;
@@ -742,188 +803,251 @@ class WorkspaceManager {
 
 }
 
-class IconManager {
+// Icon IPC //////
 
-    constructor() {
+// Get File Icon
+ipcMain.handle('get_icon', async (e, href) => {
+    return await app.getFileIcon(href, { size: 32 }).then(icon => {
+        return icon.toDataURL();
+    }).catch((err) => {
+        return `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAADHklEQVRYhe2WX0/yVhzHP8VBW04r0pKIgjDjlRfPC3BX7vXM1+OdMXsPXi9eqEu27DUgf1ICgQrlFGkxnF0sdgrq00dxyZZ9kyb0d2i/n/b8vj0H/teS6vX69xcXF7/4vh9JKdV7j7Ozs+s0fpnlwunp6c/Hx8c/5nK53EcepFar/ZAGYgXg6Ojo6CPG3wqxApDL5bLrMM9kMgnE+fn5qxArAOuSECL5Xa1WX4X4NIB6vY5pmmia9iaEtlyQUqp1Qcznc+I4Rqm/b1kul595frcus5eUzWbJZt9uqVRToJRiMBgk58PhEM/zUEqhlMLzPIbDIfDXU3c6HcIwTAWZCqDdbtPtdgGQUhIEAYZh4HkenudhmiaTyQQpJY1GA9d1abVaz179hwBqtRq6rgMwmUxwHAfHcZBSIqWkWCziOA5BEKCUwjRNhBDMZrP1AHymvhnAtm1GoxHj8RghBEIIxuMxvu+zubmJpmnEcUwYhhiG8dX7pU5BqVQCwLIsoigiDEMqlQoA3W4X27axLIv9/X16vR57e3vJN+AtpXoDYRgynU6Zz+cAFAoF8vn8mwZpzFMBKKVotVq4rkuj0WCxWNBsNun3+wCfn4LZbEY+n8c0TZRSZDIZDg4OkvH/fgoMw+D+/p44jl+c14+mINViJKVkNBqxvb2dfNt938dxHJRSdLtddF3HdV3m8zm9Xo+trS0sy1oxtCzr44vRYDBIVjlN0ygUCskG5LHx1paCxWJBu91OUvDY7bqu43keYRjS6XQIggCA29tbSqUSzWZzPSmIogghRJKCx7XAdV2klAghKJfLyf+VUhiG8e9JwVd7QNd1ptMpURShaRq2bXN3d8discC27RevieOY6XT6vhT4vh8v74yXU/DYhDs7O2iaRhRFPDw8IIQgjmP6/T7FYvHZxhQgiqLYdV39aW1lCm5ubn5frlmWRbVaTSJYKpXY3d1NOl3X9cQsl8tRrVZXzAGur69/W65tLBeurq7+ODw8/FKpVHY2NjZWxt+jOI7nl5eXv56cnPwUBEHv6dhrYRWAuQ7zJ7oH0m0U/0n9CS0Pytp5nRYfAAAAAElFTkSuQmCC`;
+    })
+})
 
-        this.home = require('os').homedir();
-        this.theme_path = this.get_theme_path();
+// Get Folder Icon
+ipcMain.on('get_folder_icon', async (e, href) => {
+    let folder_icon = iconManager.get_folder_icon(e, href);
+    e.sender.send('set_folder_icon', href, folder_icon);
+})
 
-        // Get File Icon
-        ipcMain.handle('get_icon', async (e, href) => {
-            return await app.getFileIcon(href, { size: 32 }).then(icon => {
-                return icon.toDataURL();
-            }).catch((err) => {
-                return `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAADHklEQVRYhe2WX0/yVhzHP8VBW04r0pKIgjDjlRfPC3BX7vXM1+OdMXsPXi9eqEu27DUgf1ICgQrlFGkxnF0sdgrq00dxyZZ9kyb0d2i/n/b8vj0H/teS6vX69xcXF7/4vh9JKdV7j7Ozs+s0fpnlwunp6c/Hx8c/5nK53EcepFar/ZAGYgXg6Ojo6CPG3wqxApDL5bLrMM9kMgnE+fn5qxArAOuSECL5Xa1WX4X4NIB6vY5pmmia9iaEtlyQUqp1Qcznc+I4Rqm/b1kul595frcus5eUzWbJZt9uqVRToJRiMBgk58PhEM/zUEqhlMLzPIbDIfDXU3c6HcIwTAWZCqDdbtPtdgGQUhIEAYZh4HkenudhmiaTyQQpJY1GA9d1abVaz179hwBqtRq6rgMwmUxwHAfHcZBSIqWkWCziOA5BEKCUwjRNhBDMZrP1AHymvhnAtm1GoxHj8RghBEIIxuMxvu+zubmJpmnEcUwYhhiG8dX7pU5BqVQCwLIsoigiDEMqlQoA3W4X27axLIv9/X16vR57e3vJN+AtpXoDYRgynU6Zz+cAFAoF8vn8mwZpzFMBKKVotVq4rkuj0WCxWNBsNun3+wCfn4LZbEY+n8c0TZRSZDIZDg4OkvH/fgoMw+D+/p44jl+c14+mINViJKVkNBqxvb2dfNt938dxHJRSdLtddF3HdV3m8zm9Xo+trS0sy1oxtCzr44vRYDBIVjlN0ygUCskG5LHx1paCxWJBu91OUvDY7bqu43keYRjS6XQIggCA29tbSqUSzWZzPSmIogghRJKCx7XAdV2klAghKJfLyf+VUhiG8e9JwVd7QNd1ptMpURShaRq2bXN3d8discC27RevieOY6XT6vhT4vh8v74yXU/DYhDs7O2iaRhRFPDw8IIQgjmP6/T7FYvHZxhQgiqLYdV39aW1lCm5ubn5frlmWRbVaTSJYKpXY3d1NOl3X9cQsl8tRrVZXzAGur69/W65tLBeurq7+ODw8/FKpVHY2NjZWxt+jOI7nl5eXv56cnPwUBEHv6dhrYRWAuQ7zJ7oH0m0U/0n9CS0Pytp5nRYfAAAAAElFTkSuQmCC`;
-            })
-            // try {
-            //     return await app.getFileIcon(href, { size: 32 }).then(icon => {
-            //         return icon.toDataURL();
-            //     }).catch((err) => {
-            //         // return path.join(this.get_theme_path(), 'default-file.svg');
-            //     })
-            // } catch (err) {
-            // }
-        })
+ipcMain.handle('get_symlink_icon', (e) => {
+    let symlink_icon = iconManager.get_symlink_icon();
+    return symlink_icon;
+})
 
-        // listen for get_folder_icon event
-        ipcMain.on('get_folder_icon', (e, href) => {
-            let folder_icon = this.get_folder_icon(e, href);
-            e.sender.send('set_folder_icon', href, folder_icon);
-        })
+ipcMain.handle('get_readonly_icon', (e) => {
+    let readonly_icon = iconManager.get_readonly_icon();
+    return readonly_icon;
+})
 
-        ipcMain.handle('get_symlink_icon', (e) => {
-            let icon_theme = execSync('gsettings get org.gnome.desktop.interface icon-theme').toString().replace(/'/g, '').trim();
-            let icon_dir = path.join(__dirname, 'assets', 'icons');
-            try {
-                const search_paths = [
-                    path.join(this.home, '.local/share/icons'),
-                    path.join(this.home, '.icons'),
-                    '/usr/share/icons'
-                ];
+// class IconManager {
 
-                // Find the first existing icon theme path
-                const found_path = search_paths.find(icon_path =>
-                    fs.existsSync(path.join(icon_path, icon_theme))
-                );
+//     constructor() {
 
-                icon_dir = found_path ? path.join(found_path, icon_theme) : path.join(__dirname, '../assets', 'icons');
+//         this.home = require('os').homedir();
+//         this.theme_path = this.get_theme_path();
 
-                const icon_dirs = [
-                    path.join(icon_dir, 'emblems@2x/16/emblem-symbolic-link.svg'),
-                    path.join(icon_dir, '16x16/emblems/emblem-symbolic-link.svg'),
-                    path.join(icon_dir, 'emblems/scalable/emblem-symbolic-link.svg'),
-                    path.join(icon_dir, 'emblems/16/emblem-symbolic-link.svg')
-                ];
+//         // Get File Icon
+//         ipcMain.handle('get_icon', async (e, href) => {
+//             return await app.getFileIcon(href, { size: 32 }).then(icon => {
+//                 return icon.toDataURL();
+//             }).catch((err) => {
+//                 return `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAADHklEQVRYhe2WX0/yVhzHP8VBW04r0pKIgjDjlRfPC3BX7vXM1+OdMXsPXi9eqEu27DUgf1ICgQrlFGkxnF0sdgrq00dxyZZ9kyb0d2i/n/b8vj0H/teS6vX69xcXF7/4vh9JKdV7j7Ozs+s0fpnlwunp6c/Hx8c/5nK53EcepFar/ZAGYgXg6Ojo6CPG3wqxApDL5bLrMM9kMgnE+fn5qxArAOuSECL5Xa1WX4X4NIB6vY5pmmia9iaEtlyQUqp1Qcznc+I4Rqm/b1kul595frcus5eUzWbJZt9uqVRToJRiMBgk58PhEM/zUEqhlMLzPIbDIfDXU3c6HcIwTAWZCqDdbtPtdgGQUhIEAYZh4HkenudhmiaTyQQpJY1GA9d1abVaz179hwBqtRq6rgMwmUxwHAfHcZBSIqWkWCziOA5BEKCUwjRNhBDMZrP1AHymvhnAtm1GoxHj8RghBEIIxuMxvu+zubmJpmnEcUwYhhiG8dX7pU5BqVQCwLIsoigiDEMqlQoA3W4X27axLIv9/X16vR57e3vJN+AtpXoDYRgynU6Zz+cAFAoF8vn8mwZpzFMBKKVotVq4rkuj0WCxWNBsNun3+wCfn4LZbEY+n8c0TZRSZDIZDg4OkvH/fgoMw+D+/p44jl+c14+mINViJKVkNBqxvb2dfNt938dxHJRSdLtddF3HdV3m8zm9Xo+trS0sy1oxtCzr44vRYDBIVjlN0ygUCskG5LHx1paCxWJBu91OUvDY7bqu43keYRjS6XQIggCA29tbSqUSzWZzPSmIogghRJKCx7XAdV2klAghKJfLyf+VUhiG8e9JwVd7QNd1ptMpURShaRq2bXN3d8discC27RevieOY6XT6vhT4vh8v74yXU/DYhDs7O2iaRhRFPDw8IIQgjmP6/T7FYvHZxhQgiqLYdV39aW1lCm5ubn5frlmWRbVaTSJYKpXY3d1NOl3X9cQsl8tRrVZXzAGur69/W65tLBeurq7+ODw8/FKpVHY2NjZWxt+jOI7nl5eXv56cnPwUBEHv6dhrYRWAuQ7zJ7oH0m0U/0n9CS0Pytp5nRYfAAAAAElFTkSuQmCC`;
+//             })
+//             // try {
+//             //     return await app.getFileIcon(href, { size: 32 }).then(icon => {
+//             //         return icon.toDataURL();
+//             //     }).catch((err) => {
+//             //         // return path.join(this.get_theme_path(), 'default-file.svg');
+//             //     })
+//             // } catch (err) {
+//             // }
+//         })
 
-                // Find the first existing symlink icon
-                const folder_icon_path = icon_dirs.find(dir => fs.existsSync(dir)) ||
-                                         path.join(__dirname, 'assets/icons/emblem-symbolic-link.svg');
+//         // listen for get_folder_icon event
+//         ipcMain.on('get_folder_icon', (e, href) => {
+//             let folder_icon = this.get_folder_icon(e, href);
+//             e.sender.send('set_folder_icon', href, folder_icon);
+//         })
 
-                return folder_icon_path;
-            } catch (err) {
-                console.error('Error in symlink_icon:', err);
-                return path.join(__dirname, 'assets/icons/emblem-symbolic-link.svg');
-            }
-        });
+//         ipcMain.handle('get_symlink_icon', (e) => {
+//             let icon_theme = execSync('gsettings get org.gnome.desktop.interface icon-theme').toString().replace(/'/g, '').trim();
+//             let icon_dir = path.join(__dirname, 'assets', 'icons');
+//             try {
+//                 const search_paths = [
+//                     path.join(this.home, '.local/share/icons'),
+//                     path.join(this.home, '.icons'),
+//                     '/usr/share/icons'
+//                 ];
 
-    }
+//                 // Find the first existing icon theme path
+//                 const found_path = search_paths.find(icon_path =>
+//                     fs.existsSync(path.join(icon_path, icon_theme))
+//                 );
 
-    get_theme_path() {
-        const icon_theme = execSync('gsettings get org.gnome.desktop.interface icon-theme').toString().replace(/'/g, '').trim();
-        let icon_dir = path.join(__dirname, 'assets', 'icons');
-        let theme_path = '';
+//                 icon_dir = found_path ? path.join(found_path, icon_theme) : path.join(__dirname, '../assets', 'icons');
 
-        try {
-            const search_paths = [
-                path.join(this.home, '.local/share/icons'),
-                path.join(this.home, '.icons'),
-                '/usr/share/icons'
-            ];
+//                 const icon_dirs = [
+//                     path.join(icon_dir, 'emblems@2x/16/emblem-symbolic-link.svg'),
+//                     path.join(icon_dir, '16x16/emblems/emblem-symbolic-link.svg'),
+//                     path.join(icon_dir, 'emblems/scalable/emblem-symbolic-link.svg'),
+//                     path.join(icon_dir, 'emblems/16/emblem-symbolic-link.svg')
+//                 ];
 
-            // Find the first existing icon theme path
-            const found_path = search_paths.find(icon_path => {
-                const theme_path = path.join(icon_path, icon_theme);
-                return fs.existsSync(theme_path);
-            });
+//                 // Find the first existing symlink icon
+//                 const folder_icon_path = icon_dirs.find(dir => fs.existsSync(dir)) ||
+//                                          path.join(__dirname, '../assets/icons/emblem-symbolic-link.svg');
 
-            if (found_path) {
-                icon_dir = path.join(found_path, icon_theme);
-            } else {
-                icon_dir = path.join(__dirname, 'assets', 'icons', 'kora');
-            }
+//                 return folder_icon_path;
+//             } catch (err) {
+//                 console.error('Error in symlink_icon:', err);
+//                 return path.join(__dirname, 'assets/icons/emblem-symbolic-link.svg');
+//             }
+//         });
 
-            const icon_dirs = [
-                'places@2x/48/',
-                '32x32/places/',
-                '64x64/places/',
-                'places/scalable/',
-                'scalable@2x/places/',
-                'places/32/',
-                'places/48/',
-                'places/64/',
-                'places/128/',
-                'places/symbolic/',
-                'scalable/'
-            ].map(dir => path.join(icon_dir, dir));
+//         ipcMain.handle('get_readonly_icon', (e) => {
+//             let icon_theme = execSync('gsettings get org.gnome.desktop.interface icon-theme').toString().replace(/'/g, '').trim();
+//             let icon_dir = path.join(__dirname, 'assets', 'icons');
+//             try {
+//                 const search_paths = [
+//                     path.join(this.home, '.local/share/icons'),
+//                     path.join(this.home, '.icons'),
+//                     '/usr/share/icons'
+//                 ];
 
-            // Find the first existing icon directory
-            theme_path = icon_dirs.find(dir => fs.existsSync(dir));
+//                 // Find the first existing icon theme path
+//                 const found_path = search_paths.find(icon_path =>
+//                     fs.existsSync(path.join(icon_path, icon_theme))
+//                 );
 
-            // If no theme path found, use the fallback
-            if (!theme_path) {
-                theme_path = path.join(__dirname, 'assets/icons/');
-            }
+//                 icon_dir = found_path ? path.join(found_path, icon_theme) : path.join(__dirname, '../assets', 'icons');
+//                 console.log('icon_dir', icon_dir);
 
-            return theme_path;
-        } catch (error) {
-            console.error('Error in getIconThemePath:', error);
-            return path.join(__dirname, 'assets/icons/');
-        }
-    }
+//                 const icon_dirs = [
+//                     path.join(icon_dir, 'emblems@2x/16/emblem-symbolic-readonly.svg'),
+//                     path.join(icon_dir, '16x16/emblems/emblem-symbolic-readonly.svg'),
+//                     path.join(icon_dir, 'emblems/scalable/emblem-symbolic-readonly.svg'),
+//                     path.join(icon_dir, 'emblems/16/emblem-symbolic-readonly.svg')
+//                 ];
 
-    // get folder icon
-    get_folder_icon(e, href) {
+//                 // Find the first existing readonly icon
+//                 const folder_icon_path = icon_dirs.find(dir => fs.existsSync(dir)) ||
+//                 path.join(__dirname, '../assets/icons/emblem-symbolic-readonly.svg');
 
-        try {
+//                 return folder_icon_path;
 
-            const baseName = path.basename(href);
+//             } catch (err) {
+//                 console.log(err);
+//             }
+//         })
 
-            const specialFolders = {
-                'Documents': ['folder-documents', 'folder-document'],
-                'Music': ['folder-music'],
-                'Pictures': ['folder-pictures', 'folder-image'],
-                'Videos': ['folder-videos', 'folder-video'],
-                'Downloads': ['folder-downloads', 'folder-download'],
-                'Desktop': ['folder-desktop']
-            };
+//     }
 
-            const folderType = specialFolders[baseName] || ['folder', 'default-folder'];
-            const extensions = ['.svg', '.png'];
+//     get_theme_path() {
+//         const icon_theme = execSync('gsettings get org.gnome.desktop.interface icon-theme').toString().replace(/'/g, '').trim();
+//         let icon_dir = path.join(__dirname, 'assets', 'icons');
+//         let theme_path = '';
 
-            // Try to find a special folder icon first
-            let final_icon = null;
-            for (const type of folderType) {
-                for (const ext of extensions) {
-                    const iconPath = path.join(this.theme_path, `${type}${ext}`);
-                    if (fs.existsSync(iconPath)) {
-                        final_icon = iconPath;
-                        break;
-                    }
-                }
-                if (final_icon) break;
-            }
+//         try {
+//             const search_paths = [
+//                 path.join(this.home, '.local/share/icons'),
+//                 path.join(this.home, '.icons'),
+//                 '/usr/share/icons'
+//             ];
 
-            // If no special icon found, fall back to generic folder icons
-            if (!final_icon) {
-                const folder_icons = [
-                    'folder.svg',
-                    'folder.png',
-                    'default-folder.svg',
-                    'default-folder.png'
-                ];
+//             // Find the first existing icon theme path
+//             const found_path = search_paths.find(icon_path => {
+//                 const theme_path = path.join(icon_path, icon_theme);
+//                 return fs.existsSync(theme_path);
+//             });
 
-                final_icon = folder_icons.reduce((found, icon) => {
-                    if (found) return found;
-                    const icon_path = path.join(this.theme_path, icon);
-                    return fs.existsSync(icon_path) ? icon_path : null;
-                }, null);
-            }
+//             if (found_path) {
+//                 icon_dir = path.join(found_path, icon_theme);
+//             } else {
+//                 icon_dir = path.join(__dirname, 'assets', 'icons', 'kora');
+//             }
 
-            // If still no icon found, use the ultimate fallback
-            final_icon = final_icon || path.join(__dirname, '../assets/icons/folder.svg');
-            return final_icon;
-            // e.sender.send('set_folder_icon', href, final_icon);
+//             const icon_dirs = [
+//                 'places@2x/48/',
+//                 '32x32/places/',
+//                 '64x64/places/',
+//                 'places/scalable/',
+//                 'scalable@2x/places/',
+//                 'places/32/',
+//                 'places/48/',
+//                 'places/64/',
+//                 'places/128/',
+//                 'places/symbolic/',
+//                 'scalable/'
+//             ].map(dir => path.join(icon_dir, dir));
 
-        } catch (err) {
-            console.error('Error in folder icon selection:', err);
-            // e.sender.send('set_folder_icon', href, path.join(__dirname, '../assets/icons/folder.svg'));
-            return path.join(__dirname, '../assets/icons/folder.svg');
-        }
+//             // Find the first existing icon directory
+//             theme_path = icon_dirs.find(dir => fs.existsSync(dir));
 
-    }
+//             // If no theme path found, use the fallback
+//             if (!theme_path) {
+//                 theme_path = path.join(__dirname, 'assets/icons/');
+//             }
 
-}
+//             return theme_path;
+//         } catch (error) {
+//             console.error('Error in getIconThemePath:', error);
+//             return path.join(__dirname, 'assets/icons/');
+//         }
+//     }
+
+//     // get folder icon
+//     get_folder_icon(e, href) {
+
+//         try {
+
+//             const baseName = path.basename(href);
+
+//             const specialFolders = {
+//                 'Documents': ['folder-documents', 'folder-document'],
+//                 'Music': ['folder-music'],
+//                 'Pictures': ['folder-pictures', 'folder-image'],
+//                 'Videos': ['folder-videos', 'folder-video'],
+//                 'Downloads': ['folder-downloads', 'folder-download'],
+//                 'Desktop': ['folder-desktop']
+//             };
+
+//             const folderType = specialFolders[baseName] || ['folder', 'default-folder'];
+//             const extensions = ['.svg', '.png'];
+
+//             // Try to find a special folder icon first
+//             let final_icon = null;
+//             for (const type of folderType) {
+//                 for (const ext of extensions) {
+//                     const iconPath = path.join(this.theme_path, `${type}${ext}`);
+//                     if (fs.existsSync(iconPath)) {
+//                         final_icon = iconPath;
+//                         break;
+//                     }
+//                 }
+//                 if (final_icon) break;
+//             }
+
+//             // If no special icon found, fall back to generic folder icons
+//             if (!final_icon) {
+//                 const folder_icons = [
+//                     'folder.svg',
+//                     'folder.png',
+//                     'default-folder.svg',
+//                     'default-folder.png'
+//                 ];
+
+//                 final_icon = folder_icons.reduce((found, icon) => {
+//                     if (found) return found;
+//                     const icon_path = path.join(this.theme_path, icon);
+//                     return fs.existsSync(icon_path) ? icon_path : null;
+//                 }, null);
+//             }
+
+//             // If still no icon found, use the ultimate fallback
+//             final_icon = final_icon || path.join(__dirname, '../assets/icons/folder.svg');
+//             return final_icon;
+//             // e.sender.send('set_folder_icon', href, final_icon);
+
+//         } catch (err) {
+//             console.error('Error in folder icon selection:', err);
+//             // e.sender.send('set_folder_icon', href, path.join(__dirname, '../assets/icons/folder.svg'));
+//             return path.join(__dirname, '../assets/icons/folder.svg');
+//         }
+
+//     }
+
+// }
 
 class DeviceManager {
 
@@ -1315,7 +1439,7 @@ class WindowManager {
                 nativeWindowOpen: true,
                 preload: path.join(__dirname, 'preload.js'),
             },
-            icon: path.join(__dirname, '../renderer/icons/icon.png')
+            icon: path.join(__dirname, '../assets/icons/icon.png')
         });
 
         // hide menu
@@ -1386,6 +1510,16 @@ class MenuManager {
 
     constructor() {
 
+        this.settings = settingsManager.get_settings();
+
+        // init sort
+        if (this.settings.sort_by === undefined || this.settings.sort_by === '') {
+            this.settings.sort_by = 'mtime';
+        }
+        if (this.settings.sort_direction === undefined || this.settings.sort_direction === '') {
+            this.settings.sort_direction = 'desc';
+        }
+
         // for template creation
         this.paste_worker = new worker.Worker(path.join(__dirname, '../workers/paste_worker.js'));
         this.paste_worker.on('message', (data) => {
@@ -1432,6 +1566,7 @@ class MenuManager {
                 //     type: 'separator'
                 // },
                 {
+                    id: 'new_folder',
                     label: 'New Folder',
                     click: () => {
                         // utilities.mkdir(e, destination);
@@ -1467,12 +1602,12 @@ class MenuManager {
                 {
                     label: 'View',
                     submenu: [
-                        // {
-                        //     label: 'Grid',
-                        //     click: (e) => {
-                        //         win.send('switch_view', 'grid_view')
-                        //     }
-                        // },
+                        {
+                            label: 'Grid',
+                            click: (e) => {
+                                win.send('switch_view', 'grid_view')
+                            }
+                        },
                         {
                             label: 'List',
                             click: () => {
@@ -1548,6 +1683,13 @@ class MenuManager {
                 if (item.id == this.sort) {
                     item.checked = true;
                 }
+            }
+
+            const f = gio.get_file(destination);
+            if (!f.is_writable) {
+                // disable new folder
+                this.main_menu.getMenuItemById('new_folder').enabled = false;
+                this.main_menu.getMenuItemById('templates').enabled = false;
             }
 
             // Add templates
@@ -1978,10 +2120,9 @@ class MenuManager {
 
         })
 
-        this.sort = 'date_desc';
-        ipcMain.on('sort', (e, sort_by) => {
-            this.sort = sort_by
-        })
+        // ipcMain.on('sort', (e, sort_by) => {
+        //     this.sort = sort_by
+        // })
 
         ipcMain.on('columns_menu', (e) => {
             const menu_template = [
@@ -2061,10 +2202,8 @@ class MenuManager {
         const dialog = dialogManager.dialog(dialog_properties);
 
         // let bounds = win.getBounds()
-
         // let x = bounds.x + parseInt((bounds.width - 400) / 2);
         // let y = bounds.y + parseInt((bounds.height - 350) / 2);
-
 
         // let dialog = new BrowserWindow({
         //     // parent: window.getFocusedWindow(),
@@ -2086,7 +2225,7 @@ class MenuManager {
         // })
 
         // dialog.loadFile(path.join(__dirname, '..', 'renderer', 'dialogs', 'columns.html'))
-        dialog.webContents.openDevTools()
+        // dialog.webContents.openDevTools()
 
         // SHOW DIALG
         dialog.once('ready-to-show', () => {
@@ -2255,25 +2394,27 @@ class MenuManager {
 
     sort_menu() {
 
-        let sort;
-
         let submenu = [
             {
                 label: 'Last Modified',
                 type: 'radio',
-                id: 'date_desc',
+                id: 'mtime_desc',
                 click: () => {
-                    sort = 'modified_desc';
-                    win.send('sort_cards', sort);
+                    this.settings.sort_by = 'mtime';
+                    this.settings.sort_direction = 'desc';
+                    win.send('sort_by', this.settings.sort_by, this.settings.sort_direction);
+                    settingsManager.updateSettings(this.settings);
                 }
             },
             {
                 label: 'First Modified',
                 type: 'radio',
-                id: 'modified_asc',
+                id: 'mtime_asc',
                 click: () => {
-                    sort = 'modified_asc';
-                    win.send('sort_cards', sort);
+                    this.settings.sort_by = 'mtime';
+                    this.settings.sort_direction = 'asc';
+                    win.send('sort_by', this.settings.sort_by, this.settings.sort_direction);
+                    settingsManager.updateSettings(this.settings);
                 }
             },
             {
@@ -2281,8 +2422,10 @@ class MenuManager {
                 type: 'radio',
                 id: 'name_asc',
                 click: () => {
-                    sort = 'name_asc';
-                    win.send('sort_cards', sort)
+                    this.settings.sort_by = 'name';
+                    this.settings.sort_direction = 'asc';
+                    win.send('sort_by', this.settings.sort_by, this.settings.sort_direction);
+                    settingsManager.updateSettings(this.settings);
                 }
             },
             {
@@ -2290,8 +2433,10 @@ class MenuManager {
                 type: 'radio',
                 id: 'name_desc',
                 click: () => {
-                    sort = 'name_desc';
-                    win.send('sort_cards', sort)
+                    this.settings.sort_by = 'name';
+                    this.settings.sort_direction = 'desc';
+                    win.send('sort_by', this.settings.sort_by, this.settings.sort_direction);
+                    settingsManager.updateSettings(this.settings);
                 }
             },
             {
@@ -2299,8 +2444,10 @@ class MenuManager {
                 type: 'radio',
                 id: 'size',
                 click: () => {
-                    sort = 'size';
-                    win.send('sort_cards', sort)
+                    this.settings.sort_by = 'size';
+                    this.settings.sort_direction = 'desc' ? 'asc' : 'desc';
+                    win.send('sort_by', this.settings.sort_by, this.settings.sort_direction);
+                    settingsManager.updateSettings(this.settings);
                 }
             },
             {
@@ -2308,13 +2455,25 @@ class MenuManager {
                 type: 'radio',
                 id: 'type',
                 click: () => {
-                    sort = 'type';
-                    win.send('sort_cards', sort)
+                    this.settings.sort_by = 'type';
+                    this.settings.sort_direction = 'desc' ? 'asc' : 'desc';
+                    win.send('sort_by', this.settings.sort_by, this.settings.sort_direction);
+                    settingsManager.updateSettings(this.settings);
                 }
             }
         ]
 
-        this.sort = sort;
+        // select radio button by sort and sort_direction
+        for (const item of submenu) {
+            if (item.id !== 'size' && item.id !== 'type') {
+                if (item.id == `${this.settings.sort_by}_${this.settings.sort_direction}`) {
+                    item.checked = true;
+                }
+            } else if (item.id == this.sort) {
+                item.checked = true;
+            }
+        }
+
         return submenu;
 
     }
@@ -2325,7 +2484,7 @@ const settingsManager = new SettingsManager();
 const watcherManager = new Watcher();
 const windowManager = new WindowManager();
 const utilities = new Utilities();
-const iconManager = new IconManager();
+// const iconManager = new IconManager();
 const fileManager = new FileManager();
 const propertiesManager = new PropertiesManager();
 const workspaceManager = new WorkspaceManager();
@@ -2352,6 +2511,11 @@ app.on('ready', () => {
     });
 
 });
+
+app.whenReady().then(() => {
+    const tray = new Tray(path.join(__dirname, "../assets/icons/icon.png"));
+    tray.setToolTip("File Manager");
+})
 
 // init
 function init() {

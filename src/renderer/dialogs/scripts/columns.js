@@ -171,6 +171,7 @@ class ColumnManager {
                     }
 
                     ipcRenderer.send('update_settings', settings);
+                    ipcRenderer.send('ls', settings.location);
 
                 })
 

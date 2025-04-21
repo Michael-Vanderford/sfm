@@ -58,6 +58,13 @@ class SettingsManager {
 
         this.settings = {};
         this.init_settings();
+
+        ipcRenderer.on('settings_updated', (e, updated_settings) => {
+            // console.log('settings updated', updated_settings);
+            this.settings = updated_settings;
+            // fileManager.get_files(this.settings.location);
+        })
+
     }
 
     init_settings() {
@@ -123,8 +130,23 @@ class SettingsManager {
                     count: 50
                 }
             };
-            console.log('list view settings', this.list_view_settings);
+            // console.log('list view settings', this.list_view_settings);
             ipcRenderer.send('update_list_view_settings', this.list_view_settings);
+        }
+
+        if (this.settings.icon_size === '' || this.settings.icon_size === undefined) {
+            this.settings.icon_size = 32;
+            ipcRenderer.send('update_settings', this.settings);
+        }
+
+        if (this.settings.list_icon_size === '' || this.settings.list_icon_size === undefined) {
+            this.settings.list_icon_size = 32;
+            ipcRenderer.send('update_settings', this.settings);
+        }
+
+        if (this.settings.show_hidden === undefined) {
+            this.settings.show_hidden = true;
+            ipcRenderer.send('update_settings', this.settings);
         }
 
     }
@@ -132,6 +154,15 @@ class SettingsManager {
     // get settings
     get_settings() {
         return this.settings;
+    }
+
+    // update settings
+    update_settings(settings) {
+        this.settings = settings;
+
+        console.log('update settings', this.settings);
+
+        ipcRenderer.send('update_settings', this.settings);
     }
 
     get_window_settings() {
@@ -158,10 +189,25 @@ class SettingsManager {
 
     // set location
     set_location(location) {
-        this.settings.location = location;
-        ipcRenderer.send('update_settings', this.settings);
-        // reload settings
-        this.init_settings();
+
+        if (location === undefined || location === '') {
+            console.log('Error: Setting location. No location found');
+            utilities.set_msg('Error: Setting location. No location found');
+            return;
+        }
+
+        if (location !== this.settings.location) {
+
+            this.settings.location = location;
+            this.update_settings(this.settings);
+            this.init_settings();
+
+            // ipcRenderer.invoke('update_settings', this.settings).then(res => {
+            //     // this.init_settings();
+            // })
+
+        }
+
     }
 
 }
@@ -187,7 +233,7 @@ class Utilities {
         this.move_arr = [];
         this.cut_arr = [];
         this.formatter = new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' });
-        this.byteUnits = [' kB', ' MB', ' GB', ' TB', 'PB', 'EB', 'ZB', 'YB'];
+        this.byteUnits = [' Bytes', ' kB', ' MB', ' GB', ' TB', 'PB', 'EB', 'ZB', 'YB'];
 
         this.chunk_size = 500;
 
@@ -232,7 +278,7 @@ class Utilities {
             this.set_disk_space(data);
         });
 
-        // get gome dir
+        // get home dir
         this.home_dir = ipcRenderer.sendSync('get_home_dir');
 
         // set message
@@ -259,16 +305,19 @@ class Utilities {
 
     // set folder size
     set_folder_size(folder_data) {
-        // console.log('folder data', folder_data);
         let active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
         let item = active_tab_content.querySelector(`[data-href="${folder_data.source}"]`);
         if (!item) {
+            console.log('no data-href found for', folder_data.source);
             return;
         }
         item.dataset.size = folder_data.size;
-        let size_item = item.querySelector('[data-col_name="size"]');
+        let size_item = item.querySelector('.size');
         if (size_item) {
             size_item.textContent = this.get_file_size(folder_data.size);
+        } else {
+            console.log('no .size found for', folder_data.source);
+            return;
         }
     }
 
@@ -397,8 +446,8 @@ class Utilities {
                     break;
                 }
                 case 'Escape': {
-                    this.location_input.value = this.val0;
-                    popup.remove();
+                    // this.location_input.value = this.val0;
+                    // popup.remove();
                     break;
                 }
                 case 'Tab': {
@@ -485,13 +534,21 @@ class Utilities {
 
     // get file size
     get_file_size(bytes) {
-        let i = -1;
-        do {
-            bytes = bytes / 1024;
+        if (!bytes || bytes <= 0) {
+            return "0 bytes";
+        }
+        if (bytes < 1024) {
+            return bytes + this.byteUnits[0]; // show raw bytes
+        }
+
+        let i = 0;
+        let size = bytes;
+        while (size >= 1024 && i < this.byteUnits.length - 1) {
+            size = size / 1024;
             i++;
-        } while (bytes > 1024);
-        return Math.max(bytes, 0.1).toFixed(1) + this.byteUnits[i];
-    };
+        }
+        return size.toFixed(1) + this.byteUnits[i];
+    }
 
     // create a breadcrumbs from location
     get_breadcrumbs(location) {
@@ -557,7 +614,7 @@ class Utilities {
     show_location_input() {
         this.location_input.classList.remove('hidden');
         this.breadcrumbs.classList.add('hidden');
-        // this.location_input.focus();
+        this.location_input.focus();
     }
 
     // hide location
@@ -760,41 +817,105 @@ class Utilities {
             let name = item.querySelector('.href');
             if (name) {
                 name.classList.remove('hidden');
+            } else {
+                // console.log('no .href found on', item)
+                return;
             }
 
             let input = item.querySelector('input');
             if (input) {
                 input.classList.add('hidden');
                 input.removeEventListener('focus', this.focus_input);
+            } else {
+                console.log('no input found on', item)
+                return;
             }
         });
         items = null;
 
         let location = document.querySelector('.placeholder');
-        location.focus();
+        if (location) {
+            location.focus();
+        } else {
+            console.log('no .placeholder found');
+        }
 
     }
 
     // edit -
-    edit(href) {
+    edit() {
+
+        console.log('edit');
 
         let active_tab_content = tabManager.get_active_tab_content();
         let items = active_tab_content.querySelectorAll('.highlight_select, .highlight');
-        items.forEach((item, idx) => {
 
-            let edit_name = item.querySelector('.href');
-            edit_name.classList.add('hidden');
+        if (items.length > 0) {
+            items.forEach((item, idx) => {
 
-            let input = item.querySelector('.edit_name');
-            input.classList.remove('hidden');
-            if (idx === 0) {
-                setTimeout(() => {
-                    input.focus();
-                    input.setSelectionRange(0, input.value.lastIndexOf('.'));
-                }, 1);
-            }
+                let edit_name = item.querySelector('.href');
+                if (edit_name) {
+                    edit_name.classList.add('hidden');
+                } else {
+                    console.log('no .href found on', item)
+                    return;
+                }
 
-        });
+                let input = item.querySelector('.edit_name');
+                if (input) {
+                    input.classList.remove('hidden');
+                    if (idx === 0) {
+                        setTimeout(() => {
+                            input.focus();
+                            input.setSelectionRange(0, input.value.lastIndexOf('.'));
+                        }, 1);
+                    }
+
+                    // input.addEventListener('keydown', (e) => {
+                    //     if (e.key === 'Enter') {
+                    //         e.preventDefault();
+                    //         e.stopPropagation();
+
+                    //         let id = item.dataset.id;
+                    //         if (id === undefined || id === '') {
+                    //             utilities.set_msg('No valid id found for rename');
+                    //             this.cancel_edit();
+                    //             return;
+                    //         }
+
+                    //         let source = item.dataset.href;
+                    //         if (source === undefined || source === '') {
+                    //             utilities.set_msg('No valid source found for rename');
+                    //             this.cancel_edit();
+                    //             return;
+                    //         }
+
+                    //         let destination = source.split('/').slice(0, -1).join('/') + '/' + input.value;
+                    //         if (destination === undefined || destination === '') {
+                    //             utilities.set_msg('No valid destination found for rename');
+                    //             this.cancel_edit();
+                    //             return;
+                    //         }
+
+                    //         this.rename(source, destination, id);
+
+
+                    //     } else if (e.key === 'Escape') {
+                    //         e.preventDefault();
+                    //         e.stopPropagation();
+                    //         this.cancel_edit();
+                    //     }
+                    // });
+
+                } else {
+                    console.log('no .edit_name found on', item)
+                    return;
+                }
+
+            });
+        } else {
+            this.set_msg('Nothing to edit');
+        }
 
         // active_tab_content.style.display = 'none';
         // active_tab_content.offsetHeight; // Force a reflow
@@ -811,11 +932,37 @@ class Utilities {
 
     // rename file
     rename(source, destination, id) {
+
+        if (id === undefined || id === '') {
+            utilities.set_msg('No valid id found for rename');
+            this.cancel_edit();
+            return;
+        }
+
+        if (source === undefined || source === '') {
+            utilities.set_msg('No valid source found for rename');
+            this.cancel_edit();
+            return;
+        }
+
+        if (destination === undefined || destination === '') {
+            utilities.set_msg('No valid destination found for rename');
+            this.cancel_edit();
+            return;
+        }
+
         ipcRenderer.send('rename', source, destination, id);
+
     }
 
     // mkdir
     mkdir() {
+
+        if (this.destination === undefined || this.destination === '') {
+            utilities.set_msg('No valid destination found for mkdir');
+            return;
+        }
+
         ipcRenderer.send('mkdir', this.destination);
     }
 
@@ -836,7 +983,7 @@ class Utilities {
     extract() {
         let files_arr = this.get_selected_files();
         let location = this.get_location();
-        ipcRenderer.send('extract',  files_arr,  location);
+        ipcRenderer.send('extract', files_arr, location);
         files_arr = [];
         this.clear_highlight();
         this.set_msg('Extracting files.');
@@ -883,8 +1030,8 @@ class Utilities {
                 });
             });
 
-             // Immediately load images that are already in viewport
-             lazyItems.forEach(function (lazyImage) {
+            // Immediately load images that are already in viewport
+            lazyItems.forEach(function (lazyImage) {
                 if (isInViewport(lazyImage)) {
                     setTimeout(() => {
                         loadImage(lazyImage, observer);
@@ -1019,12 +1166,24 @@ class Utilities {
         let selected_files = [];
         let active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
         let items = active_tab_content.querySelectorAll('.highlight, .highlight_select');
-        console.log('items', items.length)
+
+        if (items.length === 0) {
+            this.set_msg('No items selected');
+            return selected_files;
+        }
 
         items.forEach(item => {
+
+            // check item.dataset values
+            if (!item.dataset.id || !item.dataset.name || !item.dataset.href) {
+                console.log('missing dataset values', item);
+                return;
+            }
+
             let files_obj = {
                 id: item.dataset.id,
                 name: item.dataset.name,
+                display_name: item.dataset.name,
                 href: item.dataset.href,
                 size: item.dataset.size,
                 mtime: item.dataset.mtime,
@@ -1032,6 +1191,8 @@ class Utilities {
                 atime: item.dataset.atime,
                 is_dir: this.stob(item.dataset.is_dir),
                 content_type: item.dataset.content_type,
+                is_hidden: this.stob(item.dataset.is_hidden),
+                is_writable: this.stob(item.dataset.is_writable),
                 location: item.dataset.location
             }
             selected_files.push(files_obj);
@@ -1049,12 +1210,18 @@ class Utilities {
 
     // convert string to boolean
     stob(string_val) {
-        let bool_val = 0;
+
+        if (string_val === undefined) {
+            console.log('stob: string_val is undefined');
+            return -1;
+        }
+
+        let bool_val = true;
         if (string_val.toLocaleLowerCase() === 'true') {
             console.log('true');
-            bool_val = 1;
+            bool_val = true;
         } else if (string_val.toLocaleLowerCase() === 'false') {
-            bool_val = 0;
+            bool_val = false;
         } else {
             bool_val = -1;
         }
@@ -1361,7 +1528,7 @@ class DragSelect {
         setTimeout(() => {
             this.allow_click = true;
             this.is_dragging = false;
-        } , 100);
+        }, 100);
 
     }
 
@@ -1445,7 +1612,7 @@ class DeviceManager {
 
     }
 
-    get_type (path) {
+    get_type(path) {
         let type = '';
         if (path.match('mtp://')) {
             type = 'phone'
@@ -1614,7 +1781,7 @@ class DeviceManager {
 
 class WorkspaceManager {
 
-    constructor () {
+    constructor() {
 
         this.is_moving = false;
         this.draggedRow = null;
@@ -1628,7 +1795,7 @@ class WorkspaceManager {
 
         // Get Workspace
         ipcRenderer.on('get_workspace', (e) => {
-            this.get_workspace(() => {});
+            this.get_workspace(() => { });
         })
 
         // Remove Workspace
@@ -1648,7 +1815,7 @@ class WorkspaceManager {
             img.src = icon;
         })
 
-        this.get_workspace(() => {});
+        this.get_workspace(() => { });
 
     }
 
@@ -1708,7 +1875,7 @@ class WorkspaceManager {
 
             res.forEach(file => {
 
-                console.log('file', file);
+                // console.log('file', file);
 
                 let tr = document.createElement('tr');
                 tr.classList.add('item', 'workspace_item');
@@ -1926,7 +2093,7 @@ class WorkspaceManager {
 
 
     // edit workspace
-    editWorkspace () {
+    editWorkspace() {
 
         let workspace = document.querySelector('.workspace');
         // console.log(workspace)
@@ -2296,6 +2463,11 @@ class IconManager {
 
     constructor() {
 
+        this.readonly_icon = '';
+        this.settings = settingsManager.get_settings();
+        this.icon_size = this.settings.icon_size;
+
+
         // listen for set_folder_icon event
         ipcRenderer.on('set_folder_icon', (e, href, icon) => {
             this.set_folder_icon(href, icon);
@@ -2304,6 +2476,32 @@ class IconManager {
         // listen for set_icon event
         ipcRenderer.on('set_icon', (e, href, icon) => {
             this.set_icon(href, icon);
+        });
+
+        // resize icons on wheel event
+        document.addEventListener('wheel', (e) => {
+            if (e.ctrlKey) {
+                if (e.deltaY < 0) {
+
+                    // increase current icon size by n pixels
+                    if (this.icon_size >= 128) {
+                        return;
+                    }
+
+                    this.icon_size += 16;
+                    this.resize_icons(this.icon_size);
+
+                } else {
+
+                    // decrease current icon size by n pixels
+                    if (this.icon_size <= 16) {
+                        return;
+                    }
+
+                    this.icon_size -= 16;
+                    this.resize_icons(this.icon_size);
+                }
+            }
         });
 
     }
@@ -2333,6 +2531,11 @@ class IconManager {
 
     }
 
+    // get readonly_icon
+    get_readonly_icon() {
+        return this.readonly_icon;
+    }
+
     // set icon
     set_icon(id, icon) {
         let item = document.querySelector(`[data-id="${id}"]`);
@@ -2356,12 +2559,32 @@ class IconManager {
             }
             let img = icon_div.querySelector('img');
             if (img) {
+
                 img.src = icon;
+                img.style.width = `${this.icon_size}px`;
+                img.style.height = `${this.icon_size}px`;
+
             }
+
+
 
         } catch (err) {
             utilities.set_msg('Error setting folder icon', err);
         }
+
+    }
+
+    // resize icons
+    resize_icons(size) {
+
+        let items = document.querySelectorAll('.img');
+        items.forEach(item => {
+            item.style.width = `${size}px`;
+            item.style.height = `${size}px`;
+        })
+
+        this.settings.icon_size = size;
+        settingsManager.update_settings(this.settings);
 
     }
 
@@ -2385,10 +2608,8 @@ class TabManager {
 
         this.tab_id = 0;
 
-        this.location0 = "";
-        this.location = document.querySelector('.location');
-
-        if (!this.location) {
+        this.location_input = document.querySelector('.location');
+        if (!this.location_input) {
             return;
         }
 
@@ -2438,6 +2659,8 @@ class TabManager {
             }
             this.tab_data_arr.push(this.tab_data);
         }
+
+
         // console.log('tab data arr', this.tab_data_arr);
 
     }
@@ -2476,7 +2699,7 @@ class TabManager {
         // validate location
         // regex to validate location
         let regex = /^(\/[a-zA-Z0-9_]+)+$/;
-        if (location == regex.test(location) ||  location === undefined || location === null || location === '') {
+        if (location == regex.test(location) || location === undefined || location === null || location === '') {
             utilities.set_msg('Error adding tab. Invalid location');
             return;
         }
@@ -2689,7 +2912,7 @@ class TabManager {
         // navigation.getCardGroups();
 
         if (label !== 'Home' && label !== 'Settings' && label !== 'Recent' && label !== 'Search Results') {
-            this.addTabHistory(this.location.value);
+            this.addTabHistory(this.location_input.value);
         }
 
     }
@@ -2752,80 +2975,80 @@ class TabManager {
 
         // ipcRenderer.invoke('get_tab_history').then(history => {
 
-            // this.tab_history_arr = history;
-            let tab_history = this.tab_history_arr.filter(item => item.tab_id === parseInt(tab_id));
+        // this.tab_history_arr = history;
+        let tab_history = this.tab_history_arr.filter(item => item.tab_id === parseInt(tab_id));
 
-            if (tab_history.length === 0) {
-                return;
-            }
+        if (tab_history.length === 0) {
+            return;
+        }
 
-            if (direction === 1) {
-                tab_history.reverse();
-            }
+        if (direction === 1) {
+            tab_history.reverse();
+        }
 
-            // Create the popup element
-            const popup = document.createElement('div');
-            popup.classList.add('history-popup'); // Add a CSS class for styling
+        // Create the popup element
+        const popup = document.createElement('div');
+        popup.classList.add('history-popup'); // Add a CSS class for styling
 
-            // Create the title
-            const title = document.createElement('h2');
-            title.textContent = 'Navigation History';
+        // Create the title
+        const title = document.createElement('h2');
+        title.textContent = 'Navigation History';
 
-            // Create the list of history items
-            tab_history.forEach((item, idx) => {
+        // Create the list of history items
+        tab_history.forEach((item, idx) => {
 
-                // if (idx > 0) {
+            // if (idx > 0) {
 
-                    const menu_item = utilities.add_div(['item']);
-                    menu_item.textContent = item.location;
-                    popup.append(menu_item);
+            const menu_item = utilities.add_div(['item']);
+            menu_item.textContent = item.location;
+            popup.append(menu_item);
 
-                    menu_item.addEventListener('click', (e) => {
-                        fileManager.get_files(item.location);
-                        // this.history_idx = this.historyArr.length - 1;
-                        utilities.clear_highlight();
-                    })
-
-                // }
-
-            });
-
-            popup.addEventListener('mouseleave', (e) => {
-                popup.remove();
+            menu_item.addEventListener('click', (e) => {
+                fileManager.get_files(item.location);
+                // this.history_idx = this.historyArr.length - 1;
+                utilities.clear_highlight();
             })
 
-            // Determine position based on space below and above
-            const windowHeight = window.innerHeight;
-            const popupHeight = popup.offsetHeight;
-            const triggerElement = this.back_btn // Replace with your trigger element
-            const triggerRect = triggerElement.getBoundingClientRect();
-            const triggerTop = triggerRect.top;
-            const spaceBelow = windowHeight - (triggerTop + triggerRect.height);
-            const spaceAbove = triggerTop;
+            // }
 
-            if (spaceBelow > popupHeight) {
-                popup.style.top = triggerTop + triggerRect.height + 10 + 'px';
-            } else if (spaceAbove > popupHeight) {
-                popup.style.top = triggerTop - popupHeight + 'px';
-            } else {
-                // Handle cases where neither direction has enough space
-                // console.warn('Not enough space to display popup!');
-            }
-            popup.style.left = triggerRect.left + 10 + 'px';
+        });
 
-            // Append the popup to the body
-            const nav_menu = document.querySelector('.navigation');
-            nav_menu.appendChild(popup);
+        popup.addEventListener('mouseleave', (e) => {
+            popup.remove();
+        })
 
-            // console.log(this.historyArr)
-            return tab_history;
+        // Determine position based on space below and above
+        const windowHeight = window.innerHeight;
+        const popupHeight = popup.offsetHeight;
+        const triggerElement = this.back_btn // Replace with your trigger element
+        const triggerRect = triggerElement.getBoundingClientRect();
+        const triggerTop = triggerRect.top;
+        const spaceBelow = windowHeight - (triggerTop + triggerRect.height);
+        const spaceAbove = triggerTop;
+
+        if (spaceBelow > popupHeight) {
+            popup.style.top = triggerTop + triggerRect.height + 10 + 'px';
+        } else if (spaceAbove > popupHeight) {
+            popup.style.top = triggerTop - popupHeight + 'px';
+        } else {
+            // Handle cases where neither direction has enough space
+            // console.warn('Not enough space to display popup!');
+        }
+        popup.style.left = triggerRect.left + 10 + 'px';
+
+        // Append the popup to the body
+        const nav_menu = document.querySelector('.navigation');
+        nav_menu.appendChild(popup);
+
+        // console.log(this.historyArr)
+        return tab_history;
 
         // })
 
     }
 
     // get history idx by tab
-    getTabHistoryIdx (tab_id) {
+    getTabHistoryIdx(tab_id) {
         let tab_history_idx = 0;
         this.tab_history_idx_arr.forEach(item => {
             if (item.tab_id === tab_id) {
@@ -2837,7 +3060,7 @@ class TabManager {
     }
 
     // set history idx by tab
-    setTabHistoryIdx (tab_id, idx) {
+    setTabHistoryIdx(tab_id, idx) {
 
         this.tab_history_idx_arr.forEach(item => {
             if (item.tab_id === tab_id) {
@@ -2869,7 +3092,7 @@ class TabManager {
 
             if (href !== undefined || href !== null) {
 
-                this.location.value = href;
+                this.location_input.value = href;
                 fileManager.get_files(href);
 
                 // update tab history idx
@@ -2888,7 +3111,7 @@ class TabManager {
         this.tab_history_idx = this.getTabHistoryIdx(this.tab_id);
 
         if (this.tab_history_idx === 0) {
-            this.tab_history_arr.push(this.location.value);
+            this.tab_history_arr.push(this.location_input.value);
         }
 
         let filter_arr = this.tab_history_arr.filter(item => item.tab_id === parseInt(this.tab_id));
@@ -2900,7 +3123,7 @@ class TabManager {
         this.tab_history_idx += 1;
 
         let href = filter_arr[this.tab_history_idx].location;
-        this.location.value = href;
+        this.location_input.value = href;
         fileManager.get_files(href);
 
         // update tab history idx
@@ -2917,8 +3140,6 @@ class FileManager {
         // this.events = [];
         this.tabManager = tabManager;
         this.iconManager = iconManager;
-        this.sort_direction = 'desc';
-        this.sort_by = 'mtime';
 
         this.loaded_rows = 0;
         this.chunk_size = 1000;
@@ -2929,6 +3150,12 @@ class FileManager {
 
         this.tab_data_arr = [];
         this.drag_handle = null;
+
+        this.main = document.querySelector('.main');
+        if (!this.main) {
+            console.log('error getting main');
+            return;
+        }
 
         // get view settings
         this.view = settingsManager.get_view();
@@ -2952,7 +3179,19 @@ class FileManager {
 
         // resize column
         this.list_view_settings = settingsManager.get_list_view_settings();
-        let settings = settingsManager.get_settings();
+        this.settings = settingsManager.get_settings();
+
+        // get sort settings
+        this.sort_by = this.settings.sort_by;
+        this.sort_direction = this.settings.sort_direction;
+
+        if (this.sort_by === undefined || this.sort_by === null || this.sort_by === '') {
+            this.sort_by = 'mtime';
+        }
+
+        if (this.sort_direction === undefined || this.sort_direction === null || this.sort_direction === '') {
+            this.sort_direction = 'desc';
+        }
 
         this.initialX = 0;
         this.initialWidth = 0;
@@ -2968,22 +3207,73 @@ class FileManager {
 
         this.is_resizing = false;
 
-        this.sort_by_column = this.sort_by_column.bind(this);
+        // this.sort_by_column = this.sort_by_column.bind(this);
 
         // this.init_col_resize = this.init_col_resize.bind(this);
         this.resize_col = this.resize_col.bind(this);
         this.stop_col_resize = this.stop_col_resize.bind(this);
         //
 
-        ipcRenderer.on('switch_view', (e, view) => {
-            if (view === 'list_view') {
-                this.get_list_view(this.files_arr);
-            } else if (view === 'grid_view') {
-                this.get_grid_view(this.files_arr);
+        // sort menu
+        ipcRenderer.on('sort_by', (e, sort, sort_direction) => {
+
+            if (sort === null || sort === undefined || sort === '') {
+                utilities.set_msg(`Error: Sort is null or undefined ${sort}`);
+                return;
             }
-            settings.view = view;
-            ipcRenderer.send('update_settings', settings);
-        })
+            if (sort_direction === null || sort_direction === undefined || sort_direction === '') {
+                utilities.set_msg(`Error: Sort direction is null or undefined ${sort_direction}`);
+                return;
+            }
+            if (this.location === null || this.location === undefined || this.location === '') {
+                utilities.set_msg(`Error: Location is null or undefined ${this.location}`);
+                return;
+            }
+
+            this.sort_by = sort;
+            this.sort_direction = sort_direction;
+
+            this.get_files(this.location);
+
+            // save sort direction
+            this.settings.sort_by = this.sort_by;
+            this.settings.sort_direction = this.sort_direction;
+            settingsManager.update_settings(this.settings);
+
+        });
+
+        // switch view
+        ipcRenderer.on('switch_view', (e, view) => {
+
+            if (view === null || view === undefined || view === '') {
+                utilities.set_msg(`Error: View is null or undefined ${view}`);
+                return;
+            }
+
+            this.location = settingsManager.get_location();
+            if (this.location === null || this.location === undefined || this.location === '') {
+                this.location = utilities.home_dir;
+            }
+
+            this.view = view;
+
+            switch (this.view) {
+                case 'list_view':
+                    this.get_files(this.location);
+                    break;
+                case 'grid_view':
+                    this.get_files(this.location);
+                    break;
+                default:
+                    console.error(`Unknown view: ${this.view}`);
+                    break;
+            }
+
+            this.settings.view = this.view;
+            this.settings.location = this.location;
+            ipcRenderer.send('update_settings', this.settings);
+
+        });
 
         // get files
         ipcRenderer.on('ls', (e, files_arr) => {
@@ -2998,13 +3288,10 @@ class FileManager {
             } else if (this.view === 'grid_view') {
                 this.get_grid_view(files_arr);
             }
-            tabManager.set_tab_data_arr(files_arr);
-            ipcRenderer.send('get_disk_space', this.location);
 
-            // if (files_arr.length === 0) {
-            //     utilities.set_msg('No files found.');
-            //     this.folder_is_empty();
-            // }
+            tabManager.set_tab_data_arr(files_arr);
+            tabManager.update_tab(this.location);
+            ipcRenderer.send('get_disk_space', this.location);
 
             this.check_for_empty_folder();
 
@@ -3012,41 +3299,88 @@ class FileManager {
 
         // add items
         ipcRenderer.on('add_items', (e, copy_arr) => {
+
+            console.log('add items', copy_arr);
+
             this.add_items(copy_arr);
             this.check_for_empty_folder();
+
         });
 
         // get list view item
         ipcRenderer.on('get_item', (e, f) => {
 
+            console.log('get item', f);
+
             let active_tab_content = tabManager.get_active_tab_content();
-            let table = active_tab_content.querySelector('.table');
-            let tbody = table.querySelector('tbody');
-            let items = active_tab_content.querySelectorAll('.tr')
-
-            // convert items to array and get number of directories
-            let idx = Array.from(items).filter(item => item.dataset.is_dir === 'true').length;
-            console.log('get item', idx);
-
-            let tr = this.get_list_view_item(f);
-
-            if (f.is_dir) {
-                tbody.prepend(tr);
-            } else {
-                // insert row at position idx
-                tbody.insertBefore(tr, tbody.children[idx]);
+            if (!active_tab_content) {
+                console.log('error getting active tab content');
+                return;
             }
 
-            // focus item
-            tr.classList.add('highlight_select');
-            console.log(f)
-            let href = tr.querySelector('a');
-            href.focus();
+            if (this.view === 'grid_view') {
 
-            // tr.dataset.id = utilities.stob(href.innerText);
+                console.log('grid view');
+                let grid = active_tab_content.querySelector('.grid3');
+                if (!grid) {
+                    console.log('Error: getting grid');
+                    utilities.set_msg('Error: getting grid');
+                    return;
+                }
+
+                let items = grid.querySelectorAll('.card');
+                if (items.length > 0) {
+
+                    let idx = Array.from(items).filter(item => item.dataset.is_dir === 'true').length;
+                    let card = this.get_grid_view_item(f);
+
+                    if (!card) {
+                        console.log('error getting card');
+                        utilities.set_msg('Error: getting card');
+                        return;
+                    }
+
+                    if (f.is_dir) {
+                        grid.prepend(card);
+                    } else {
+                        // insert row at position idx
+                        grid.insertBefore(card, grid.children[idx]);
+                    }
+
+                }
+
+            } else if (this.view === 'list_view') {
+
+                let table = active_tab_content.querySelector('.table');
+                if (!table) {
+                    console.log('error getting table');
+                    return;
+                }
+                let tbody = table.querySelector('tbody');
+                let items = active_tab_content.querySelectorAll('.tr')
+
+                // convert items to array and get number of directories
+                let idx = Array.from(items).filter(item => item.dataset.is_dir === 'true').length;
+                let tr = this.get_list_view_item(f);
+
+                if (f.is_dir) {
+                    tbody.prepend(tr);
+                } else {
+                    // insert row at position idx
+                    tbody.insertBefore(tr, tbody.children[idx]);
+                }
+
+                // focus item
+                tr.classList.add('highlight_select');
+                console.log(f)
+                let href = tr.querySelector('a');
+                href.focus();
+
+                // tr.dataset.id = utilities.stob(href.innerText);
+
+            }
 
             dragSelect.initialize();
-
             this.check_for_empty_folder();
 
         });
@@ -3054,16 +3388,36 @@ class FileManager {
         // edit item mode
         ipcRenderer.on('edit_item', (e, f) => {
 
-            console.log('edit item', f);
+            if (f.id === undefined || f.id === null) {
+                utilities.set_msg('Error: getting file id');
+                return;
+            }
 
             let active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
             let item = active_tab_content.querySelector(`[data-id="${f.id}"]`);
+            if (!item) {
+                console.log('error getting data-id', f.id);
+                utilities.set_msg(`Error: getting  data-id ${f.id}`);
+                return;
+            }
 
             let edit_name = item.querySelector('.href');
-            edit_name.classList.add('hidden');
+            if (edit_name) {
+                edit_name.classList.add('hidden');
+            } else {
+                console.log('error getting edit name');
+                utilities.set_msg('Error: getting edit name');
+                return;
+            }
 
             let input = item.querySelector('input');
-            input.classList.remove('hidden');
+            if (input) {
+                input.classList.remove('hidden');
+            } else {
+                console.log('error getting input');
+                utilities.set_msg('Error: getting input');
+                return;
+            }
 
             input.focus();
             input.setSelectionRange(0, input.value.lastIndexOf('.'));
@@ -3081,10 +3435,37 @@ class FileManager {
             let item = active_tab_content.querySelector(`[data-id="${f.id}"]`);
 
             if (item) {
-                // replace item with new item
-                let tr = fileManager.get_list_view_item(f);
-                item.replaceWith(tr);
-                dragSelect.initialize();
+
+                if (this.view === 'grid_view') {
+
+                    let card = this.get_grid_view_item(f);
+                    if (!card) {
+                        console.log('error getting card');
+                        utilities.set_msg('Error: getting card');
+                        return;
+                    }
+                    item.replaceWith(card);
+
+                } else if (this.view === 'list_view') {
+
+                    let href = item.querySelector('.href');
+                    if (!href) {
+                        console.log('error getting href');
+                        utilities.set_msg('Error: getting href');
+                        return;
+                    }
+
+                    href.innerText = this.sanitize_file_name(f.name);
+                    let tr = fileManager.get_list_view_item(f);
+                    item.replaceWith(tr);
+                    dragSelect.initialize();
+
+                }
+
+
+            } else {
+                console.log('error getting data-id', f.id);
+                utilities.set_msg(`Error: getting data-id ${f.id}`);
             }
 
 
@@ -3110,6 +3491,7 @@ class FileManager {
                 item.remove();
             })
             this.check_for_empty_folder();
+            utilities.get_disk_space(this.location);
         });
 
         ipcRenderer.on('overwrite', (e, overwrite_arr) => {
@@ -3122,6 +3504,7 @@ class FileManager {
 
     }
 
+    // set / remove empty folder message
     check_for_empty_folder() {
 
         let active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
@@ -3162,7 +3545,7 @@ class FileManager {
 
     }
 
-
+    // init column resize
     init_col_resize(e) {
 
         this.is_resizing = true;
@@ -3176,6 +3559,7 @@ class FileManager {
 
     }
 
+    // resize column
     resize_col(e) {
 
         if (!this.is_resizing) return;
@@ -3199,6 +3583,7 @@ class FileManager {
 
     }
 
+    // stop column resize
     stop_col_resize(e) {
 
         document.body.style.cursor = 'default';
@@ -3214,7 +3599,9 @@ class FileManager {
         drag_handle.style.width = '10px';
         drag_handle.style.right = '-5px';
 
-        this.is_resizing = false;
+        setTimeout(() => {
+            this.is_resizing = false;
+        }, 500);
 
     }
 
@@ -3251,7 +3638,7 @@ class FileManager {
             }
 
             if (e.ctrlKey && e.key === 'l') {
-                this.location.focus();
+                // this.location.focus();
                 return;
             }
 
@@ -3282,6 +3669,7 @@ class FileManager {
 
     }
 
+    // run filter
     run_filer() {
 
         setTimeout(() => {
@@ -3319,6 +3707,7 @@ class FileManager {
 
     }
 
+    // clear filter
     clear_filter() {
 
         let active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
@@ -3387,7 +3776,7 @@ class FileManager {
     // get grid view
     get_grid_view(files_arr) {
 
-        console.log('running get list view');
+        console.log('running get grid view');
 
         let active_tab_content = tabManager.get_active_tab_content();
         if (!active_tab_content) {
@@ -3397,7 +3786,7 @@ class FileManager {
         active_tab_content.innerHTML = '';
 
         let grid = document.createElement('div');
-        grid.classList.add('grid3');
+        grid.classList.add('grid', 'grid3');
 
         // let settings = settingsManager.get_settings();
         // let grid_view_settings = settingsManager.get_grid_view_settings();
@@ -3407,16 +3796,17 @@ class FileManager {
 
         for (let i = 0; i < files_arr.length; i++) {
 
-            let f = files_arr[i];
+            // let f = files_arr[i];
             let card = utilities.add_div(['card', 'lazy']) //this.get_grid_view_item(f);
-            card.dataset.id = f.id;
-            card.dataset.href = f.href;
-            card.dataset.name = f.name;
-            card.dataset.size = f.size;
-            card.dataset.mtime = f.mtime;
-            card.dataset.content_type = f.content_type;
-            card.dataset.is_dir = f.is_dir;
-            card.dataset.location = f.location;
+            card.dataset.id = files_arr[i].id;
+            card.dataset.href = files_arr[i].href;
+            card.dataset.name = files_arr[i].name;
+            card.dataset.size = files_arr[i].size;
+            card.dataset.mtime = files_arr[i].mtime;
+            card.dataset.content_type = files_arr[i].content_type;
+            card.dataset.is_dir = files_arr[i].is_dir;
+            card.dataset.location = files_arr[i].location;
+            card.dataset.content_type = files_arr[i].content_type;
             grid.appendChild(card);
 
         }
@@ -3426,10 +3816,16 @@ class FileManager {
 
     }
 
+    // get grid view item
     get_grid_view_item(f) {
 
-        let location = document.getElementById('location');
-        let is_dir = 0;
+        // loop f to make sure its complete
+        for (let items in f) {
+            if (f[items] === undefined || f[items] === null) {
+                console.log('error getting grid view item', f);
+                return -1;
+            }
+        }
 
         let card = utilities.add_div(['card']);
         let content = utilities.add_div(['content']);
@@ -3441,15 +3837,19 @@ class FileManager {
         let path = utilities.add_div(['path', 'item', 'hidden']);
         let mtime = utilities.add_div(['date', 'mtime', 'item']);
         let atime = utilities.add_div(['date', 'atime', 'item', 'hidden']);
-        let ctime = utilities.add_div(['date', 'ctime','item', 'hidden']);
+        let ctime = utilities.add_div(['date', 'ctime', 'item', 'hidden']);
         let size = utilities.add_div(['size', 'item']);
         let type = utilities.add_div(['type', 'item', 'hidden']);
         let count = utilities.add_div(['count', 'item', 'hidden']);
         let input = document.createElement('input');
         let tooltip = utilities.add_div('tooltip', 'hidden');
 
-        input.classList.add('input', 'item', 'hidden');
-        // img.classList.add('icon');
+        href.classList.add('href', 'item');
+        input.classList.add('input', 'item', 'hidden', 'edit_name');
+
+        icon.style = 'cursor: pointer';
+
+        img.classList.add('img');
         img.loading = 'lazy';
 
         card.classList.add('lazy');
@@ -3459,7 +3859,6 @@ class FileManager {
         href.href = f.href;
         href.innerHTML = f.display_name;
         input.value = f.display_name;
-        card.dataset.name = f.name;
 
         input.spellcheck = false;
         input.type = 'text';
@@ -3469,12 +3868,6 @@ class FileManager {
         img.draggable = false;
         icon.draggable = false;
         card.draggable = true;
-
-        card.dataset.id = f.id;
-        card.dataset.href = f.href;
-        card.dataset.mtime = f.mtime;
-        card.dataset.size = f.size;
-        card.dataset.type = f.content_type;
 
         // Check file values
         if (f.size) {
@@ -3497,130 +3890,6 @@ class FileManager {
             item.draggable = false;
         })
 
-        // tooltip.append(`Name: ${path.basename(file.href)}`);
-        let tooltip_timeout;
-
-        // Mouse Over
-        let title = '';
-        card.addEventListener('mouseover', (e) => {
-
-            card.classList.add('highlight');
-            title =
-                'Name: ' + f.display_name +
-                '\n' +
-                'Location: ' + f.location +
-                '\n' +
-                'Size: ' + utilities.get_file_size(f.size) +
-                '\n' +
-                'Accessed: ' + utilities.get_date_time(f.atime) +
-                '\n' +
-                'Modified: ' + utilities.get_date_time(f.mtime) +
-                // '\n' +
-                // 'Created: ' + getDateTime(file.ctime) +
-                '\n' +
-                'Type: ' + f.content_type
-
-            card.title = title;
-            // href.focus();
-
-        })
-
-        tooltip.addEventListener('mouseout', (e) => {
-            tooltip.classList.add('hidden')
-        })
-
-        card.addEventListener('mouseout', (e) => {
-            clearTimeout(tooltip_timeout);
-            tooltip.classList.add('hidden');
-            card.classList.remove('highlight');
-        })
-
-        card.addEventListener('mouseenter', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-        })
-
-        // Mouse Leave
-        card.addEventListener('mouseleave', (e) => {
-
-        })
-
-        // Card ctrl onclick
-        card.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-
-            if (e.ctrlKey) {
-                card.classList.toggle('highlight_select');
-                utilities.getSelectedCount();
-            } else {
-                clearHighlight();
-                card.classList.add('highlight_select');
-                utilities.getSelectedCount();
-            }
-
-        })
-
-        card.addEventListener('dragstart', (e) => {
-            // e.stopPropagation();
-            // ipcRenderer.send('copy_to_clipboard', file.href);
-            getSelectedFiles();
-        })
-
-        card.addEventListener('dragenter', (e) => {
-            // e.preventDefault();
-            // e.stopPropagation();
-        })
-
-        card.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            let cards = document.querySelectorAll('.highlight_select');
-            let count = cards.length;
-            if (is_dir && !card.classList.contains('highlight')) {
-
-                card.classList.add('highlight_target');
-
-                if (e.ctrlKey) {
-                    e.dataTransfer.dropEffect = "copy";
-                    this.msg('Copy to ' + f.href);
-                } else {
-                    e.dataTransfer.dropEffect = "move";
-                    this.msg(`Move ${count} items to ${f.href}`);
-                }
-
-            }
-        })
-
-        card.addEventListener('dragleave', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            card.classList.remove('highlight_target');
-            utilities.msg('');
-        })
-
-        card.addEventListener('drop', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-
-            // let utils = new Utilities();
-            ipcRenderer.send('main', 0);
-            if (!card.classList.contains('highlight') && card.classList.contains('highlight_target')) {
-                if (e.ctrlKey) {
-                    fileOperations.paste(f.href);
-                } else {
-                    fileOperations.move(f.href);
-                }
-            } else {
-                // console.log('did not find target')
-            }
-
-        })
-
-        // mtime.append(getDateTime(file.mtime));
-        // ctime.append(getDateTime(file.ctime));
-        // atime.append(getDateTime(file.atime));
-        // type.append(file.content_type);
-
         icon.append(img);
         header.append(href, input);
 
@@ -3630,57 +3899,9 @@ class FileManager {
             ipcRenderer.send('get_folder_icon', f.href);
             ipcRenderer.send('get_folder_size', f.href);
 
-            is_dir = 1;
-            // utilities.getFolderIcon(file).then(folder_icon => {
-            //     img.src = folder_icon;
-            // })
+            // is_dir = 1;
 
-            card.classList.add('folder_card', 'lazy')
-
-            // Href
-            href.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-
-                if (!f.is_readable) {
-                    utilities.msg('Error: Access Denied');
-                    return;
-                }
-
-                // navigation.addHistory(file.href);
-                tabManager.addTabHistory(f.href);
-
-                if (e.ctrlKey) {
-                    this.get_files(f.href);
-                    tabManager.add_tab(f.href);
-                } else {
-                    this.get_files(f.href);
-                }
-
-            })
-
-            // Img
-            img.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-
-                if (!f.is_readable) {
-                    utilities.msg('Error: Access Denied');
-                    return;
-                }
-
-                tabManager.addTabHistory(f.href);
-                // navigation.addHistory(file.href);
-
-                location.value = f.href;
-                if (e.ctrlKey) {
-                    // ipcRenderer.send('get_files', file.href, 1);
-                    fileOperations.getFiles(f.href, 1);
-                } else {
-                    location.dispatchEvent(new Event('change'));
-                }
-                ipcRenderer.send('saveRecentFile', f.href);
-            })
+            card.classList.add('folder_card', 'lazy');
 
             // Context Menu
             card.addEventListener('contextmenu', (e) => {
@@ -3690,70 +3911,11 @@ class FileManager {
                 ipcRenderer.send('folder_menu', f);
             })
 
-        // Files
+            // Files
         } else {
-            // Get Icon
-            try {
 
-                if (f.content_type.indexOf('image/') > -1) {
-
-                    // Load generic icon
-                    img.src = './assets/icons/image-generic.svg';
-                    img.dataset.content_type = f.content_type;
-
-                    if (f.content_type === 'image/x-xcf') {
-                        img.classList.remove('lazy')
-                        ipcRenderer.invoke('get_icon', (f.href)).then(res => {
-                            img.src = res;
-                        })
-                    } else if (f.content_type === 'image/svg+xml') {
-                        img.classList.add('lazy')
-                        img.dataset.src = f.href;
-                        img.classList.add('svg')
-                    } else if (f.content_type === 'image/webp') {
-                        img.src = f.href;
-                    } else if (f.content_type === 'image/gif') {
-                        img.src = f.href;
-                    } else {
-                        img.classList.add('lazy')
-                        img.src = './assets/icons/image-generic.svg';
-
-                        img.dataset.src = f.href;
-
-                    }
-                } else if (f.content_type.indexOf('video/') > -1) {
-
-                    // let video = add_canvas(file);
-                    video.src = f.href;
-                    video.classList.add('icon');
-                    icon.innerHTML = '';
-                    icon.append(video);
-                    icon.addEventListener('click', (e) => {
-                        e.preventDefault();
-                        ipcRenderer.send('open', f.href);
-                        ipcRenderer.send('saveRecentFile', f.href);
-                    })
-                } else {
-                    ipcRenderer.invoke('get_icon', (f.href)).then(res => {
-                        img.src = res;
-                    })
-                }
-            } catch (err) {
-                ipcRenderer.invoke('get_icon', (f.href)).then(res => {
-                    img.src = res;
-                })
-            }
-
-            // Open href in default application
-            href.addEventListener('click', (e) => {
-                e.preventDefault();
-                ipcRenderer.send('open', f.href);
-            })
-            img.addEventListener('click', (e) => {
-                e.preventDefault();
-                ipcRenderer.send('open', f.href);
-            })
             size.append(utilities.get_file_size(f["size"]));
+
             // Context Menu
             card.addEventListener('contextmenu', (e) => {
                 e.preventDefault();
@@ -3761,53 +3923,35 @@ class FileManager {
                 card.classList.add('highlight_select')
                 ipcRenderer.send('file_menu', f);
             })
-        }
-
-        // if (file.is_symlink) {
-        //     let symlink_img = document.createElement('img');
-        //     symlink_img.src = symlink_icon;
-        //     symlink_img.classList.add('symlink');
-        //     icon.append(symlink_img);
-        // }
-
-        if (!f.is_writable) {
-
-            // console.log(file)
-            let readonly_img = document.createElement('img');
-            readonly_img.src = readonly_icon;
-            readonly_img.classList.add('readonly');
-            // readonly_icon.style = 'height: 12px'; // applied style here because there is a little lag time when set in css
-            icon.append(readonly_img);
 
         }
+
+        // Handle events
+        this.handleDataAttributes(card, f);
+        this.handleTitle(card, f);
+        this.handleDragStart(card);
+        this.handleDragOver(card);
+        this.handleDragLeave(card);
+        this.handleDrop(card);
+        this.handleRename(input, f);
+
+        // Get Icon
+        this.handleIcon(icon, f);
+
+        // handle click events - Card click is handled in drag select
+        this.handleClick(href, f);
+        this.handleClick(img, f);
 
         content.append(header, path, mtime, ctime, atime, type, size, count);
         card.append(icon, content, tooltip);
 
-        // clear empty folder message
-        // this.removeEmptyFolderMsg();
-
         return card;
     }
 
-    // sort event
-    sort_by_column(e) {
-
-        e.stopPropagation();
-
-        console.log('running sort by column', e.target);
-
-        // let settings = settingsManager.get_settings();
-        // settings.sort_by = e.target.dataset.col_name;
-        // settings.sort_direction = settings.sort_direction === 'asc' ? 'desc' : 'asc';
-        // ipcRenderer.send('update_settings', settings);
-        // this.get_list_view(files_arr);
-    }
-
     // get list view
-    get_list_view (files_arr) {
+    get_list_view(files_arr) {
 
-        // console.log('running get list view');
+        console.log('running get list view');
 
         utilities.clear_filter();
 
@@ -3824,8 +3968,8 @@ class FileManager {
         active_tab_content.innerHTML = '';
         active_tab_content.scrollTop = 0;
 
-        // update tab label when location changes
-        tabManager.update_tab(utilities.get_location());
+        // // update tab label when location changes
+        // tabManager.update_tab(utilities.get_location());
 
         const table_container = utilities.add_div(['table_container']);
 
@@ -3837,18 +3981,18 @@ class FileManager {
 
         let tbody = document.createElement('tbody');
 
-        let settings = settingsManager.get_settings();
-        let list_view_settings = settingsManager.get_list_view_settings();
+        this.settings = settingsManager.get_settings();
+        this.list_view_settings = settingsManager.get_list_view_settings();
 
-        for (const key in settings.columns) {
-            if (settings.columns[key]) {
+        for (const key in this.settings.columns) {
+            if (this.settings.columns[key]) {
 
                 let th_sort_icon = document.createElement('i');
                 th_sort_icon.classList.add('th_sort_icon');
-                if (settings.sort_by === key) {
+                if (this.settings.sort_by === key) {
 
                     // th_sort_icon.classList.add('bi', 'bi-caret-up-fill');
-                    if (settings.sort_direction === 'desc') {
+                    if (this.settings.sort_direction === 'desc') {
                         th_sort_icon.classList.remove('bi', 'bi-caret-up-fill');
                         th_sort_icon.classList.add('bi', 'bi-caret-down-fill');
                     } else {
@@ -3860,20 +4004,22 @@ class FileManager {
                 let drag_handle = document.createElement('div');
                 drag_handle.classList.add('drag_handle');
 
+                let th = document.createElement('th');
+                th.classList.add('sort_column');
+
                 // handle name column
                 if (key === 'name') {
 
-                    let th_name = document.createElement('th');
-                    th_name.innerHTML = 'Name';
-                    th_name.appendChild(drag_handle);
-                    th_name.dataset.col_name = key;
-                    tr.appendChild(th_name);
+                    th.innerHTML = 'Name';
+                    th.appendChild(drag_handle);
+                    th.dataset.col_name = key;
+                    tr.appendChild(th);
 
-                    th_name.style.width = list_view_settings.col_width[key] + 'px';
+                    th.style.width = this.list_view_settings.col_width[key] + 'px';
 
                 } else {
 
-                    let th = document.createElement('th');
+                    // let th = document.createElement('th');
 
                     switch (key) {
                         case 'size':
@@ -3904,7 +4050,7 @@ class FileManager {
                     th.dataset.col_name = key;
                     tr.appendChild(th);
 
-                    th.style.width = list_view_settings.col_width[key] + 'px';
+                    th.style.width = this.list_view_settings.col_width[key] + 'px';
 
                 }
 
@@ -3913,19 +4059,11 @@ class FileManager {
                     this.init_col_resize(e);
                 });
 
+                // handle sort event
+                this.handleColumnSort(th, key);
+
             }
         }
-
-        // handle sort event
-        // tr.removeEventListener('click', this.sort_by_handler);
-        // thead.addEventListener('click', (e) => {
-        //     e.preventDefault();
-        //     e.stopPropagation();
-        //     settings.sort_by = e.target.dataset.col_name;
-        //     settings.sort_direction = settings.sort_direction === 'asc' ? 'desc' : 'asc';
-        //     ipcRenderer.send('update_settings', settings);
-        //     this.get_list_view(files_arr);
-        // })
 
         // table.appendChild(colgroup);
         thead.appendChild(tr);
@@ -3933,7 +4071,7 @@ class FileManager {
         table.appendChild(tbody);
 
         // sort files array
-        files_arr = utilities.sort(files_arr, settings.sort_by, settings.sort_direction);
+        files_arr = utilities.sort(files_arr, this.settings.sort_by, this.settings.sort_direction);
 
         files_arr.forEach((f, idx) => {
             let tr = document.createElement('tr'); //this.get_list_view_item(f);
@@ -3970,93 +4108,58 @@ class FileManager {
     // add_list_view_item(f) {
     get_list_view_item(f) {
 
+        // loop f to make sure its complete
+        for (let items in f) {
+            if (f[items] === undefined || f[items] === null) {
+                console.log('error getting grid view item', f);
+                return -1;
+            }
+        }
+
         let tr = document.createElement('tr');
         tr.classList.add('tr');
 
-        let div_name = utilities.add_div(['div_name']);
-        let div_icon = utilities.add_div(['icon']);
-        let img = document.createElement('img');
+        // add data attributes from column settings
+        this.handleDataAttributes(tr, f);
 
+        // add hover over title
+        this.handleTitle(tr, f);
+
+        let div_name = utilities.add_div(['div_name']);
+        let icon = utilities.add_div(['icon']);
+        let img = document.createElement('img');
         let input = document.createElement('input');
+        let link = utilities.add_link(f.href, f.name);
+
+        // input settings
         input.type = 'text';
         input.value = f.name;
         input.classList.add('edit_name', 'hidden');
         input.spellcheck = false;
 
-        // let input = utilities.add_div(['edit_name', 'hidden']);
-        // input.contentEditable = true;
-        // input.innerHTML = f.name;
+        icon.style = 'cursor: pointer';
+        img.classList.add('img');
+        img.loading = 'lazy';
 
-        let link = utilities.add_link(f.href, f.name);
         link.draggable = false;
         link.classList.add('href');
 
-        // add symlink icon
-        if (f.is_symlink) {
-            let symlink_img = document.createElement('img');
-            ipcRenderer.invoke('get_symlink_icon', f.href).then(symlink_icon => {
-                symlink_img.src = symlink_icon;
-                symlink_img.classList.add('symlink');
-                div_icon.append(symlink_img);
-            })
-        }
-
-
-        let settings = settingsManager.get_settings();
-        for (const key in settings.columns) {
-            if (settings.columns[key]) {
-
-                // add data attributes from column settings
-                tr.dataset.id = f.id;
-                tr.dataset.href = f.href;
-                tr.dataset.content_type = f.content_type;
-                tr.dataset.is_dir = f.is_dir;
-                tr.dataset.location = f.location;
-
-                tr.dataset[key] = f[key];
+        // handle columns
+        this.settings = settingsManager.get_settings();
+        for (const key in this.settings.columns) {
+            if (this.settings.columns[key]) {
 
                 let td = document.createElement('td');
-
-                let title =
-                    'Name: ' + f.display_name +
-                    '\n' +
-                    'Location: ' + f.location +
-                    '\n' +
-                    'Size: ' + utilities.get_file_size(f.size) +
-                    '\n' +
-                    'Accessed: ' + utilities.get_date_time(f.atime) +
-                    '\n' +
-                    'Modified: ' + utilities.get_date_time(f.mtime) +
-                    // '\n' +
-                    // 'Created: ' + getDateTime(file.ctime) +
-                    '\n' +
-                    'Type: ' + f.content_type
-
-                td.title = title;
-
-                // // handle sort icon
-                // let th_sort_icon = document.createElement('i');
-                // th_sort_icon.classList.add('th_sort_icon');
-                // if (this.sort_by === key) {
-                //     th_sort_icon.classList.add('bi', 'bi-caret-up-fill');
-                //     if (this.sort_direction === 'desc') {
-                //         th_sort_icon.classList.remove('bi-caret-up-fill');
-                //         th_sort_icon.classList.add('bi-caret-down-fill');
-                //     } else {
-                //         th_sort_icon.classList.remove('bi-caret-down-fill');
-                //         th_sort_icon.classList.add('bi-caret-up-fill');
-                //     }
-                // }
 
                 // handle name column
                 if (key === 'name') {
 
                     img.loading = 'lazy';
-                    div_icon.appendChild(img);
+                    icon.appendChild(img);
 
                     td.classList.add('name');
 
-                    div_name.append(div_icon, link, input);
+                    div_name.append(icon, link, input);
                     td.append(div_name);
 
                     // tr.appendChild(td_icon);
@@ -4068,111 +4171,25 @@ class FileManager {
                         ipcRenderer.send('get_folder_icon', f.href);
                         ipcRenderer.send('get_folder_size', f.href);
 
-                        // handle icon click
-                        img.addEventListener('click', (e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (e.ctrlKey) {
-                                tabManager.add_tab(f.href);
-                                this.get_files(f.href);
-                            } else {
-                                this.get_files(f.href);
-                            }
-                        });
-
-                        // handle link click
-                        link.addEventListener('click', (e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            if (e.ctrlKey) {
-                                tabManager.add_tab(f.href);
-                                this.get_files(f.href);
-                            } else {
-                                this.get_files(f.href);
-                            }
-                        });
-
                     } else {
 
-                        if (f.content_type.includes('image/')) {
-
-                            // check for svg
-                            if (f.content_type.includes('svg')) {
-                                img.src = f.href;
-                                img.classList.add('svg');
-                            } else {
-                                img.src = f.href;
-                            }
-
-
-                        } else if (f.content_type.includes('video/')) {
-
-                            let video = document.createElement('video');
-                            video.src = f.href;
-                            video.classList.add('video');
-                            div_icon.innerHTML = '';
-                            div_icon.append(video);
-
-                        } else {
-                            img.classList.add('lazy');
-                            ipcRenderer.invoke('get_icon', f.href).then(icon => {
-                                img.src = icon;
-                            })
-                        }
-
-                        // handle icon click
-                        // img.addEventListener('click', (e) => {
-                        //     e.preventDefault();
-                        //     e.stopPropagation();
-                        //     let selected_files = utilities.get_selected_files();
-                        //     selected_files.forEach(f => {
-                        //         ipcRenderer.send('open', f.href);
-                        //     });
-                        //     selected_files = [];
-                        // });
-
-                        // handle link click
-                        this.handleClick(link, f);
-                        // link.addEventListener('click', (e) => {
-                        //     e.preventDefault();
-                        //     e.stopPropagation();
-
-                        //     let selected_files = utilities.get_selected_files();
-                        //     console.log('running open', selected_files);
-                        //     // selected_files.forEach(f => {
-                        //     //     console.log('running open', f.href);
-
-                        //     //     ipcRenderer.send('open', f.href);
-                        //     // });
-
-                        //     utilities.clear_highlight();
-                        //     selected_files = [];
-
-                        // });
+                        this.handleIcon(icon, f);
 
                     }
 
-                    // handle rename
-                    input.addEventListener('keydown', (e) => {
+                    // handle click events
+                    this.handleClick(link, f);
+                    this.handleClick(img, f);
 
-                        if (e.key === 'Enter') {
-                            let id = f.id;
-                            let source = f.href;
-                            let destination = source.split('/').slice(0, -1).join('/') + '/' + input.value;
-                            utilities.rename(source, destination, id);
-                        }
-                        if (e.key === 'Escape') {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            utilities.cancel_edit();
-                        }
-                    })
+                    // handle rename
+                    this.handleRename(input, f);
 
                 } else {
 
                     switch (key) {
                         case 'size':
                             td.innerHTML = utilities.get_file_size(f.size);
+                            td.classList.add('size');
                             break;
                         case 'mtime':
                             td.innerHTML = utilities.get_date_time(f.mtime);
@@ -4226,22 +4243,329 @@ class FileManager {
 
     }
 
-    // handle click event
-    handleClick(link, f) {
+    // sort event
+    handleColumnSort(item) {
 
-        link.addEventListener('click', (e) => {
+        item.addEventListener('click', (e) => {
 
             e.preventDefault();
             e.stopPropagation();
 
-            let active_tab_content = document.querySelector('.main');
-            let selected_files = active_tab_content.querySelectorAll('.highlight, .highlight_select');
+            if (this.is_resizing) {
+                return;
+            }
 
-            ipcRenderer.send('open', f.href);
-            // });
+            console.log('running sort by column', e.target);
+            this.settings.sort_by = e.target.dataset.col_name;
+            this.settings.sort_direction = this.settings.sort_direction === 'asc' ? 'desc' : 'asc';
+            settingsManager.update_settings(this.settings);
+            this.get_files(this.location);
+
+        });
+
+    }
+
+    // handle title
+    handleTitle(item, f) {
+
+        let title =
+            'Name: ' + f.display_name +
+            '\n' +
+            'Location: ' + f.location +
+            '\n' +
+            'Size: ' + utilities.get_file_size(f.size) +
+            '\n' +
+            'Accessed: ' + utilities.get_date_time(f.atime) +
+            '\n' +
+            'Modified: ' + utilities.get_date_time(f.mtime) +
+            '\n' +
+            'Created: ' + utilities.get_date_time(f.ctime) +
+            '\n' +
+            'Type: ' + f.content_type
+
+        item.title = title;
+
+    }
+
+    // handle data attributes
+    handleDataAttributes(item, f) {
+
+        item.dataset.id = f.id;
+        item.dataset.href = f.href;
+        item.dataset.name = f.name;
+        item.dataset.mtime = f.mtime;
+        item.dataset.atime = f.atime;
+        item.dataset.ctime = f.ctime;
+        item.dataset.size = f.size;
+        item.dataset.type = f.content_type;
+        item.dataset.is_dir = f.is_dir;
+        item.dataset.location = f.location;
+        item.dataset.content_type = f.content_type;
+
+    }
+
+    // handle icon
+    handleIcon(icon, f) {
+
+        for (let field in f) {
+            if (f[field] === undefined || f[field] === null) {
+                console.log('error getting icon', f);
+                return -1;
+            }
+        }
+
+        if (icon === undefined || icon === null) {
+            const errorMessage = `Error loading icon ${icon}`;
+            console.log(errorMessage);
+            utilities.set_msg(errorMessage);
+            if (err && typeof err === 'function') {
+            err(errorMessage);
+            }
+            return -1;
+        }
+
+        if (f.href === undefined || f.href === null) {
+            console.log('Error getting icon href', f.href);
+            utilities.set_msg(`Error getting href ${f.href}`);
+            return -2;
+        }
+
+        if (f.content_type === undefined || f.content_type === null) {
+            console.log('Error getting icon content type', f.content_type);
+            utilities.set_msg(`Error getting icon content type ${f.content_type}`);
+            return -3;
+        }
+
+        let img = icon.querySelector('.img');
+        if (!img) {
+            console.log('Error getting .img for icon', img);
+            utilities.set_msg('Error getting .img for icon');
+            return -4;
+        }
+
+        // console.log('running handle icon', f);
+        this.settings = settingsManager.get_settings();
+
+        try {
+
+            if (f.is_dir || f.type === 'inode/directory') {
+
+                ipcRenderer.send('get_folder_icon', f.href);
+
+            } else if (f.is_dir === false) {
+
+                if (f.content_type.includes('image/')) {
+
+                    // check for svg
+                    if (f.content_type.includes('svg')) {
+                        img.src = f.href;
+                        img.classList.add('svg');
+                    } else {
+                        img.src = f.href;
+                    }
+
+
+                } else if (f.content_type.includes('video/')) {
+
+                    let video = document.createElement('video');
+                    video.src = f.href;
+                    video.classList.add('video');
+                    icon.innerHTML = '';
+                    icon.append(video);
+
+                } else {
+                    img.classList.add('lazy');
+                    ipcRenderer.invoke('get_icon', f.href).then(icon => {
+                        img.src = icon;
+                    })
+                }
+
+            }
+
+            if (!f.is_writable) {
+                icon.classList.add('readonly');
+                let readonly_img = document.createElement('img');
+                ipcRenderer.invoke('get_readonly_icon', f.href).then(readonly_icon => {
+                    console.log('readonly icon', readonly_icon);
+                    readonly_img.src = readonly_icon;
+                    readonly_img.classList.add('symlink');
+                    icon.append(readonly_img);
+                })
+            }
+
+            if (f.is_symlink) {
+                let symlink_img = document.createElement('img');
+                ipcRenderer.invoke('get_symlink_icon', f.href).then(symlink_icon => {
+                    symlink_img.src = symlink_icon;
+                    symlink_img.classList.add('symlink');
+                    icon.append(symlink_img);
+                })
+            }
+
+            img.style.width = `${this.settings.icon_size}px`;
+            img.style.height = `${this.settings.icon_size}px`;
+
+        } catch (err) {
+
+            console.log('Error loading icon', err);
+            utilities.set_msg(`Error loading icon ${err}`);
+
+            ipcRenderer.invoke('get_icon', (f.href)).then(res => {
+                img.src = res;
+            })
+
+            img.style.width = `${this.settings.icon_size}px`;
+            img.style.height = `${this.settings.icon_size}px`
+
+        }
+
+        return 0;
+
+    }
+
+    // handle dragstart
+    handleDragStart(item) {
+        item.addEventListener('dragstart', (e) => {
+            e.stopPropagation();
+            console.log('dragstart');
+            this.is_dragging = true;
+            this.is_dragging_divs = true;
+        })
+    }
+
+    // handle drag over
+    handleDragOver(item) {
+
+        item.addEventListener('dragover', (e) => {
+
+            e.preventDefault();
+
+            if (item.dataset.is_dir === 'true') {
+                // Add highlight only if not already highlighted
+                if (!item.dataset.dragover) {
+                    item.dataset.dragover = 'true';
+                    item.classList.add('highlight_target');
+                }
+
+                console.log('dragover', item.dataset.href);
+
+                if (e.ctrlKey) {
+                    e.dataTransfer.dropEffect = "copy";
+                    utilities.set_msg(`Copy items to ${item.dataset.href}`);
+                } else {
+                    e.dataTransfer.dropEffect = "move";
+                    utilities.set_msg(`Move items to ${item.dataset.href}`);
+                }
+                utilities.set_destination(item.dataset.href);
+                utilities.set_msg(`Destination: ${item.dataset.href}`);
+            } else {
+                // handle drag/drop on active tab content
+            }
+
+        })
+
+    }
+
+    // handle dragleave
+    handleDragLeave(item) {
+        item.addEventListener('dragleave', (e) => {
+            if (item.dataset.dragover === 'true') {
+                delete item.dataset.dragover;
+                item.classList.remove('highlight_target');
+            }
+        })
+    }
+
+    // handle drop
+    handleDrop(item) {
+
+        item.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            ipcRenderer.send('is_main', 0);
+            if (!item.classList.contains('highlight') && item.classList.contains('highlight_target')) {
+
+                utilities.copy();
+                if (e.ctrlKey) {
+                    utilities.paste();
+                } else {
+                    utilities.move();
+                }
+
+            } else {
+
+                console.log('did not find target')
+                ipcRenderer.send('is_main', 1);
+                utilities.copy();
+                utilities.paste();
+
+            }
+            utilities.clear();
+            dragSelect.set_is_dragging(true);
+        })
+
+    }
+
+    // handle rename
+    handleRename(input, f) {
+
+        input.addEventListener('keydown', (e) => {
+
+            if (e.key === 'Enter') {
+                let id = f.id;
+                let source = f.href;
+                let destination = source.split('/').slice(0, -1).join('/') + '/' + input.value;
+                utilities.rename(source, destination, id);
+            }
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                utilities.cancel_edit();
+            }
+        })
+
+    }
+
+    // handle click event
+    handleClick(item, f) {
+
+        if (item === null || item === undefined) {
+            utilities.set_msg('Error: handleClick - item is null or undefined');
+            return;
+        }
+
+        if (f === null || f === undefined) {
+            utilities.set_msg('Error: handleClick - file is null or undefined');
+            return;
+        }
+
+        item.addEventListener('click', (e) => {
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            if (f.is_dir === true) {
+
+                if (!f.is_readable) {
+                    utilities.set_msg('Error: Access Denied');
+                    return;
+                }
+
+                if (e.ctrlKey) {
+                    tabManager.add_tab(f.href);
+                    this.get_files(f.href);
+                } else {
+                    this.get_files(f.href);
+                }
+
+                utilities.set_location(f.href);
+
+            } else if (f.is_dir === false) {
+                console.log('running handle click file', f.href);
+                ipcRenderer.send('open', f.href);
+            }
 
             this.clearHighlight();
-            selected_files = [];
 
         });
 
@@ -4282,14 +4606,15 @@ class FileManager {
                 }
 
                 if (idx === 0) {
-                //     active_tab_content.addEventListener('mouseover', (e) => {
-                //         e.target.focus();
-                //     });
+                    //     active_tab_content.addEventListener('mouseover', (e) => {
+                    //         e.target.focus();
+                    //     });
                 }
 
                 if (idx === lazyItems.length - 1) {
                     utilities.set_msg(`Loaded ${files_arr.length} items`);
                     setTimeout(() => {
+
                         // dragSelect.set_is_dragging(false);
                         // dragSelect.drag_select();
 
@@ -4340,6 +4665,7 @@ class FileManager {
             // Possibly fall back to a more compatible method here
         }
 
+
     }
 
     // create a breadcrumbs from location
@@ -4386,46 +4712,49 @@ class FileManager {
     // request files from location
     get_files(location) {
 
-        // console.log('getting files', location);
+        console.log('running get_files', location);
+
+        if (!location || location === '' || location === undefined) {
+            utilities.set_msg('Error: get_files - location is empty');
+            return;
+        }
 
         utilities.set_msg(`<img src="../renderer/icons/spinner.gif" style="width: 12px; height: 12px" alt="loading" /> Loading...`);
 
         this.location = location;
-        utilities.set_location(location);
-        settingsManager.set_location(location);
+        ipcRenderer.send('ls', this.location);
 
-        // set destination for file operations
-        utilities.set_destination(location);
+        settingsManager.set_location(this.location);
 
-        ipcRenderer.send('ls', location);
+        utilities.set_location(this.location);
+        utilities.set_destination(this.location);
+
         this.get_breadcrumbs(this.location);
 
         ipcRenderer.send('is_main', 1);
 
-        let main = document.querySelector('.main');
+        // let main = document.querySelector('.main');
         // main.style.width = window.innerWidth + 'px';
 
     }
 
-    // add item structure for lazy loading
-    add_item_struct(f) {
-        let tr = document.createElement('tr');
-        tr.dataset.id = f.id;
-        tr.dataset.href = f.href;
-        tr.dataset.name = f.name;
-        tr.dataset.size = f.size;
-        tr.dataset.mtime = f.mtime;
-        tr.dataset.content_type = f.content_type;
-        tr.dataset.is_dir = f.is_dir;
-        tr.dataset.location = f.location;
-        tr.classList.add('tr', 'lazy');
-        return tr;
-    }
-
     // add copy_array items to the view
     add_items(copy_arr) {
+
+        console.log('running add items');
+
+        if (copy_arr.length === 0) {
+            utilities.set_msg('Error: Add items - copy_arr is empty');
+            return;
+        }
+
         let active_tab_content = tabManager.get_active_tab_content();
         let items = active_tab_content.querySelectorAll('.card, .tr');
+        if (!items) {
+            utilities.set_msg('Error: Add items - No items found to add');
+            return;
+        }
+
         // get index of last directory
         let idx = 0;
         items.forEach((item, index) => {
@@ -4434,18 +4763,60 @@ class FileManager {
             }
         });
 
-        let table = active_tab_content.querySelector('.table');
-        let tbody = table.querySelector('tbody');
-        copy_arr.forEach(f => {
-            let tr = this.get_list_view_item(f);
-            if (f.is_dir === 'true') {
-                table.prepend(tr);
-            } else {
-                // table.insertBefore(tr, items[idx + 1]);
-                tbody.insertBefore(tr, tbody.childNodes[idx + 1]);
+        if (this.view === 'grid_view') {
+
+            let grid = active_tab_content.querySelector('.grid');
+            if (!grid) {
+                utilities.set_msg('Error: Add items - Could not find grid');
+                return;
             }
-            tr.classList.add('highlight_select');
-        })
+
+            copy_arr.forEach(f => {
+
+                // make sure f is complete
+                for (let items in f) {
+                    if (f[items] === undefined || f[items] === null) {
+                        console.log('error getting grid view item', f);
+                        return -1;
+                    }
+                }
+
+                // f is wrong when sent from paste worker - wrong values
+                let card = this.get_grid_view_item(f);
+                if (f.is_dir === true) {
+                    grid.prepend(card);
+                } else {
+                    grid.insertBefore(card, grid.childNodes[idx + 1]);
+                }
+                card.classList.add('highlight_select');
+            })
+
+        } else if (this.view === 'list_view') {
+
+            let table = active_tab_content.querySelector('.table');
+            if (!table) {
+                utilities.set_msg('Error: Add items - Could not find table');
+                return;
+            }
+
+            let tbody = table.querySelector('tbody');
+            if (!tbody) {
+                utilities.set_msg('Error: Add items - Could not find tbody');
+                return;
+            }
+
+            copy_arr.forEach(f => {
+                let tr = this.get_list_view_item(f);
+                if (f.is_dir === true) {
+                    table.prepend(tr);
+                } else {
+                    tbody.insertBefore(tr, tbody.childNodes[idx + 1]);
+                }
+                tr.classList.add('highlight_select');
+            })
+
+        }
+
         dragSelect.initialize();
         copy_arr = [];
     }
@@ -4548,7 +4919,7 @@ class PropertiesManager {
                 let folder_count = utilities.add_div();
                 folder_count.classList.add('item', 'folder_count');
 
-                let size =utilities.add_div();
+                let size = utilities.add_div();
                 size.classList.add('size');
                 // size.append('Calculating..');
 
@@ -4702,57 +5073,6 @@ class PropertiesManager {
         } else {
             active_tab_content.innerHTML = "Unable to get properties";
         }
-
-    //     let properties_table = document.createElement('table');
-    //     properties_table.classList.add('properties_table');
-
-    //     for (const key in properties) {
-    //         if (properties[key]) {
-    //             let tr = document.createElement('tr');
-    //             let td_key = document.createElement('td');
-    //             let td_value = document.createElement('td');
-    //             td_key.classList.add('th');
-    //             td_key.innerHTML =  key.charAt(0).toUpperCase() + key.slice(1);
-
-    //             switch (key) {
-    //                 case 'size':
-    //                     td_value.innerHTML = utilities.get_file_size(properties[key]);
-    //                     break;
-    //                 case 'mtime':
-    //                     td_value.innerHTML = utilities.get_date_time(properties[key]);
-    //                     break;
-    //                 case 'ctime':
-    //                     td_value.innerHTML = utilities.get_date_time(properties[key]);
-    //                     break;
-    //                 case 'atime':
-    //                     td_value.innerHTML = utilities.get_date_time(properties[key]);
-    //                     break;
-    //                 case 'is_dir':
-    //                     td_value.innerHTML = properties[key] === true ? 'Yes' : 'No';
-    //                     break;
-    //                 case 'is_readable':
-    //                     td_value.innerHTML = properties[key] === true ? 'Yes' : 'No';
-    //                     break;
-    //                 case 'is_writable':
-    //                     td_value.innerHTML = properties[key] === true ? 'Yes' : 'No';
-    //                     break;
-    //                 case 'is_symlink':
-    //                     td_value.innerHTML = properties[key] === true ? 'Yes' : 'No';
-    //                     break;
-    //                 case 'is_execute':
-    //                     td_value.innerHTML = properties[key] === true ? 'Yes' : 'No';
-    //                     break;
-    //                 default:
-    //                     td_value.innerHTML = properties[key];
-    //                     break;
-    //             }
-    //             tr.appendChild(td_key);
-    //             tr.appendChild(td_value);
-    //             properties_table.appendChild(tr);
-    //         }
-    //     }
-
-    //     return properties_table;
 
     }
 
@@ -5019,7 +5339,7 @@ init = () => {
     iconManager = new IconManager();
     tabManager = new TabManager();
     dragSelect = new DragSelect();
-    fileManager = new FileManager(tabManager,iconManager);
+    fileManager = new FileManager(tabManager, iconManager);
     propertiesManager = new PropertiesManager();
     menuManager = new MenuManager();
     windowManager = new WindowManager();

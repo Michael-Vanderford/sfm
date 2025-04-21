@@ -39,9 +39,21 @@ if (!isMainThread) {
 
     parentPort.on('message', (data) => {
         const cmd = data.cmd;
+
         switch (cmd) {
 
             case 'compress': {
+
+                for (let d in data) {
+                    if (data[d] === undefined) {
+                        let msg = {
+                            cmd: 'set_msg',
+                            msg: `Error: ${d} is undefined`
+                        }
+                        parentPort.postMessage(msg);
+                        return;
+                    }
+                }
 
                 let location = data.location;
                 let type = data.type;
@@ -90,6 +102,18 @@ if (!isMainThread) {
                     parentPort.postMessage(msg);
                 }
 
+                // init progress
+                let increment = 10;
+                let progress = {
+                    cmd: 'progress',
+                    value: increment,
+                    max: size,
+                    status: `Compressing "${path.basename(file_path)}"`
+                }
+                parentPort.postMessage(progress);
+
+
+
                 files_arr.forEach(f => {
                     if (f.is_dir) {
                         archive.directory(f.href, path.relative(location, f.href));
@@ -124,9 +148,10 @@ if (!isMainThread) {
                         // id: progress_id,
                         cmd: 'progress',
                         status: `Compressing "${path.basename(file_path)}"`,
-                        max: progress.entries.total,
-                        value: progress.entries.processed
+                        max: size,
+                        value: progress.fs.processedBytes
                     }
+                    console.log('progress', progress_data);
                     parentPort.postMessage(progress_data);
                 });
 
@@ -162,6 +187,7 @@ if (!isMainThread) {
 
                 archive.pipe(output);
                 archive.finalize();
+
 
                 break;
             }

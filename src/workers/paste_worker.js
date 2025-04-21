@@ -24,6 +24,9 @@ class Utilities {
         let file;
         try {
             file = gio.get_file(source);
+
+            console.log('file', file);
+
         } catch (err) {
             return callback(`Error getting file: ${err.message}`);
         }
@@ -39,6 +42,9 @@ class Utilities {
             }
             for (let i = 0; i < dirents.length; i++) {
                 let f = dirents[i];
+
+                console.log('file', f);
+
                 if (f.filesystem.toLocaleLowerCase() === 'ntfs') {
                     // sanitize file name
                     f.name = f.name.replace(/[^a-z0-9]/gi, '_');
@@ -71,6 +77,9 @@ class Utilities {
         let max = 0;
         let size = 0;
         copy_arr.forEach((f, i) => {
+
+            console.log('f', f);
+
             // cal size
             size = parseInt(f.size);
             if (size) {
