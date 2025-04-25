@@ -1290,6 +1290,8 @@ class DragSelect {
     // Initialize the drag select functionality
     initialize() {
 
+        console.log('drag select init');
+
         const selectionRectangle = document.querySelector('.selection-rectangle');
         const active_tab_content = document.querySelector('.active-tab-content');
 
@@ -3945,6 +3947,7 @@ class FileManager {
         content.append(header, path, mtime, ctime, atime, type, size, count);
         card.append(icon, content, tooltip);
 
+        dragSelect.initialize();
         return card;
     }
 
@@ -4239,6 +4242,7 @@ class FileManager {
             })
         }
 
+        dragSelect.initialize();
         return tr;
 
     }

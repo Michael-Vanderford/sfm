@@ -48,19 +48,32 @@ hr {
 
 .header {
     display: flex;
-    /* padding: 2px; */
+    align-items: center;
+    padding: 2px;
     /* background-color: var(--menu); */
     border-bottom: var(--border);
+    height: 28px;
 }
 
 .header .button {
     background-color: var(--menu);
+    text-align: center;
     color: var(--text);
     border: 1px solid var(--border);
     border-radius: 5px;
     padding: 2px;
     margin-left: 5px;
     width: 50px;
+    height: 100%;
+}
+
+.header i {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0px;
+    /* font-size: 16px; */
+    color: var(--text);
 }
 
 .header .button:hover {
@@ -883,7 +896,7 @@ td .div_name a {
 }
 
 .svg {
-    /* background-color: #000; */
+    /* background-color: var(--svg); */
     /* opacity: 0.2; */
     /* filter: invert(1) brightness(100); */
     /* border: 1px solid var(--border); */
@@ -1115,6 +1128,8 @@ span {
         --progress: #2c2c2c;
         --scrollbar: #3b3a3a;
         --scrollbar-hover: #5c636a;
+
+        --svg: #ffffff;
 
         --msg-connect: #ffa500;
         --msg-connect-error: #ff0000;

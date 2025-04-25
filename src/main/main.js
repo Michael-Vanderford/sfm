@@ -8,6 +8,7 @@ const path = require('path');
 const os = require('os');
 const gio = require('../gio/build/Release/gio.node');
 const iconManager = require('./lib/IconManager');
+const { XMLParser } = require('fast-xml-parser');
 
 
 // // Configure electron-reload
@@ -1275,6 +1276,7 @@ class FileManager {
                 attributeNamePrefix: "@_"
             });
             let res = parser.parse(data);
+            console.log('res', res);
             res.xbel.bookmark.forEach(b => {
                 try {
                     let href = path.normalize(b['@_href'] = b['@_href'].replace('file://', ''));
