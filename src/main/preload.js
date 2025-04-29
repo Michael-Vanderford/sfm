@@ -1268,6 +1268,8 @@ class DragSelect {
 
     constructor() {
 
+        this.items = [];
+
         this.is_dragging = false;
         this.is_selecting = false;
         this.is_scrolling = false;
@@ -1289,9 +1291,6 @@ class DragSelect {
 
     // Initialize the drag select functionality
     initialize() {
-
-        console.log('drag select init');
-
         const selectionRectangle = document.querySelector('.selection-rectangle');
         const active_tab_content = document.querySelector('.active-tab-content');
 
@@ -1300,70 +1299,81 @@ class DragSelect {
             return;
         }
 
-        const items = active_tab_content.querySelectorAll('.tr, .card');
-        if (!items.length) {
-            console.log('No selectable items found.');
-            return;
-        }
-
-        // handle events for tr and card elements
-        items.forEach(item => {
-
-            // prevent active_tab_content event from firing on mouse down
-            item.addEventListener('mousedown', (e) => {
-                e.stopPropagation();
-            });
-
-            // handle mouseover
-            item.addEventListener('mouseover', function () {
-                item.classList.add('highlight');
-                // link.focus();
-            });
-
-            // handle mouseout
-            item.addEventListener('mouseout', function () {
-                item.classList.remove('highlight');
-            });
-
-
-            // handle click
-            item.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                console.log('click');
-                if (e.ctrlKey) {
-                    item.classList.toggle('highlight_select');
-                    if (item.classList.contains('highlight_select')) {
-                        this.drag_select_arr.add(item);
-                    } else {
-                        this.drag_select_arr.delete(item);
-                    }
-                } else {
-                    this.clearSelection(items);
-                    item.classList.add('highlight_select');
-                    this.drag_select_arr.add(item);
-                }
-            });
-
-            // handle dragstart
+        // Set draggable property for current items (do this after DOM updates as needed)
+        Array.from(active_tab_content.querySelectorAll('.tr, .card')).forEach(item => {
             item.draggable = true;
-            item.addEventListener('dragstart', (e) => {
+        });
+
+        // Delegated event listeners for .tr and .card elements
+
+        // Prevent mousedown bubbling
+        active_tab_content.addEventListener('mousedown', (e) => {
+            const item = e.target.closest('.tr, .card');
+            if (item) {
+                e.stopPropagation();
+            } else {
+                this.startSelection(e, selectionRectangle, active_tab_content);
+            }
+        });
+
+        // Mouseover/mouseout for highlight
+        active_tab_content.addEventListener('mouseover', (e) => {
+            const item = e.target.closest('.tr, .card');
+            if (item) {
+                item.classList.add('highlight');
+            }
+        });
+        active_tab_content.addEventListener('mouseout', (e) => {
+            const item = e.target.closest('.tr, .card');
+            if (item) {
+                item.classList.remove('highlight');
+            }
+        });
+
+        // Click for selection
+        // active_tab_content.addEventListener('click', (e) => {
+        //     const item = e.target.closest('.tr, .card');
+        //     if (!item) {
+        //         this.handleOutsideClick(e, this.items);
+        //         return;
+        //     }
+        //     e.preventDefault();
+        //     e.stopPropagation();
+        //     if (e.ctrlKey) {
+        //         item.classList.toggle('highlight_select');
+        //         if (item.classList.contains('highlight_select')) {
+        //             this.drag_select_arr.add(item);
+        //         } else {
+        //             this.drag_select_arr.delete(item);
+        //         }
+        //     } else {
+        //         this.clearSelection(Array.from(active_tab_content.querySelectorAll('.tr, .card')));
+        //         item.classList.add('highlight_select');
+        //         this.drag_select_arr.add(item);
+        //     }
+        // });
+
+        // Dragstart
+        active_tab_content.addEventListener('dragstart', (e) => {
+            const item = e.target.closest('.tr, .card');
+            if (item) {
                 e.stopPropagation();
                 console.log('dragstart');
                 this.is_dragging = true;
                 this.is_dragging_divs = true;
-            });
+            }
+        });
 
-            // handle dragover
-            item.addEventListener('dragover', (e) => {
+        // Dragover
+        active_tab_content.addEventListener('dragover', (e) => {
+            const item = e.target.closest('.tr, .card');
+            if (item) {
                 e.preventDefault();
                 if (item.dataset.is_dir === 'true') {
-                    // Add highlight only if not already highlighted
                     if (!item.dataset.dragover) {
                         item.dataset.dragover = 'true';
                         item.classList.add('highlight_target');
                     }
-
                     if (e.ctrlKey) {
                         e.dataTransfer.dropEffect = "copy";
                         utilities.set_msg(`Copy items to ${item.dataset.href}`);
@@ -1373,21 +1383,23 @@ class DragSelect {
                     }
                     utilities.set_destination(item.dataset.href);
                     utilities.set_msg(`Destination: ${item.dataset.href}`);
-                } else {
-                    // handle drag/drop on active tab content
                 }
-            });
+            }
+        });
 
-            // handle dragleave
-            item.addEventListener('dragleave', (e) => {
-                if (item.dataset.dragover === 'true') {
-                    delete item.dataset.dragover;
-                    item.classList.remove('highlight_target');
-                }
-            });
+        // Dragleave
+        active_tab_content.addEventListener('dragleave', (e) => {
+            const item = e.target.closest('.tr, .card');
+            if (item && item.dataset.dragover === 'true') {
+                delete item.dataset.dragover;
+                item.classList.remove('highlight_target');
+            }
+        });
 
-            // handle drop
-            item.addEventListener('drop', (e) => {
+        // Drop
+        active_tab_content.addEventListener('drop', (e) => {
+            const item = e.target.closest('.tr, .card');
+            if (item) {
                 e.preventDefault();
                 e.stopPropagation();
                 ipcRenderer.send('is_main', 0);
@@ -1406,32 +1418,38 @@ class DragSelect {
                 }
                 utilities.clear();
                 this.set_is_dragging(true);
-            });
-
+            }
         });
 
-        // Event listeners
-        active_tab_content.addEventListener('mousedown', (e) => this.startSelection(e, selectionRectangle, active_tab_content));
-        active_tab_content.addEventListener('mousemove', (e) => this.updateSelection(e, selectionRectangle, items));
-        active_tab_content.addEventListener('mouseup', (e) => this.endSelection(e, selectionRectangle, items));
-        active_tab_content.addEventListener('click', (e) => this.handleOutsideClick(e, items));
+        // Selection rectangle and scroll handling
+        active_tab_content.addEventListener('mousemove', (e) => this.updateSelection(e, selectionRectangle, active_tab_content));
+        active_tab_content.addEventListener('mouseup', (e) => this.endSelection(e, selectionRectangle, this.items));
+        active_tab_content.addEventListener('click', (e) => this.handleOutsideClick(e, active_tab_content));
 
         active_tab_content.addEventListener('scroll', (e) => {
             console.log('scroll');
             if (this.is_selecting) {
                 this.is_scrolling = true;
-                // setTimeout(() => {
-                //     this.is_scrolling = false;
-                // }, 100);
             }
         });
-
     }
 
     // Start selection
     startSelection(e, selectionRectangle, active_tab_content) {
 
         e.stopPropagation();
+
+        // validate selection rectangle
+        if (!selectionRectangle) {
+            console.error('Missing selection rectangle element.');
+            return;
+        }
+
+        // validate active tab content
+        if (!active_tab_content) {
+            console.error('Missing active tab content element.');
+            return;
+        }
 
         if (e.button === 2) return; // Ignore right-click
 
@@ -1453,13 +1471,17 @@ class DragSelect {
     }
 
     // Update selection rectangle and highlight items
-    updateSelection(e, selectionRectangle, items) {
+    updateSelection(e, selectionRectangle, active_tab_content) {
+
+        if (!selectionRectangle || !active_tab_content) {
+            console.error('Missing required elements');
+            return;
+        }
 
         if (!this.is_selecting || this.is_dragging) return;
 
-        this.allow_click = false;
-
-        // console.log('mousemove');
+        // Always get fresh DOM references
+        const currentItems = Array.from(active_tab_content.querySelectorAll('.tr, .card'));
 
         this.endPosX = e.clientX;
         this.endPosY = e.clientY;
@@ -1472,30 +1494,30 @@ class DragSelect {
         selectionRectangle.style.left = rectWidth > 0 ? `${this.startPosX}px` : `${this.endPosX}px`;
         selectionRectangle.style.top = rectHeight > 0 ? `${this.startPosY}px` : `${this.endPosY}px`;
 
-        // Track the initial state of items when Ctrl is pressed
+        // Track initial state using current DOM elements
         if (!this.initialSelectionState && (e.ctrlKey || this.is_scrolling)) {
-            this.initialSelectionState = new Set();
-            items.forEach(item => {
-                if (item.classList.contains('highlight_select')) {
-                    this.initialSelectionState.add(item);
-                }
-            });
+            this.initialSelectionState = new Set(
+                currentItems.filter(item => item.classList.contains('highlight_select'))
+            );
         }
 
-        items.forEach(item => {
+        currentItems.forEach(item => {
+
             const itemRect = item.getBoundingClientRect();
             const isWithinSelection = this.isWithinSelection(itemRect);
 
             if (e.ctrlKey || this.is_scrolling) {
-                // Preserve initial state and toggle only for new selections
                 if (isWithinSelection && !this.initialSelectionState.has(item)) {
                     item.classList.add('highlight_select');
                     this.drag_select_arr.add(item);
-                } else if (!isWithinSelection && this.initialSelectionState.has(item)) {
-                    item.classList.add('highlight_select');
                 }
+                // Keep initially selected items highlighted
+                this.initialSelectionState.forEach(initialItem => {
+                    if (!currentItems.includes(initialItem)) return;  // Skip stale elements
+                    initialItem.classList.add('highlight_select');
+                    this.drag_select_arr.add(initialItem);
+                });
             } else {
-                // Normal behavior: clear previous selection and select new items
                 if (isWithinSelection) {
                     item.classList.add('highlight_select');
                     this.drag_select_arr.add(item);
@@ -1506,15 +1528,13 @@ class DragSelect {
             }
         });
 
-        // Reset the initial state once selection is complete
         if (!e.ctrlKey) {
             this.initialSelectionState = null;
         }
-
     }
 
     // End selection
-    endSelection(e, selectionRectangle, items) {
+    endSelection(e, selectionRectangle) {
 
         // e.stopPropagation();
 
@@ -1545,7 +1565,13 @@ class DragSelect {
     }
 
     // Handle click outside selected items
-    handleOutsideClick(e, items) {
+    handleOutsideClick(e) {
+
+        let active_tab_content = document.querySelector('.active-tab-content');
+        if (!active_tab_content) {
+            console.error('Missing active tab content element.');
+            return;
+        }
 
         if (this.is_dragging) {
             console.log('is dragging');
@@ -1561,22 +1587,39 @@ class DragSelect {
         }
 
         if (!this.allow_click) {
+            console.log('not allow click');
             return;
         }
 
-        const clickedItem = e.target.closest('.tr, .card');
+        let clickedItem = e.target.closest('.tr, .card');
         if (!clickedItem || !this.drag_select_arr.has(clickedItem)) {
-            this.clearSelection(items);
+            setTimeout(() => {
+                // this.clearSelection();
+            }, 100);
         }
 
     }
 
     // Clear selection
-    clearSelection(items) {
-        items.forEach(item => {
+    clearSelection() {
+
+        console.log('clear selection');
+
+        let active_tab_content = document.querySelector('.active-tab-content');
+        if (!active_tab_content) {
+            console.error('Missing active tab content element.');
+            return;
+        }
+
+        this.drag_select_arr.forEach(item => {
+            // console.log('clearing selection', item);
             item.classList.remove('highlight_select');
+            item.classList.remove('highlight');
+            item.classList.remove('highlight_target');
         });
+
         this.drag_select_arr.clear();
+
     }
 
 }
@@ -3382,7 +3425,6 @@ class FileManager {
 
             }
 
-            dragSelect.initialize();
             this.check_for_empty_folder();
 
         });
@@ -3460,7 +3502,6 @@ class FileManager {
                     href.innerText = this.sanitize_file_name(f.name);
                     let tr = fileManager.get_list_view_item(f);
                     item.replaceWith(tr);
-                    dragSelect.initialize();
 
                 }
 
@@ -3928,14 +3969,14 @@ class FileManager {
 
         }
 
-        // Handle events
-        this.handleDataAttributes(card, f);
-        this.handleTitle(card, f);
-        this.handleDragStart(card);
-        this.handleDragOver(card);
-        this.handleDragLeave(card);
-        this.handleDrop(card);
-        this.handleRename(input, f);
+        // // Handle events
+        // this.handleDataAttributes(card, f);
+        // this.handleTitle(card, f);
+        // this.handleDragStart(card);
+        // this.handleDragOver(card);
+        // this.handleDragLeave(card);
+        // this.handleDrop(card);
+        // this.handleRename(input, f);
 
         // Get Icon
         this.handleIcon(icon, f);
@@ -3947,7 +3988,6 @@ class FileManager {
         content.append(header, path, mtime, ctime, atime, type, size, count);
         card.append(icon, content, tooltip);
 
-        dragSelect.initialize();
         return card;
     }
 
@@ -4242,10 +4282,11 @@ class FileManager {
             })
         }
 
-        dragSelect.initialize();
         return tr;
 
     }
+
+    handleDrag
 
     // sort event
     handleColumnSort(item) {
@@ -4589,24 +4630,32 @@ class FileManager {
         let active_tab_content = document.querySelector('.active-tab-content');
         let lazyItems = active_tab_content.querySelectorAll(".lazy");
 
+        console.log('running lazy load files', lazyItems.length);
+
         // listen for scroll event
         if ("IntersectionObserver" in window) {
             let observer = new IntersectionObserver(function (entries, observer) {
                 entries.forEach(function (entry) {
                     if (entry.isIntersecting) {
                         load_item(entry.target, observer);
+                        // console.log('lazy load item', entry.target.dataset.id);
                     }
                 });
             });
 
             // Immediately load items that are already in viewport
             lazyItems.forEach((lazy_item, idx) => {
+
                 if (isInViewport(lazy_item)) {
+
                     setTimeout(() => {
                         load_item(lazy_item, observer);
                     }, 10);
+
                 } else {
+
                     observer.observe(lazy_item);
+
                 }
 
                 if (idx === 0) {
@@ -4618,13 +4667,8 @@ class FileManager {
                 if (idx === lazyItems.length - 1) {
                     utilities.set_msg(`Loaded ${files_arr.length} items`);
                     setTimeout(() => {
-
-                        // dragSelect.set_is_dragging(false);
-                        // dragSelect.drag_select();
-
                         dragSelect.initialize();
-
-                    }, 100);
+                    }, 500);
                 }
 
             });
@@ -4644,17 +4688,27 @@ class FileManager {
 
                 const id = lazy_item.dataset.id;
                 if (id) {
+
                     let f = files_arr.find(f => f.id === id);
+                    let item;
 
                     // console.log('lazy load view', this.view);
 
                     if (this.view === 'list_view') {
-                        let tr = this.get_list_view_item(f);
-                        lazy_item.replaceWith(tr);
+
+                        item = this.get_list_view_item(f);
+                        lazy_item.replaceWith(item);
+
+
                     } else if (this.view === 'grid_view') {
-                        let card = this.get_grid_view_item(f);
-                        lazy_item.replaceWith(card);
+
+                        item = this.get_grid_view_item(f);
+                        lazy_item.replaceWith(item);
+
                     }
+
+                    this.handleDataAttributes(item, f);
+                    this.handleTitle(item, f);
 
                     // Stop watching and remove the placeholder
                     lazy_item.classList.remove("lazy");
@@ -4821,7 +4875,6 @@ class FileManager {
 
         }
 
-        dragSelect.initialize();
         copy_arr = [];
     }
 
