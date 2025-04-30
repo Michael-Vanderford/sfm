@@ -19,8 +19,8 @@ a {
     width: 100%;
     display: block;
     color: var(--text);
-    text-decoration: none;
-    display: inline-block;
+    /* text-decoration: none; */
+    /* display: inline-block; */
     text-decoration: none;
 }
 
@@ -46,16 +46,16 @@ hr {
     border: 1px solid var(--border);
 }
 
-.header {
+.nav_header {
     display: flex;
     align-items: center;
     padding: 2px;
-    /* background-color: var(--menu); */
+    background-color: var(--menu);
     border-bottom: var(--border);
     height: 28px;
 }
 
-.header .button {
+.nav_header .button {
     background-color: var(--menu);
     text-align: center;
     color: var(--text);
@@ -67,7 +67,7 @@ hr {
     height: 100%;
 }
 
-.header i {
+.nav_header i {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -76,7 +76,7 @@ hr {
     color: var(--text);
 }
 
-.header .button:hover {
+.nav_header .button:hover {
     background-color: var(--button-hover);
 }
 
@@ -131,12 +131,14 @@ hr {
 }
 
 .back.button, .forward.button {
-    background-color: var(--menu);
-    color: var(--text);
+    margin-top: 2px;
+    background-color: var(--button-nav);
+    color: var(--button-nav-text);
     border: 1px solid var(--dialog);
     border-radius: 5px;
+    height: 26px;
     padding: 2px;
-    /* margin-left: 5px; */
+    margin-left: 2px;
     width: 50px;
 }
 
@@ -150,13 +152,14 @@ hr {
 }
 
 .back.button:hover, .forward.button:hover {
-    background-color: var(--button-hover);
+    background-color: var(--button-nav-hover);
+    color: var(--button-nav-text);
 }
 
 .breadcrumbs {
     display: flex;
     align-items: center;
-    padding: 5px;
+    /* padding: 5px; */
     height: 100%;
     width: 80%;
     color: var(--text);
@@ -169,24 +172,56 @@ hr {
 }
 
 .breadcrumb_item {
-    padding-left: 2px;
-    padding-right: 2px;
-    margin-left: 5px;
-    /* height: 18px; */
-    background-color: var(--location);
-}
-
-.breadcrumb_spacer {
-    padding-left: 0px;
-    padding-right: 0px;
-    margin-left: 5px;
+    padding: 5px 10px;
+    /* margin-left: 5px; */
+    /* height: 100%; */
+    background-color: var(--button-nav);
+    color: var(--button-nav-text);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    text-align: center;
+    cursor: pointer;
+    display: inline-block;
+    font-size: 12px;
 }
 
 .breadcrumb_item:hover {
+    background-color: var(--button-nav-hover);
+    color: var(--button-nav-text);
+}
+
+/* .breadcrumb_item {
+    padding-left: 2px;
+    padding-right: 2px;
+    margin-left: 5px;
+    background-color: var(--location);
+} */
+
+.breadcrumb_spacer {
+
+    padding: 5px 10px;
+    /* margin-left: 5px; */
+    background-color: var(--menu);
+    color: var(--text);
+    border: 1px solid var(--border);
+    /* border-radius: 5px; */
+    text-align: center;
+    cursor: pointer;
+    display: inline-block;
+    font-size: 12px;
+}
+
+/* .breadcrumb_spacer {
+    padding-left: 0px;
+    padding-right: 0px;
+    margin-left: 5px;
+} */
+
+/* .breadcrumb_item:hover {
     background-color: var(--button-hover);
     border-radius: 2px;
     cursor: pointer;
-}
+} */
 
 .location {
     display: flex;
@@ -1123,6 +1158,9 @@ span {
         --button-active: #1b557c;
         --button-hover: #5c636a;
         --button-hover-warning: #960000;
+        --button-nav: #292929;
+        --button-nav-hover: #5c636a;
+        --button-nav-text: #cfcfcf;
         --location: #2c2c2c;
         --location-border: #3b3a3a;
         --progress: #2c2c2c;
@@ -1188,6 +1226,9 @@ span {
         --button-active: #5c636a;
         --button-hover: #5c636a;
         --button-hover-warning: #960000;
+        --button-nav: #f0f0f0;
+        --button-nav-hover: #dcdcdc;
+        --button-nav-text: #333333;
         --location: #f0f0f0;
         --location-border: #dcdcdc;
         --progress: #f7f7f7;

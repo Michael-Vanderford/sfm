@@ -579,7 +579,7 @@ class Utilities {
                 fileManager.get_files(new_location);
             });
             if (breadcrumb !== '') {
-                breadcrumb_div.append(breadcrumb_spacer, breadcrumb_item);
+                breadcrumb_div.append(breadcrumb_item);
             }
         });
 
@@ -1330,28 +1330,7 @@ class DragSelect {
             }
         });
 
-        // Click for selection
-        // active_tab_content.addEventListener('click', (e) => {
-        //     const item = e.target.closest('.tr, .card');
-        //     if (!item) {
-        //         this.handleOutsideClick(e, this.items);
-        //         return;
-        //     }
-        //     e.preventDefault();
-        //     e.stopPropagation();
-        //     if (e.ctrlKey) {
-        //         item.classList.toggle('highlight_select');
-        //         if (item.classList.contains('highlight_select')) {
-        //             this.drag_select_arr.add(item);
-        //         } else {
-        //             this.drag_select_arr.delete(item);
-        //         }
-        //     } else {
-        //         this.clearSelection(Array.from(active_tab_content.querySelectorAll('.tr, .card')));
-        //         item.classList.add('highlight_select');
-        //         this.drag_select_arr.add(item);
-        //     }
-        // });
+
 
         // Dragstart
         active_tab_content.addEventListener('dragstart', (e) => {
@@ -1567,14 +1546,7 @@ class DragSelect {
     // Handle click outside selected items
     handleOutsideClick(e) {
 
-        let active_tab_content = document.querySelector('.active-tab-content');
-        if (!active_tab_content) {
-            console.error('Missing active tab content element.');
-            return;
-        }
-
         if (this.is_dragging) {
-            console.log('is dragging');
             return;
         }
 
@@ -1587,14 +1559,15 @@ class DragSelect {
         }
 
         if (!this.allow_click) {
-            console.log('not allow click');
+            // console.log('not allow click');
             return;
         }
 
         let clickedItem = e.target.closest('.tr, .card');
-        if (!clickedItem || !this.drag_select_arr.has(clickedItem)) {
+
+        if (!this.allow_add & (!clickedItem || !this.drag_select_arr.has(clickedItem))) {
             setTimeout(() => {
-                // this.clearSelection();
+                this.clearSelection();
             }, 100);
         }
 
@@ -1611,13 +1584,16 @@ class DragSelect {
             return;
         }
 
-        this.drag_select_arr.forEach(item => {
-            // console.log('clearing selection', item);
-            item.classList.remove('highlight_select');
-            item.classList.remove('highlight');
-            item.classList.remove('highlight_target');
-        });
+        // this.drag_select_arr.forEach(item => {
+        //     // console.log('clearing selection', item);
+        //     item.classList.remove('highlight_select');
+        //     item.classList.remove('highlight');
+        //     item.classList.remove('highlight_target');
+        // });
 
+        utilities.clear_highlight();
+
+        this.allow_click = false;
         this.drag_select_arr.clear();
 
     }
@@ -4754,7 +4730,7 @@ class FileManager {
             });
 
             if (breadcrumb !== '') {
-                breadcrumb_div.append(breadcrumb_spacer, breadcrumb_item);
+                breadcrumb_div.append(breadcrumb_item);
             }
         });
 
