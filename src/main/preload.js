@@ -1305,80 +1305,80 @@ class DragSelect {
 
         });
 
-        // // Dragstart
-        // active_tab_content.addEventListener('dragstart', (e) => {
-        //     const item = e.target.closest('.tr, .card');
-        //     if (item) {
-        //         e.stopPropagation();
-        //         console.log('dragstart');
-        //         this.is_dragging = true;
-        //         this.is_dragging_divs = true;
-        //         e.dataTransfer.effectAllowed = "copyMove"; // ADD THIS LINE
-        //     }
-        // });
+        // Dragstart
+        active_tab_content.addEventListener('dragstart', (e) => {
+            const item = e.target.closest('.tr, .card');
+            if (item) {
+                e.stopPropagation();
+                console.log('dragstart');
+                this.is_dragging = true;
+                this.is_dragging_divs = true;
+                e.dataTransfer.effectAllowed = "copyMove"; // ADD THIS LINE
+            }
+        });
 
-        // // Dragover
-        // active_tab_content.addEventListener('dragover', (e) => {
-        //     const item = e.target.closest('.tr, .card');
-        //     if (item) {
+        // Dragover
+        active_tab_content.addEventListener('dragover', (e) => {
+            const item = e.target.closest('.tr, .card');
+            if (item) {
 
-        //         e.preventDefault();
-        //         e.stopPropagation();
+                e.preventDefault();
+                e.stopPropagation();
 
-        //         console.log('ctrlKey', e.ctrlKey, 'dropEffect', e.dataTransfer.dropEffect);
+                console.log('ctrlKey', e.ctrlKey, 'dropEffect', e.dataTransfer.dropEffect);
 
-        //         if (item.dataset.is_dir === 'true') {
-        //             if (!item.dataset.dragover) {
-        //                 item.dataset.dragover = 'true';
-        //                 item.classList.add('highlight_target');
-        //             }
-        //             if (e.ctrlKey) {
-        //                 e.dataTransfer.dropEffect = "copy";
-        //                 utilities.set_msg(`Copy items to ${item.dataset.href}`);
-        //             } else {
-        //                 e.dataTransfer.dropEffect = "move";
-        //                 utilities.set_msg(`Move items to ${item.dataset.href}`);
-        //             }
-        //             utilities.set_destination(item.dataset.href);
-        //             utilities.set_msg(`Destination: ${item.dataset.href}`);
-        //         }
-        //     }
-        // });
+                if (item.dataset.is_dir === 'true') {
+                    if (!item.dataset.dragover) {
+                        item.dataset.dragover = 'true';
+                        item.classList.add('highlight_target');
+                    }
+                    if (e.ctrlKey) {
+                        e.dataTransfer.dropEffect = "copy";
+                        utilities.set_msg(`Copy items to ${item.dataset.href}`);
+                    } else {
+                        e.dataTransfer.dropEffect = "move";
+                        utilities.set_msg(`Move items to ${item.dataset.href}`);
+                    }
+                    utilities.set_destination(item.dataset.href);
+                    utilities.set_msg(`Destination: ${item.dataset.href}`);
+                }
+            }
+        });
 
-        // // Dragleave
-        // active_tab_content.addEventListener('dragleave', (e) => {
-        //     const item = e.target.closest('.tr, .card');
-        //     if (item && item.dataset.dragover === 'true') {
-        //         delete item.dataset.dragover;
-        //         item.classList.remove('highlight_target');
-        //     }
-        // });
+        // Dragleave
+        active_tab_content.addEventListener('dragleave', (e) => {
+            const item = e.target.closest('.tr, .card');
+            if (item && item.dataset.dragover === 'true') {
+                delete item.dataset.dragover;
+                item.classList.remove('highlight_target');
+            }
+        });
 
-        // // Drop
-        // active_tab_content.addEventListener('drop', (e) => {
-        //     const item = e.target.closest('.tr, .card');
-        //     if (item) {
-        //         e.preventDefault();
-        //         e.stopPropagation();
+        // Drop
+        active_tab_content.addEventListener('drop', (e) => {
+            const item = e.target.closest('.tr, .card');
+            if (item) {
+                e.preventDefault();
+                e.stopPropagation();
 
-        //         // ipcRenderer.send('is_main', 0);
-        //         if (!item.classList.contains('highlight') && item.classList.contains('highlight_target')) {
-        //             utilities.copy();
-        //             if (e.ctrlKey) {
-        //                 utilities.paste();
-        //             } else {
-        //                 utilities.move();
-        //             }
-        //         } else {
-        //             console.log('did not find target')
-        //             ipcRenderer.send('is_main', 1);
-        //             utilities.copy();
-        //             utilities.paste();
-        //         }
-        //         utilities.clear();
-        //         this.set_is_dragging(true);
-        //     }
-        // });
+                // ipcRenderer.send('is_main', 0);
+                if (!item.classList.contains('highlight') && item.classList.contains('highlight_target')) {
+                    utilities.copy();
+                    if (e.ctrlKey) {
+                        utilities.paste();
+                    } else {
+                        utilities.move();
+                    }
+                } else {
+                    console.log('did not find target')
+                    ipcRenderer.send('is_main', 1);
+                    utilities.copy();
+                    utilities.paste();
+                }
+                utilities.clear();
+                this.set_is_dragging(true);
+            }
+        });
 
         // Selection rectangle and scroll handling
         active_tab_content.addEventListener('mousemove', (e) => this.updateSelection(e, selectionRectangle, active_tab_content));
@@ -3971,10 +3971,10 @@ class FileManager {
         }
 
         // // Handle events
-        this.handleDragStart(card);
-        this.handleDragOver(card);
-        this.handleDragLeave(card);
-        this.handleDrop(card);
+        // this.handleDragStart(card);
+        // this.handleDragOver(card);
+        // this.handleDragLeave(card);
+        // this.handleDrop(card);
 
         this.handleDataAttributes(card, f);
         this.handleTitle(card, f);
