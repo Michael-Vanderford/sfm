@@ -1517,7 +1517,7 @@ class MenuManager {
     constructor() {
 
         this.settings = settingsManager.get_settings();
-        if (!settings) {
+        if (!this.settings) {
             this.settings = {
                 sort_by: 'mtime',
                 sort_direction: 'desc'
