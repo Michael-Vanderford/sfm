@@ -1424,6 +1424,9 @@ class WindowManager {
             this.window_settings.window.y = displayToUse.bounds.y + 50
         }
 
+        let app_icon = path.join(__dirname, '..', 'assets', 'icons', 'icon.png')
+        console.log('app_icon', app_icon);
+
         let window = new BrowserWindow({
             minWidth: 400,
             minHeight: 400,
@@ -1441,7 +1444,8 @@ class WindowManager {
                 nativeWindowOpen: true,
                 preload: path.join(__dirname, 'preload.js'),
             },
-            icon: path.join(__dirname, '../assets/icons/icon.png')
+            // icon: path.join(__dirname, '../assets/icons/icon.png')
+            icon: app_icon
         });
 
         // hide menu
@@ -2510,6 +2514,11 @@ app.on('ready', () => {
         windowManager.windows.forEach(window => {
             window.close();
         });
+    });
+
+    // listen for window reload
+    ipcMain.on('reload', () => {
+        win.reload();
     });
 
 });

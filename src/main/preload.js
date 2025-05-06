@@ -560,6 +560,8 @@ class Utilities {
             return;
         }
 
+        console.log('breadcrumbs', breadcrumbs.length, breadcrumbs);
+
         breadcrumb_div.innerHTML = '';
         breadcrumbs.forEach((breadcrumb, index) => {
 
@@ -570,17 +572,20 @@ class Utilities {
             let breadcrumb_item = document.createElement('div');
             breadcrumb_item.classList.add('breadcrumb_item');
             breadcrumb_item.innerHTML = `${breadcrumb}`;
-            // breadcrumb_item.style = 'margin-right: 5px; cursor: pointer;';
+
             breadcrumb_item.addEventListener('click', (e) => {
-                console.log(e.target)
+
                 e.preventDefault();
                 e.stopPropagation();
                 let new_location = breadcrumbs.slice(0, index + 1).join('/');
                 fileManager.get_files(new_location);
+
             });
+
             if (breadcrumb !== '') {
                 breadcrumb_div.append(breadcrumb_item);
             }
+
         });
 
         // click event for breadcrumbs div
@@ -601,7 +606,7 @@ class Utilities {
     // set location
     set_location(location) {
 
-        this.get_breadcrumbs(location);
+        // this.get_breadcrumbs(location);
         if (!this.location_input) {
             return;
         }
@@ -845,12 +850,13 @@ class Utilities {
     // edit -
     edit() {
 
-        console.log('edit');
+        console.log('running edit');
 
         let active_tab_content = tabManager.get_active_tab_content();
         let items = active_tab_content.querySelectorAll('.highlight_select, .highlight');
 
         if (items.length > 0) {
+
             items.forEach((item, idx) => {
 
                 let edit_name = item.querySelector('.href');
@@ -860,6 +866,8 @@ class Utilities {
                     console.log('no .href found on', item)
                     return;
                 }
+
+                // get input by
 
                 let input = item.querySelector('.edit_name');
                 if (input) {
@@ -871,44 +879,8 @@ class Utilities {
                         }, 1);
                     }
 
-                    // input.addEventListener('keydown', (e) => {
-                    //     if (e.key === 'Enter') {
-                    //         e.preventDefault();
-                    //         e.stopPropagation();
-
-                    //         let id = item.dataset.id;
-                    //         if (id === undefined || id === '') {
-                    //             utilities.set_msg('No valid id found for rename');
-                    //             this.cancel_edit();
-                    //             return;
-                    //         }
-
-                    //         let source = item.dataset.href;
-                    //         if (source === undefined || source === '') {
-                    //             utilities.set_msg('No valid source found for rename');
-                    //             this.cancel_edit();
-                    //             return;
-                    //         }
-
-                    //         let destination = source.split('/').slice(0, -1).join('/') + '/' + input.value;
-                    //         if (destination === undefined || destination === '') {
-                    //             utilities.set_msg('No valid destination found for rename');
-                    //             this.cancel_edit();
-                    //             return;
-                    //         }
-
-                    //         this.rename(source, destination, id);
-
-
-                    //     } else if (e.key === 'Escape') {
-                    //         e.preventDefault();
-                    //         e.stopPropagation();
-                    //         this.cancel_edit();
-                    //     }
-                    // });
-
                 } else {
-                    console.log('no .edit_name found on', item)
+                    this.set_msg('No input found for edit');
                     return;
                 }
 
@@ -933,12 +905,6 @@ class Utilities {
     // rename file
     rename(source, destination, id) {
 
-        if (id === undefined || id === '') {
-            utilities.set_msg('No valid id found for rename');
-            this.cancel_edit();
-            return;
-        }
-
         if (source === undefined || source === '') {
             utilities.set_msg('No valid source found for rename');
             this.cancel_edit();
@@ -947,6 +913,12 @@ class Utilities {
 
         if (destination === undefined || destination === '') {
             utilities.set_msg('No valid destination found for rename');
+            this.cancel_edit();
+            return;
+        }
+
+        if (id === undefined || id === '') {
+            utilities.set_msg('No valid id found for rename');
             this.cancel_edit();
             return;
         }
@@ -1270,6 +1242,7 @@ class DragSelect {
 
         this.items = [];
 
+        this.key = null;
         this.is_dragging = false;
         this.is_selecting = false;
         this.is_scrolling = false;
@@ -1291,6 +1264,7 @@ class DragSelect {
 
     // Initialize the drag select functionality
     initialize() {
+
         const selectionRectangle = document.querySelector('.selection-rectangle');
         const active_tab_content = document.querySelector('.active-tab-content');
 
@@ -1328,9 +1302,8 @@ class DragSelect {
             if (item) {
                 item.classList.remove('highlight');
             }
+
         });
-
-
 
         // Dragstart
         active_tab_content.addEventListener('dragstart', (e) => {
@@ -1340,6 +1313,7 @@ class DragSelect {
                 console.log('dragstart');
                 this.is_dragging = true;
                 this.is_dragging_divs = true;
+                e.dataTransfer.effectAllowed = "copyMove"; // ADD THIS LINE
             }
         });
 
@@ -1347,7 +1321,12 @@ class DragSelect {
         active_tab_content.addEventListener('dragover', (e) => {
             const item = e.target.closest('.tr, .card');
             if (item) {
+
                 e.preventDefault();
+                e.stopPropagation();
+
+                console.log('ctrlKey', e.ctrlKey, 'dropEffect', e.dataTransfer.dropEffect);
+
                 if (item.dataset.is_dir === 'true') {
                     if (!item.dataset.dragover) {
                         item.dataset.dragover = 'true';
@@ -1381,7 +1360,8 @@ class DragSelect {
             if (item) {
                 e.preventDefault();
                 e.stopPropagation();
-                ipcRenderer.send('is_main', 0);
+
+                // ipcRenderer.send('is_main', 0);
                 if (!item.classList.contains('highlight') && item.classList.contains('highlight_target')) {
                     utilities.copy();
                     if (e.ctrlKey) {
@@ -2394,6 +2374,20 @@ class KeyBoardManager {
                 // return;
             }
 
+            if (e.ctrlKey) {
+                e.preventDefault();
+                e.stopPropagation();
+                utilities.set_msg('ctrl + key');
+
+            }
+
+            // ctrl + r to refresh
+            if (e.ctrlKey && e.key === 'r') {
+                e.preventDefault();
+                e.stopPropagation();
+               ipcRenderer.send('reload');
+            }
+
             // ctrl + l to focus location
             if (e.ctrlKey && e.key === 'l') {
                 e.preventDefault();
@@ -2476,7 +2470,23 @@ class KeyBoardManager {
 
         })
 
+        // add event listener for keyup
+        document.addEventListener('keyup', (e) => {
+
+            // e.preventDefault();
+            // e.stopPropagation();
+
+            // prevent inputs from firing global keyboard events
+            // if (e.ctrlKey) {
+                utilities.set_msg('');
+            // }
+
+
+        })
+
     }
+
+
 
 }
 
@@ -3172,6 +3182,16 @@ class FileManager {
         this.tab_data_arr = [];
         this.drag_handle = null;
 
+        this.ctrlKey = false;
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Control')  this.ctrKey = true;
+        });
+
+        document.addEventListener('keyup', (e) => {
+            if (e.key === 'Control')  this.ctrKey = false;
+        });
+
         this.main = document.querySelector('.main');
         if (!this.main) {
             console.log('error getting main');
@@ -3518,7 +3538,12 @@ class FileManager {
         });
 
         ipcRenderer.on('recent_files', (e, files_arr) => {
-            this.get_list_view(files_arr);
+            if (this.view == 'grid_view') {
+                tabManager.add_tab('Recent');
+                this.get_grid_view(files_arr);
+            } else if (this.view == 'list_view') {
+                this.get_list_view(files_arr);
+            }
         })
 
     }
@@ -3795,8 +3820,9 @@ class FileManager {
     // get grid view
     get_grid_view(files_arr) {
 
-        console.log('running get grid view');
+        utilities.clear_filter();
 
+        // active tab content
         let active_tab_content = tabManager.get_active_tab_content();
         if (!active_tab_content) {
             this.tabManager.add_tab(utilities.get_location());
@@ -3804,18 +3830,17 @@ class FileManager {
         }
         active_tab_content.innerHTML = '';
 
+        // scroll to top of active tab content
+        active_tab_content.scrollTop = 0;
+
         let grid = document.createElement('div');
         grid.classList.add('grid', 'grid3');
-
-        // let settings = settingsManager.get_settings();
-        // let grid_view_settings = settingsManager.get_grid_view_settings();
 
         // sort files array
         files_arr = utilities.sort(files_arr, this.sort_by, this.sort_direction);
 
         for (let i = 0; i < files_arr.length; i++) {
 
-            // let f = files_arr[i];
             let card = utilities.add_div(['card', 'lazy']) //this.get_grid_view_item(f);
             card.dataset.id = files_arr[i].id;
             card.dataset.href = files_arr[i].href;
@@ -3946,18 +3971,20 @@ class FileManager {
         }
 
         // // Handle events
-        // this.handleDataAttributes(card, f);
-        // this.handleTitle(card, f);
-        // this.handleDragStart(card);
-        // this.handleDragOver(card);
-        // this.handleDragLeave(card);
-        // this.handleDrop(card);
-        // this.handleRename(input, f);
+        this.handleDragStart(card);
+        this.handleDragOver(card);
+        this.handleDragLeave(card);
+        this.handleDrop(card);
+
+        this.handleDataAttributes(card, f);
+        this.handleTitle(card, f);
+        this.handleRename(input, f);
 
         // Get Icon
         this.handleIcon(icon, f);
 
         // handle click events - Card click is handled in drag select
+        this.handleClick(card, f);
         this.handleClick(href, f);
         this.handleClick(img, f);
 
@@ -3970,27 +3997,21 @@ class FileManager {
     // get list view
     get_list_view(files_arr) {
 
-        console.log('running get list view');
-
         utilities.clear_filter();
 
-        const start = this.loaded_rows;
-        const end = Math.min(start + this.chunk_size, files_arr.length);
+        // const start = this.loaded_rows;
+        // const end = Math.min(start + this.chunk_size, files_arr.length);
 
+        // Set up tab content
         let active_tab_content = tabManager.get_active_tab_content();
         if (!active_tab_content) {
-            // set the location for the tab name
             this.tabManager.add_tab(utilities.get_location());
-            // create the tab content
             active_tab_content = document.querySelector('.active-tab-content');
         }
         active_tab_content.innerHTML = '';
+
+        // scroll to top of active tab content
         active_tab_content.scrollTop = 0;
-
-        // // update tab label when location changes
-        // tabManager.update_tab(utilities.get_location());
-
-        const table_container = utilities.add_div(['table_container']);
 
         let table = document.createElement('table');
         table.classList.add('table');
@@ -4082,6 +4103,7 @@ class FileManager {
                 this.handleColumnSort(th, key);
 
             }
+
         }
 
         // table.appendChild(colgroup);
@@ -4121,6 +4143,7 @@ class FileManager {
         active_tab_content.addEventListener('mouseover', (e) => {
             e.target.focus();
         });
+
 
     }
 
@@ -4197,6 +4220,7 @@ class FileManager {
                     }
 
                     // handle click events
+                    this.handleClick(tr, f);
                     this.handleClick(link, f);
                     this.handleClick(img, f);
 
@@ -4262,7 +4286,7 @@ class FileManager {
 
     }
 
-    handleDrag
+    // handleDrag
 
     // sort event
     handleColumnSort(item) {
@@ -4446,11 +4470,14 @@ class FileManager {
 
     // handle dragstart
     handleDragStart(item) {
+
         item.addEventListener('dragstart', (e) => {
-            e.stopPropagation();
-            console.log('dragstart');
+
+            // e.stopPropagation();
+            e.dataTransfer.effectAllowed = 'copyMove';
             this.is_dragging = true;
             this.is_dragging_divs = true;
+
         })
     }
 
@@ -4468,15 +4495,15 @@ class FileManager {
                     item.classList.add('highlight_target');
                 }
 
-                console.log('dragover', item.dataset.href);
+                console.log('running drag over', this.ctrlKey);
 
-                if (e.ctrlKey) {
-                    e.dataTransfer.dropEffect = "copy";
-                    utilities.set_msg(`Copy items to ${item.dataset.href}`);
-                } else {
-                    e.dataTransfer.dropEffect = "move";
-                    utilities.set_msg(`Move items to ${item.dataset.href}`);
-                }
+                // if (this.ctrlKey) {
+                //     e.dataTransfer.dropEffect = "copy";
+                //     utilities.set_msg(`Copy items to ${item.dataset.href}`);
+                // } else {
+                //     e.dataTransfer.dropEffect = "move";
+                //     utilities.set_msg(`Move items to ${item.dataset.href}`);
+                // }
                 utilities.set_destination(item.dataset.href);
                 utilities.set_msg(`Destination: ${item.dataset.href}`);
             } else {
@@ -4501,24 +4528,32 @@ class FileManager {
     handleDrop(item) {
 
         item.addEventListener('drop', (e) => {
+
             e.preventDefault();
             e.stopPropagation();
+
             ipcRenderer.send('is_main', 0);
+
             if (!item.classList.contains('highlight') && item.classList.contains('highlight_target')) {
 
-                utilities.copy();
-                if (e.ctrlKey) {
-                    utilities.paste();
+                // the ctrl key is not firing
+                // utilities.copy();
+                if (ctrl) {
+                    console.log('running drop ctrl', item.dataset.href);
+                //     utilities.paste();
                 } else {
-                    utilities.move();
+                    console.log('running drop', item.dataset.href);
+                //     utilities.move();
                 }
 
             } else {
 
-                console.log('did not find target')
-                ipcRenderer.send('is_main', 1);
-                utilities.copy();
-                utilities.paste();
+                console.log('running drop 1', item.dataset.href);
+
+                // console.log('did not find target')
+                // ipcRenderer.send('is_main', 1);
+                // utilities.copy();
+                // utilities.paste();
 
             }
             utilities.clear();
@@ -4558,6 +4593,26 @@ class FileManager {
         if (f === null || f === undefined) {
             utilities.set_msg('Error: handleClick - file is null or undefined');
             return;
+        }
+
+        if (item.classList.contains('card') || item.classList.contains('tr')) {
+
+            item.addEventListener('click', (e) => {
+
+                e.preventDefault();
+                e.stopPropagation();
+
+                if (e.ctrlKey) {
+                    item.classList.toggle('highlight_select');
+                } else {
+                    this.clearHighlight();
+                    item.classList.add('highlight_select');
+                }
+
+            })
+
+            return;
+
         }
 
         item.addEventListener('click', (e) => {
@@ -4704,7 +4759,10 @@ class FileManager {
 
     // create a breadcrumbs from location
     get_breadcrumbs(location) {
-        let breadcrumbs = location.split('/');
+
+        console.log('running get breadcrumbs', location);
+
+        let breadcrumbs = [];
         let breadcrumb_div = document.querySelector('.breadcrumbs');
 
         if (!breadcrumb_div) {
@@ -4712,27 +4770,62 @@ class FileManager {
         }
 
         breadcrumb_div.innerHTML = '';
-        breadcrumbs.forEach((breadcrumb, index) => {
-            let breadcrumb_spacer = document.createElement('div');
-            breadcrumb_spacer.classList.add('breadcrumb_spacer');
-            breadcrumb_spacer.innerHTML = '/';
+
+        if (location === '/') {
 
             let breadcrumb_item = document.createElement('div');
-            breadcrumb_item.classList.add('breadcrumb_item');
-            breadcrumb_item.innerHTML = `${breadcrumb}`;
-            // breadcrumb_item.style = 'margin-right: 5px; cursor: pointer;';
-            breadcrumb_item.addEventListener('click', (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                let new_location = breadcrumbs.slice(0, index + 1).join('/');
-                this.get_files(new_location);
-                utilities.set_location(new_location);
-            });
+            let i = document.createElement('i');
+            let label = document.createElement('div');
 
-            if (breadcrumb !== '') {
-                breadcrumb_div.append(breadcrumb_item);
-            }
-        });
+            breadcrumb_item.classList.add('breadcrumb_item', 'flex');
+            i.classList.add('bi', 'bi-hdd');
+            label.innerHTML = `File System`;
+
+            breadcrumb_item.append(i);
+            breadcrumb_item.title = `File System`;
+
+            breadcrumb_div.append(breadcrumb_item);
+
+            return;
+
+        }
+
+
+        breadcrumbs = location.split('/');
+        if (breadcrumbs.length > 0) {
+
+            breadcrumbs.forEach((breadcrumb, index) => {
+
+                if (breadcrumb !== '' && breadcrumb !== 'home') {
+
+                    let breadcrumb_item = document.createElement('div');
+                    let i = document.createElement('i');
+                    let label = document.createElement('div');
+
+
+                    breadcrumb_item.classList.add('breadcrumb_item', 'flex');
+                    i.classList.add('bi', 'bi-home');
+                    label.innerHTML = breadcrumb;
+
+                    breadcrumb_item.append(label);
+                    breadcrumb_item.title = `${breadcrumb}`;
+                    breadcrumb_item.addEventListener('click', (e) => {
+
+                        e.preventDefault();
+                        e.stopPropagation();
+
+                        let new_location = breadcrumbs.slice(0, index + 1).join('/');
+                        this.get_files(new_location);
+                        utilities.set_location(new_location);
+
+                    });
+
+                    breadcrumb_div.append(breadcrumb_item);
+
+                }
+
+            });
+        }
 
         // click event for breadcrumbs div
         breadcrumb_div.addEventListener('click', (e) => {
@@ -5344,6 +5437,7 @@ class WindowManager {
 let eventManager
 let utilities;
 let settingsManager;
+let km;
 let viewManager;
 let iconManager;
 let tabManager;
@@ -5368,6 +5462,7 @@ init = () => {
 
     utilities = new Utilities();
     settingsManager = new SettingsManager();
+    km = new KeyBoardManager(utilities);
     viewManager = new ViewManager();
     iconManager = new IconManager();
     tabManager = new TabManager();
@@ -5377,7 +5472,7 @@ init = () => {
     menuManager = new MenuManager();
     windowManager = new WindowManager();
     const navigation = new Navigation(FileManager);
-    const keyboardManager = new KeyBoardManager(utilities);
+    // const keyboardManager = new KeyBoardManager(utilities);
 
     // side bar init
     sideBarManager = new SideBarManager(utilities, fileManager);

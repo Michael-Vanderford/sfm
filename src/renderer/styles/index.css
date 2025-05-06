@@ -173,8 +173,6 @@ hr {
 
 .breadcrumb_item {
     padding: 5px 10px;
-    /* margin-left: 5px; */
-    /* height: 100%; */
     background-color: var(--button-nav);
     color: var(--button-nav-text);
     border: 1px solid var(--border);
@@ -183,6 +181,9 @@ hr {
     cursor: pointer;
     display: inline-block;
     font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .breadcrumb_item:hover {
