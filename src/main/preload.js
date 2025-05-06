@@ -2478,7 +2478,7 @@ class KeyBoardManager {
 
             // prevent inputs from firing global keyboard events
             // if (e.ctrlKey) {
-                utilities.set_msg('');
+                // utilities.set_msg('');
             // }
 
 
@@ -4495,17 +4495,15 @@ class FileManager {
                     item.classList.add('highlight_target');
                 }
 
-                console.log('running drag over', this.ctrlKey);
-
-                // if (this.ctrlKey) {
-                //     e.dataTransfer.dropEffect = "copy";
-                //     utilities.set_msg(`Copy items to ${item.dataset.href}`);
-                // } else {
-                //     e.dataTransfer.dropEffect = "move";
-                //     utilities.set_msg(`Move items to ${item.dataset.href}`);
-                // }
+                if (this.ctrlKey) {
+                    e.dataTransfer.dropEffect = "copy";
+                    utilities.set_msg(`Copy items to ${item.dataset.href}`);
+                } else {
+                    e.dataTransfer.dropEffect = "move";
+                    utilities.set_msg(`Move items to ${item.dataset.href}`);
+                }
                 utilities.set_destination(item.dataset.href);
-                utilities.set_msg(`Destination: ${item.dataset.href}`);
+                // utilities.set_msg(`Destination: ${item.dataset.href}`);
             } else {
                 // handle drag/drop on active tab content
             }
