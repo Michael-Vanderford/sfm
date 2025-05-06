@@ -1517,14 +1517,20 @@ class MenuManager {
     constructor() {
 
         this.settings = settingsManager.get_settings();
+        if (!settings) {
+            this.settings = {
+                sort_by: 'mtime',
+                sort_direction: 'desc'
+            }
+        }
 
-        // init sort
-        if (this.settings.sort_by === undefined || this.settings.sort_by === '') {
-            this.settings.sort_by = 'mtime';
-        }
-        if (this.settings.sort_direction === undefined || this.settings.sort_direction === '') {
-            this.settings.sort_direction = 'desc';
-        }
+        // // init sort
+        // if (this.settings.sort_by === undefined || this.settings.sort_by === '') {
+        //     this.settings.sort_by = 'mtime';
+        // }
+        // if (this.settings.sort_direction === undefined || this.settings.sort_direction === '') {
+        //     this.settings.sort_direction = 'desc';
+        // }
 
         // for template creation
         this.paste_worker = new worker.Worker(path.join(__dirname, '../workers/paste_worker.js'));
