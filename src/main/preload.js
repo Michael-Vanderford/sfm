@@ -4536,7 +4536,7 @@ class FileManager {
 
                 // the ctrl key is not firing
                 utilities.copy();
-                if (ctrl) {
+                if (e.ctrlKey) {
                     console.log('running drop ctrl', item.dataset.href);
                     utilities.paste();
                 } else {
