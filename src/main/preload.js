@@ -3971,10 +3971,10 @@ class FileManager {
         }
 
         // // Handle events
-        // this.handleDragStart(card);
-        // this.handleDragOver(card);
-        // this.handleDragLeave(card);
-        // this.handleDrop(card);
+        this.handleDragStart(card);
+        this.handleDragOver(card);
+        this.handleDragLeave(card);
+        this.handleDrop(card);
 
         this.handleDataAttributes(card, f);
         this.handleTitle(card, f);
