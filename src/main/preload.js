@@ -4535,23 +4535,21 @@ class FileManager {
             if (!item.classList.contains('highlight') && item.classList.contains('highlight_target')) {
 
                 // the ctrl key is not firing
-                // utilities.copy();
+                utilities.copy();
                 if (ctrl) {
                     console.log('running drop ctrl', item.dataset.href);
-                //     utilities.paste();
+                    utilities.paste();
                 } else {
                     console.log('running drop', item.dataset.href);
-                //     utilities.move();
+                    utilities.move();
                 }
 
             } else {
 
-                console.log('running drop 1', item.dataset.href);
-
-                // console.log('did not find target')
-                // ipcRenderer.send('is_main', 1);
-                // utilities.copy();
-                // utilities.paste();
+                console.log('did not find target')
+                ipcRenderer.send('is_main', 1);
+                utilities.copy();
+                utilities.paste();
 
             }
             utilities.clear();
