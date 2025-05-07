@@ -1490,6 +1490,9 @@ class DragSelect {
         if (!e.ctrlKey) {
             this.initialSelectionState = null;
         }
+
+        // allow outside click
+        this.allow_click = false;
     }
 
     // End selection
@@ -1500,16 +1503,16 @@ class DragSelect {
         this.is_selecting = false;
         selectionRectangle.style.display = 'none';
 
+        setTimeout(() => {
+            this.allow_click = true;
+            this.is_dragging = false;
+        }, 500);
+
         // Restore text selection
         document.querySelector('.active-tab-content').style.userSelect = '';
 
         // Ensure selected items are kept highlighted
         this.drag_select_arr.forEach(item => item.classList.add('highlight_select'));
-
-        setTimeout(() => {
-            this.allow_click = true;
-            this.is_dragging = false;
-        }, 100);
 
     }
 
@@ -1526,7 +1529,10 @@ class DragSelect {
     // Handle click outside selected items
     handleOutsideClick(e) {
 
+        console.log('outside click', this.allow_add, this.allow_click);
+
         if (this.is_dragging) {
+            console.log('dragging');
             return;
         }
 
@@ -1543,9 +1549,7 @@ class DragSelect {
             return;
         }
 
-        let clickedItem = e.target.closest('.tr, .card');
-
-        if (!this.allow_add & (!clickedItem || !this.drag_select_arr.has(clickedItem))) {
+        if (!this.is_selecting) {
             setTimeout(() => {
                 this.clearSelection();
             }, 100);
@@ -2372,13 +2376,6 @@ class KeyBoardManager {
             // prevent inputs from firing global keyboard events
             if (e.target.isContentEditable || e.target.tagName === 'INPUT') {
                 // return;
-            }
-
-            if (e.ctrlKey) {
-                e.preventDefault();
-                e.stopPropagation();
-                utilities.set_msg('ctrl + key');
-
             }
 
             // ctrl + r to refresh
@@ -3955,7 +3952,7 @@ class FileManager {
                 ipcRenderer.send('folder_menu', f);
             })
 
-            // Files
+        // Files
         } else {
 
             size.append(utilities.get_file_size(f["size"]));
