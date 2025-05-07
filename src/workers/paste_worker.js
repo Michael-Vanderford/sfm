@@ -180,6 +180,12 @@ class Utilities {
         }
         parentPort.postMessage(msg);
 
+        const cp_done = {
+            cmd: 'cp_done',
+            destination: destination,
+        }
+        parentPort.postMessage(cp_done);
+
         files_arr = [];
         copy_arr = [];
 

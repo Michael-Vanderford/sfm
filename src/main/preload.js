@@ -4691,7 +4691,7 @@ class FileManager {
                 if (idx === lazyItems.length - 1) {
                     utilities.set_msg(`Loaded ${files_arr.length} items`);
                     setTimeout(() => {
-                        dragSelect.initialize();
+                        // dragSelect.initialize();
                     }, 500);
                 }
 
@@ -5471,5 +5471,9 @@ init = () => {
     sideBarManager = new SideBarManager(utilities, fileManager);
     deviceManager = new DeviceManager();
     workspaceManager = new WorkspaceManager();
+
+    setTimeout(() => {
+        dragSelect.initialize();
+    }, 1000);
 
 }

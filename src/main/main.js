@@ -215,6 +215,21 @@ class Utilities {
                     win.send('set_msg', data.msg);
                     break;
                 }
+                case 'cp_done': {
+
+                    // if (is_main) {
+                    //     if (watcher_failed) {
+                    //         let file = gio.get_file(data.destination);
+                    //         win.send('remove_card', data.destination);
+                    //         win.send('get_card_gio', file);
+                    //     }
+                    // } else {
+                    //     if (!is_main) {
+                    //         win.send('get_folder_count', path.dirname(data.destination));
+                    //         win.send('get_folder_size', path.dirname(data.destination));
+                    //     }
+                    // }
+                }
                 default:
                     break;
             }
