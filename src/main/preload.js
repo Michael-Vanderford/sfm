@@ -1976,9 +1976,11 @@ class WorkspaceManager {
                     tr.classList.add('highlight_select');
                 });
 
-                tr.addEventListener('mouseover', (e) => {
-                    a.focus();
-                })
+                // note: this has some undefined behavior.
+                // It is pushing some of the bottom elements up
+                // tr.addEventListener('mouseover', (e) => {
+                //     a.focus();
+                // })
 
                 // Edit workspace item
                 tr.addEventListener('keyup', (e) => {
