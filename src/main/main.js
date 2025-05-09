@@ -145,6 +145,7 @@ class Utilities {
     constructor() {
 
         this.is_main = true;
+        this.root_destination = '';
 
         this.byteUnits = [' kB', ' MB', ' GB', ' TB', 'PB', 'EB', 'ZB', 'YB'];
 
@@ -171,6 +172,7 @@ class Utilities {
 
         // listen for paste event
         ipcMain.on('paste', (e, copy_arr, location) => {
+            this.root_destination = location;
             this.paste(e, copy_arr, location);
         })
 
@@ -217,18 +219,22 @@ class Utilities {
                 }
                 case 'cp_done': {
 
-                    // if (is_main) {
-                    //     if (watcher_failed) {
-                    //         let file = gio.get_file(data.destination);
-                    //         win.send('remove_card', data.destination);
-                    //         win.send('get_card_gio', file);
-                    //     }
-                    // } else {
-                    //     if (!is_main) {
-                    //         win.send('get_folder_count', path.dirname(data.destination));
-                    //         win.send('get_folder_size', path.dirname(data.destination));
-                    //     }
-                    // }
+                    if (this.is_main) {
+
+                        // let file = gio.get_file(data.destination);
+                        // console.log('file', file);
+
+                    } else if (!this.is_main) {
+
+                        // get the base name of the file
+                        let file = gio.get_file(this.root_destination);
+                        if (file.href === undefined || file.href === null) {
+                            win.send('set_msg', 'Error: File not found.');
+                        } else {
+                            win.send('update_item', file);
+                        }
+
+                    }
                 }
                 default:
                     break;
@@ -268,6 +274,7 @@ class Utilities {
 
         // listen for is_main event
         ipcMain.on('is_main', (e, is_main) => {
+            console.log('is_main', is_main);
             this.is_main = is_main;
         });
 
@@ -461,7 +468,7 @@ class Utilities {
             f.is_hidden = f.is_hidden;
             f.href = f.destination;
 
-            console.log('paste', f.location, f.destination);
+            // console.log('paste', f.location, f.destination);
 
             // handle duplicate file names
             if (f.location == location && fs.existsSync(f.destination)) {
@@ -519,7 +526,7 @@ class Utilities {
         overwrite_arr = [];
         copy_arr = [];
 
-        this.is_main = true;
+        // this.is_main = true;
     }
 
     // move

@@ -3509,6 +3509,13 @@ class FileManager {
 
         // remove item
         ipcRenderer.on('remove_item', (e, id) => {
+
+            if (id === undefined || id === null) {
+                utilities.set_msg('Error: getting file id');
+                console.log('error getting file id');
+                return;
+            }
+
             let active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
             let item = active_tab_content.querySelector(`[data-href="${id}"]`);
             if (item) {
@@ -4157,6 +4164,7 @@ class FileManager {
 
         let tr = document.createElement('tr');
         tr.classList.add('tr');
+        tr.draggable = true;
 
         // add data attributes from column settings
         this.handleDataAttributes(tr, f);
@@ -4278,6 +4286,11 @@ class FileManager {
                 ipcRenderer.send('file_menu', f);
             })
         }
+
+        this.handleDragStart(tr);
+        this.handleDragOver(tr);
+        this.handleDragLeave(tr);
+        this.handleDrop(tr);
 
         return tr;
 
@@ -4531,7 +4544,6 @@ class FileManager {
 
             if (!item.classList.contains('highlight') && item.classList.contains('highlight_target')) {
 
-                // the ctrl key is not firing
                 utilities.copy();
                 if (e.ctrlKey) {
                     console.log('running drop ctrl', item.dataset.href);
