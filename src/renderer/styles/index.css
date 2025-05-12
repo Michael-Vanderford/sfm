@@ -162,6 +162,7 @@ hr {
     /* padding: 5px; */
     height: 100%;
     width: 80%;
+    font-weight: 500;
     color: var(--text);
     background-color: var(--location);
     border: 1px solid var(--location-border);

@@ -169,7 +169,7 @@ class Utilities {
 
         let msg = {
             cmd: 'set_msg',
-            msg: `Done Copying ${files_arr.length} Files`
+            msg: `Done copying (${files_arr.length}) files`
         }
         parentPort.postMessage(msg);
 

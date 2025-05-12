@@ -79,7 +79,8 @@ if (!isMainThread) {
             case 'ls':
                 parentPort.postMessage({
                     cmd: 'ls',
-                    files_arr: fileManager.get_files(data.location)
+                    files_arr: fileManager.get_files(data.location),
+                    add_tab: data.add_tab
                 });
                 break;
 

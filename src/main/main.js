@@ -198,7 +198,7 @@ class Utilities {
 
         // listen for get_disk_space event
         ipcMain.on('get_disk_space', (e, href) => {
-            this.get_disk_space(e, href);
+            this.get_disk_space(href);
         })
 
         // listen for message from worker
@@ -219,22 +219,42 @@ class Utilities {
                 }
                 case 'cp_done': {
 
+                    console.log('cp_done_data', data);
+
                     if (this.is_main) {
 
-                        // let file = gio.get_file(data.destination);
-                        // console.log('file', file);
+                        // get the base name of the file
+                        let file = gio.get_file(data.destination);
+
+                        if (file.href === undefined || file.href === null) {
+                            win.send('set_msg', 'Error: File not found.');
+                            break;
+
+                        }
+
+                        file.id = btoa(file.href);
+                        win.send('update_item', file);
+
+
 
                     } else if (!this.is_main) {
 
                         // get the base name of the file
                         let file = gio.get_file(this.root_destination);
+                        file.id = btoa(file.href);
+
                         if (file.href === undefined || file.href === null) {
                             win.send('set_msg', 'Error: File not found.');
+                            break;
                         } else {
                             win.send('update_item', file);
                         }
 
                     }
+
+                    this.get_disk_space(this.root_destination);
+
+                    break;
                 }
                 default:
                     break;
@@ -247,9 +267,9 @@ class Utilities {
         this.move_worker.on('message', (data) => {
             const cmd = data.cmd;
             switch (cmd) {
-                // case 'set_progress':
-                //     win.send('set_progress', data);
-                //     break;
+                case 'set_progress':
+                    win.send('set_progress', data);
+                    break;
                 // case 'remove_item': {
                 //     win.send('remove_item', data.id);
                 //     break;
@@ -271,6 +291,10 @@ class Utilities {
         ipcMain.on('get_home_dir', (e) => {
             e.returnValue = os.homedir();
         });
+
+        ipcMain.on('get_user', (e) => {
+            e.returnValue = os.userInfo().username;
+        })
 
         // listen for is_main event
         ipcMain.on('is_main', (e, is_main) => {
@@ -583,7 +607,9 @@ class Utilities {
                 move_arr: move_arr,
                 location: location
             }
+
             this.move_worker.postMessage(move_cmd);
+
         }
 
         if (overwrite_arr.length > 0) {
@@ -620,7 +646,11 @@ class Utilities {
         console.log('rename', source, destination);
 
         if (fs.existsSync(destination)) {
-            win.send('set_msg', 'Error: File name already exists.');
+
+            if (!destination.includes('New Folder')) {
+                win.send('set_msg', `Error: File name '${destination}' already exists.`);
+            }
+            win.send('cancel_edit');
             return;
         }
 
@@ -700,7 +730,7 @@ class Utilities {
     };
 
     // get disk space
-    get_disk_space(e, href) {
+    get_disk_space(href) {
 
         try {
             let options = {
@@ -1179,21 +1209,19 @@ class FileManager {
         this.ls_worker = new worker.Worker(path.join(__dirname, '../workers/ls_worker.js'));
 
         // listen for ls event
-        ipcMain.on('ls', (e, location) => {
+        ipcMain.on('ls', (e, location, add_tab = false) => {
 
-            // check if location is valid
-            if (fs.existsSync(location) === false && !location.startsWith('mtp://')) {
-                win.send('set_msg', `Error: Could not find ${location}`);
+            if (location === '' || location === undefined) {
+                win.send('set_msg', 'Location is null or undefined');
                 return;
             }
 
-            this.location = location;
-            let ls_data = {
-                cmd: 'ls',
-                location: this.location
+            if (add_tab !== true && add_tab !== false) {
+                win.send('set_msg', 'the add_tab parameter needs to be true or false');
+                return;
             }
 
-            this.ls_worker.postMessage(ls_data);
+            this.get_ls(location, add_tab);
 
         })
 
@@ -1202,7 +1230,7 @@ class FileManager {
             const cmd = data.cmd;
             switch (cmd) {
                 case 'ls':
-                    win.send('ls', data.files_arr);
+                    win.send('ls', data.files_arr, data.add_tab);
                     // watcherManager.watch(this.location);
                     break;
                 case 'set_msg':
@@ -1275,6 +1303,38 @@ class FileManager {
                 // get_disk_space(href);
             }
         })
+    }
+
+    // return file from get_files
+    get_ls(location, add_tab) {
+
+        console.log('get_ls location', location)
+
+        if (location === '' || location === undefined) {
+            win.send('set_msg', 'Location is null or undefined');
+            return;
+        }
+
+        if (add_tab !== true && add_tab !== false) {
+            win.send('set_msg', 'the add_tab parameter needs to be true or false');
+            return;
+        }
+
+        // check if location is valid
+        if (fs.existsSync(location) === false && !location.startsWith('mtp://')) {
+            win.send('set_msg', `Error: Could not find ${location}`);
+            return;z
+        }
+
+        this.location = location;
+        let ls_data = {
+            cmd: 'ls',
+            location: this.location,
+            add_tab: add_tab
+        }
+
+        this.ls_worker.postMessage(ls_data);
+
     }
 
     // get files
@@ -1608,6 +1668,12 @@ class MenuManager {
                     }
                 },
                 {
+                    label: 'New Tab',
+                    click: () => {
+                        fileManager.get_ls(destination, true);
+                    }
+                },
+                {
                     id: 'templates',
                     label: 'New Document',
                     submenu: [
@@ -1761,7 +1827,10 @@ class MenuManager {
                 {
                     label: 'New Tab',
                     click: () => {
-                        ls_worker.postMessage({ cmd: 'ls', source: f.href, tab: 1 });
+
+                        fileManager.get_ls(f.href, true);
+                        // fileManager.get_files(f.href);
+                        // ls_worker.postMessage({ cmd: 'ls', source: f.href, tab: 1 });
                     }
                 },
                 {
@@ -2499,13 +2568,20 @@ class MenuManager {
 
         // select radio button by sort and sort_direction
         for (const item of submenu) {
-            if (item.id !== 'size' && item.id !== 'type') {
-                if (item.id == `${this.settings.sort_by}_${this.settings.sort_direction}`) {
-                    item.checked = true;
-                }
-            } else if (item.id == this.sort) {
+
+            if (item.id === this.settings.sort_by && item.id === 'size') {
                 item.checked = true;
             }
+
+            if(item.id === this.settings.sort_by && item.id === 'type') {
+                item.checked = true;
+            }
+
+            if (item.id == `${this.settings.sort_by}_${this.settings.sort_direction}`) {
+                item.checked = true;
+                break;
+            }
+
         }
 
         return submenu;

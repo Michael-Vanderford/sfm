@@ -278,6 +278,9 @@ class Utilities {
             this.set_disk_space(data);
         });
 
+        // get user
+        this.user_name = ipcRenderer.sendSync('get_user');
+
         // get home dir
         this.home_dir = ipcRenderer.sendSync('get_home_dir');
 
@@ -292,6 +295,10 @@ class Utilities {
 
         ipcRenderer.on('folder_size', (e, folder_data) => {
             this.set_folder_size(folder_data);
+        })
+
+        ipcRenderer.on('cancel_edit', (e) => {
+            this.cancel_edit();
         })
 
     }
@@ -552,49 +559,127 @@ class Utilities {
 
     // create a breadcrumbs from location
     get_breadcrumbs(location) {
-        // console.log('location', location);
-        let breadcrumbs = location.split('/');
+
+        console.log('running get breadcrumbs', location);
+
+        let breadcrumbs = [];
         let breadcrumb_div = document.querySelector('.breadcrumbs');
 
         if (!breadcrumb_div) {
             return;
         }
 
-        console.log('breadcrumbs', breadcrumbs.length, breadcrumbs);
-
         breadcrumb_div.innerHTML = '';
-        breadcrumbs.forEach((breadcrumb, index) => {
 
-            let breadcrumb_spacer = document.createElement('div');
-            breadcrumb_spacer.classList.add('breadcrumb_spacer');
-            breadcrumb_spacer.innerHTML = '/';
+        if (location === '/') {
 
             let breadcrumb_item = document.createElement('div');
-            breadcrumb_item.classList.add('breadcrumb_item');
-            breadcrumb_item.innerHTML = `${breadcrumb}`;
+            let i = document.createElement('i');
+            let label = document.createElement('div');
 
-            breadcrumb_item.addEventListener('click', (e) => {
+            breadcrumb_item.classList.add('breadcrumb_item', 'flex');
+            i.classList.add('bi', 'bi-hdd');
+            label.innerHTML = `File System`;
 
-                e.preventDefault();
-                e.stopPropagation();
-                let new_location = breadcrumbs.slice(0, index + 1).join('/');
-                fileManager.get_files(new_location);
+            breadcrumb_item.append(i);
+            breadcrumb_item.title = `File System`;
+
+            breadcrumb_div.append(breadcrumb_item);
+
+            return;
+
+        }
+
+
+        breadcrumbs = location.split('/');
+        if (breadcrumbs.length > 0) {
+
+            breadcrumbs.forEach((breadcrumb, index) => {
+
+                if (breadcrumb !== '' && breadcrumb !== 'home') {
+
+                    let breadcrumb_item = document.createElement('div');
+                    let i = document.createElement('i');
+                    let label = document.createElement('div');
+
+                    breadcrumb_item.classList.add('breadcrumb_item', 'flex');
+
+                    if (breadcrumb === utilities.user_name) {
+
+                        i.classList.add('bi', 'bi-house');
+                        breadcrumb_item.append(i)
+                        label.innerHTML = 'Home'
+                        breadcrumb_item.title = `Home`;
+
+                    } else {
+                        label.innerHTML = breadcrumb;
+                        breadcrumb_item.title = `${breadcrumb}`;
+                    }
+
+                    breadcrumb_item.append(label);
+                    breadcrumb_item.addEventListener('click', (e) => {
+
+                        e.preventDefault();
+                        e.stopPropagation();
+
+                        let new_location = breadcrumbs.slice(0, index + 1).join('/');
+                        fileManager.get_files(new_location);
+                        utilities.set_location(new_location);
+
+                    });
+
+                    breadcrumb_div.append(breadcrumb_item);
+
+                }
 
             });
 
-            if (breadcrumb !== '') {
-                breadcrumb_div.append(breadcrumb_item);
-            }
+        }
 
-        });
+        // // console.log('location', location);
 
-        // click event for breadcrumbs div
-        breadcrumb_div.addEventListener('click', (e) => {
-            console.log('breadcrumbs click', e.target);
-            e.preventDefault();
-            e.stopPropagation();
-            this.show_location_input();
-        });
+        // let breadcrumbs = location.split('/');
+        // let breadcrumb_div = document.querySelector('.breadcrumbs');
+
+        // if (!breadcrumb_div) {
+        //     return;
+        // }
+
+        // console.log('breadcrumbs', breadcrumbs.length, breadcrumbs);
+
+        // breadcrumb_div.innerHTML = '';
+        // breadcrumbs.forEach((breadcrumb, index) => {
+
+        //     let breadcrumb_spacer = document.createElement('div');
+        //     breadcrumb_spacer.classList.add('breadcrumb_spacer');
+        //     breadcrumb_spacer.innerHTML = '/';
+
+        //     let breadcrumb_item = document.createElement('div');
+        //     breadcrumb_item.classList.add('breadcrumb_item');
+        //     breadcrumb_item.innerHTML = `${breadcrumb}`;
+
+        //     breadcrumb_item.addEventListener('click', (e) => {
+
+        //         e.preventDefault();
+        //         e.stopPropagation();
+        //         let new_location = breadcrumbs.slice(0, index + 1).join('/');
+        //         fileManager.get_files(new_location);
+
+        //     });
+
+        //     if (breadcrumb !== '') {
+        //         breadcrumb_div.append(breadcrumb_item);
+        //     }
+
+        // });
+
+        // // click event for breadcrumbs div
+        // breadcrumb_div.addEventListener('click', (e) => {
+        //     console.log('breadcrumbs click', e.target);
+        //     e.preventDefault();
+        //     e.stopPropagation();
+        //     this.show_location_input();
+        // });
 
     }
 
@@ -772,6 +857,7 @@ class Utilities {
 
     // paste
     paste() {
+
         console.log('running paste', this.destination);
         // check if cut operation
         if (this.is_cut_operation) {
@@ -795,6 +881,7 @@ class Utilities {
         this.cut_arr = [];
         this.clear_highlight();
         this.clear_empty_folder();
+
     }
 
     // move
@@ -829,6 +916,7 @@ class Utilities {
 
             let input = item.querySelector('input');
             if (input) {
+                input.value = item.dataset.name
                 input.classList.add('hidden');
                 input.removeEventListener('focus', this.focus_input);
             } else {
@@ -1052,10 +1140,7 @@ class Utilities {
         this.hide_location_input();
 
         // clear filter
-        let filter = document.querySelector('.filter');
-        if (filter) {
-            filter.innerHTML = '';
-        }
+        fileManager.clear_filter();
 
         // clear tab highlight
         let tabs = document.querySelectorAll('.tab');
@@ -1065,14 +1150,6 @@ class Utilities {
             });
         }
 
-        // clear highlighted all highlighted items
-        // let active_tab_content = document.querySelector('.active-tab-content');
-        // let main = document.querySelector('.main');
-        // let items = main.querySelectorAll('.highlight, .highlight_select, .highlight_target');
-        // items.forEach(item => {
-        //     item.classList.remove('highlight_select', 'highlight', 'highlight_target');
-        // });
-        // items = null;
         this.clear_highlight();
 
         // clear sidebar highlight
@@ -1113,16 +1190,34 @@ class Utilities {
         items.forEach(item => {
             item.classList.remove('highlight_select', 'highlight', 'highlight_target');
         });
+
     }
 
-    // clear filter
-    clear_filter() {
-        let filter = document.querySelector('.filter');
-        if (filter) {
-            filter.innerHTML = '';
-            filter.classList.remove('active');
-        }
-    }
+    // // clear filter
+    // clear_filter() {
+
+
+    //     let active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
+    //     let cards = active_tab_content.querySelectorAll('.card, .tr');
+    //     cards.forEach((card) => {
+    //         card.classList.remove('hidden');
+    //     })
+
+    //     let filter = document.querySelector('.filter');
+    //     if (filter) {
+    //         filter.innerText = '';
+    //         filter.classList.remove('active');
+    //     } else {
+    //         console.log('no filter');
+    //     }
+
+    //     // let filter = document.querySelector('.filter');
+    //     // if (filter) {
+    //     //     filter.innerHTML = '';
+    //     //     filter.classList.remove('active');
+    //     // }
+
+    // }
 
     // clear empty folder message
     clear_empty_folder() {
@@ -1149,6 +1244,7 @@ class Utilities {
             // check item.dataset values
             if (!item.dataset.id || !item.dataset.name || !item.dataset.href) {
                 console.log('missing dataset values', item);
+                utilities.set_msg(`Missing dataset values ${item}`);
                 return;
             }
 
@@ -1165,6 +1261,7 @@ class Utilities {
                 content_type: item.dataset.content_type,
                 is_hidden: this.stob(item.dataset.is_hidden),
                 is_writable: this.stob(item.dataset.is_writable),
+                is_readable: this.stob(item.dataset.is_readable),
                 location: item.dataset.location
             }
             selected_files.push(files_obj);
@@ -1234,6 +1331,52 @@ class Utilities {
         });
     }
 
+    // sort card / tr items. not a file array
+    sortItems(items_arr, sort_by, sort_direction) {
+
+        if (sort_by === '' || sort_by === undefined) {
+            utilities.set_msg("Error: sort by not found.")
+            return;
+        }
+
+        if (sort_direction === '' || sort_direction === undefined) {
+            utilities.set_msg("Error: sort direction not found.")
+            return;
+        }
+
+        const sortFunctions = {
+            name: (a, b) => a.dataset.name.localeCompare(b.dataset.name),
+            size: (a, b) => parseInt(a.dataset.size) - parseInt(b.dataset.size),
+            mtime: (a, b) => parseInt(a.dataset.mtime) - parseInt(b.dataset.mtime),
+            ctime: (a, b) => parseInt(a.dataset.ctime) - parseInt(b.dataset.ctime),
+            atime: (a, b) => parseInt(a.dataset.atime) - parseInt(b.dataset.atime),
+        };
+
+        return items_arr.sort((a, b) => {
+
+            // First, separate directories and files
+            const a_is_dir = a.dataset.is_dir === "true";
+            const b_is_dir = b.dataset.is_dir === "true";
+            if (a_is_dir !== b_is_dir) {
+                return a_is_dir ? -1 : 1; // Directories first
+            }
+
+            // Sort by hidden status last
+            if (a.dataset.name.startsWith('.') !== b.dataset.name.startsWith('.')) {
+                return a.dataset.name.startsWith('.') ? 1 : -1;
+            }
+
+            // If both are directories or both are files, sort based on the specified criteria
+            if (sort_by in sortFunctions) {
+                const sortFunction = sortFunctions[sort_by];
+                const result = sortFunction(a, b);
+                return sort_direction === 'asc' ? result : -result;
+            }
+
+            return 0;
+        });
+    }
+
 }
 
 class DragSelect {
@@ -1273,6 +1416,8 @@ class DragSelect {
             return;
         }
 
+        active_tab_content.draggable = false;
+
         // Set draggable property for current items (do this after DOM updates as needed)
         Array.from(active_tab_content.querySelectorAll('.tr, .card')).forEach(item => {
             item.draggable = true;
@@ -1295,6 +1440,10 @@ class DragSelect {
             const item = e.target.closest('.tr, .card');
             if (item) {
                 item.classList.add('highlight');
+                let href = item.querySelector('a');
+                if (href) {
+                    href.focus();
+                }
             }
         });
         active_tab_content.addEventListener('mouseout', (e) => {
@@ -1307,23 +1456,27 @@ class DragSelect {
 
         // Dragstart
         active_tab_content.addEventListener('dragstart', (e) => {
+
+            // e.stopPropagation();
+
             const item = e.target.closest('.tr, .card');
             if (item) {
-                e.stopPropagation();
                 console.log('dragstart');
                 this.is_dragging = true;
                 this.is_dragging_divs = true;
                 e.dataTransfer.effectAllowed = "copyMove"; // ADD THIS LINE
             }
+
         });
 
         // Dragover
         active_tab_content.addEventListener('dragover', (e) => {
+
+            e.preventDefault();
+            e.stopPropagation();
+
             const item = e.target.closest('.tr, .card');
             if (item) {
-
-                e.preventDefault();
-                e.stopPropagation();
 
                 console.log('ctrlKey', e.ctrlKey, 'dropEffect', e.dataTransfer.dropEffect);
 
@@ -1343,23 +1496,42 @@ class DragSelect {
                     utilities.set_msg(`Destination: ${item.dataset.href}`);
                 }
             }
+
+            if (e.target) {
+                if (e.ctrlKey) {
+                    e.dataTransfer.dropEffect = "copy";
+                    utilities.set_msg(`Copy items to ${utilities.get_location()}`);
+                } else {
+                    e.dataTransfer.dropEffect = "move";
+                    utilities.set_msg(`Move items to ${utilities.get_location()}`);
+                }
+                utilities.set_destination(utilities.get_location());
+            }
+
         });
 
         // Dragleave
         active_tab_content.addEventListener('dragleave', (e) => {
+
             const item = e.target.closest('.tr, .card');
             if (item && item.dataset.dragover === 'true') {
                 delete item.dataset.dragover;
                 item.classList.remove('highlight_target');
             }
+
         });
 
         // Drop
         active_tab_content.addEventListener('drop', (e) => {
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            console.log('dropping', e)
+
             const item = e.target.closest('.tr, .card');
             if (item) {
-                e.preventDefault();
-                e.stopPropagation();
+
 
                 // ipcRenderer.send('is_main', 0);
                 if (!item.classList.contains('highlight') && item.classList.contains('highlight_target')) {
@@ -1377,7 +1549,22 @@ class DragSelect {
                 }
                 utilities.clear();
                 this.set_is_dragging(true);
+
             }
+
+            if (e.target) {
+
+                // e.preventDefault();
+                // e.stopPropagation();
+
+                if (e.ctrlKey) {
+                    console.log('running copy')
+                    utilities.copy();
+                    utilities.paste();
+                }
+
+            }
+
         });
 
         // Selection rectangle and scroll handling
@@ -2381,14 +2568,14 @@ class KeyBoardManager {
             }
 
             // ctrl + r to refresh
-            if (e.ctrlKey && e.key === 'r') {
+            if (e.ctrlKey && e.key.toLocaleLowerCase() === 'r') {
                 e.preventDefault();
                 e.stopPropagation();
                ipcRenderer.send('reload');
             }
 
             // ctrl + l to focus location
-            if (e.ctrlKey && e.key === 'l') {
+            if (e.ctrlKey && e.key.toLocaleLowerCase() === 'l') {
                 e.preventDefault();
                 e.stopPropagation();
                 utilities.show_location_input();
@@ -2402,24 +2589,24 @@ class KeyBoardManager {
             }
 
             // ctrl + a to select all
-            if (e.ctrlKey && e.key === 'a') {
+            if (e.ctrlKey && e.key.toLocaleLowerCase() === 'a') {
                 e.preventDefault();
                 e.stopPropagation();
                 utilities.select_all();
             }
 
             // ctrl + c to copy
-            if (e.ctrlKey && e.key === 'c') {
+            if (e.ctrlKey && e.key.toLocaleLowerCase() === 'c') {
                 utilities.copy();
             }
 
             // ctrl + v to paste
-            if (e.ctrlKey && e.key === 'v') {
+            if (e.ctrlKey && e.key.toLocaleLowerCase() === 'v') {
                 utilities.paste();
             }
 
             // ctrl + x to cut
-            if (e.ctrlKey && e.key === 'x') {
+            if (e.ctrlKey && e.key.toLocaleLowerCase() === 'x') {
                 e.preventDefault();
                 e.stopPropagation();
                 utilities.cut();
@@ -2465,6 +2652,13 @@ class KeyBoardManager {
                 e.preventDefault();
                 e.stopPropagation();
                 fileManager.get_files(utilities.get_location());
+            }
+
+            // ctrl + t
+            if (e.ctrlKey && e.key.toLocaleLowerCase() === 't') {
+                e.preventDefault();
+                e.stopPropagation();
+                ipcRenderer.send('ls', utilities.get_location(), true);
             }
 
         })
@@ -2827,6 +3021,9 @@ class TabManager {
         // Switch Tabs
         tab.addEventListener('click', (e) => {
 
+            console.log('switch tab')
+            e.preventDefault()
+
             this.clearActiveTabs();
 
             tab.classList.add('active-tab');
@@ -2839,11 +3036,11 @@ class TabManager {
             this.tab_id = parseInt(tab.dataset.id);
             this.tab_history_idx = 0;
 
-            // update global location
-            utilities.set_location(tab.dataset.href);
 
-            // update global destination for paste / move operation
+            settingsManager.set_location(tab.dataset.href);
+            utilities.set_location(tab.dataset.href);
             utilities.set_destination(tab.dataset.href);
+            utilities.get_breadcrumbs(tab.dataset.href);
 
             // set local destination
             this.destination = tab.dataset.href;
@@ -2927,16 +3124,16 @@ class TabManager {
             // tab_content.classList.remove('highlight');
         })
 
-        tab_content.addEventListener('drop', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            if (e.ctrlKey) {
-                alert('2680 fix me - tab_content.addEventListener drop');
-                console.log('2680 fix me - tab_content.addEventListener drop');
-                // utilities.copy();
-                // console.log('dropping on tab content', e);
-            }
-        })
+        // tab_content.addEventListener('drop', (e) => {
+        //     e.preventDefault();
+        //     e.stopPropagation();
+        //     if (e.ctrlKey) {
+        //         alert('2680 fix me - tab_content.addEventListener drop');
+        //         console.log('2680 fix me - tab_content.addEventListener drop');
+        //         // utilities.copy();
+        //         // console.log('dropping on tab content', e);
+        //     }
+        // })
 
         // navigation.getCardCount(); // get new card count for navigation
         // navigation.getCardGroups();
@@ -2944,6 +3141,8 @@ class TabManager {
         if (label !== 'Home' && label !== 'Settings' && label !== 'Recent' && label !== 'Search Results') {
             this.addTabHistory(this.location_input.value);
         }
+
+        dragSelect.initialize();
 
     }
 
@@ -3257,6 +3456,8 @@ class FileManager {
         // sort menu
         ipcRenderer.on('sort_by', (e, sort, sort_direction) => {
 
+            console.log('sort by', sort, sort_direction)
+
             if (sort === null || sort === undefined || sort === '') {
                 utilities.set_msg(`Error: Sort is null or undefined ${sort}`);
                 return;
@@ -3273,12 +3474,97 @@ class FileManager {
             this.sort_by = sort;
             this.sort_direction = sort_direction;
 
+            // let active_tab_content = tabManager.get_active_tab_content();
+            // let items = Array.from(active_tab_content.querySelectorAll('.card, .tr'));
+
+            // let items_arr = []
+            // items.forEach((item, idx) => {
+            //     let f = {
+            //         id: item.dataset.id,
+            //         name: item.dataset.name,
+            //         href: item.dataset.href,
+            //         name: item.dataset.name,
+            //         display_name: item.dataset.name,
+            //         size: item.dataset.size,
+            //         mtime: item.dataset.mtime,
+            //         atime: item.dataset.atime,
+            //         ctime: item.dataset.ctime,
+            //         content_type: item.dataset.content_type,
+            //         type: item.dataset.type,
+            //         is_dir: utilities.stob(item.dataset.is_dir),
+            //         is_writable: item.dataset.is_writable,
+            //         location: item.dataset.location
+            //     };
+            //     items_arr.push(f);
+            // })
+
+            // const sortFunctions = {
+            //     name: (a, b) => a.name.localeCompare(b.name),
+            //     size: (a, b) => a.size - b.size,
+            //     mtime: (a, b) => a.mtime - b.mtime,
+            //     ctime: (a, b) => a.ctime - b.ctime,
+            //     atime: (a, b) => a.atime - b.atime
+            // };
+
+            // items_arr.sort((a, b) => {
+
+            //     // First, separate directories and files
+            //     if (a.is_dir !== b.is_dir) {
+            //         return a.is_dir ? -1 : 1;
+            //     }
+
+            //     // console.log(a)
+
+            //     // Sort by hidden status last
+            //     if (a.name.startsWith('.') !== b.name.startsWith('.')) {
+            //         return a.name.startsWith('.') ? 1 : -1;
+            //     }
+
+            //     // If both are directories or both are files, sort based on the specified criteria
+            //     if (this.sort_by in sortFunctions) {
+            //         const sortFunction = sortFunctions[this.sort_by];
+            //         const result = sortFunction(a, b);
+            //         return sort_direction === 'asc' ? result : -result;
+            //     }
+
+            // });
+
+            // Remove and re-append to update DOM order
+            // items.forEach(item => active_tab_content.appendChild(item));
+
+            // if (this.view === 'grid_view') {
+            //     this.get_grid_view(items_arr);
+            // } else if (this.view === 'list_view') {
+            //     this.get_list_view(items_arr);
+            // }
+
+            // // // Save sort settings
+            // this.settings.sort_by = this.sort_by;
+            // this.settings.sort_direction = this.sort_direction;
+            // settingsManager.update_settings(this.settings);
+
+            // if (sort === null || sort === undefined || sort === '') {
+            //     utilities.set_msg(`Error: Sort is null or undefined ${sort}`);
+            //     return;
+            // }
+            // if (sort_direction === null || sort_direction === undefined || sort_direction === '') {
+            //     utilities.set_msg(`Error: Sort direction is null or undefined ${sort_direction}`);
+            //     return;
+            // }
+            // if (this.location === null || this.location === undefined || this.location === '') {
+            //     utilities.set_msg(`Error: Location is null or undefined ${this.location}`);
+            //     return;
+            // }
+
+            // this.sort_by = sort;
+            // this.sort_direction = sort_direction;
+
             this.get_files(this.location);
 
-            // save sort direction
-            this.settings.sort_by = this.sort_by;
-            this.settings.sort_direction = this.sort_direction;
-            settingsManager.update_settings(this.settings);
+            // // save sort direction
+            // this.settings.sort_by = this.sort_by;
+            // this.settings.sort_direction = this.sort_direction;
+            // settingsManager.update_settings(this.settings);
 
         });
 
@@ -3316,11 +3602,17 @@ class FileManager {
         });
 
         // get files
-        ipcRenderer.on('ls', (e, files_arr) => {
+        ipcRenderer.on('ls', (e, files_arr, new_tab) => {
 
             this.files_arr = files_arr;
             if (this.view === '' || this.view === undefined) {
                 console.log('view is undefined');
+            }
+
+            if (new_tab) {
+                this.location = files_arr[0].location;
+                tabManager.add_tab(this.location);
+                utilities.set_location(this.location);
             }
 
             if (this.view === 'list_view') {
@@ -3339,8 +3631,6 @@ class FileManager {
 
         // add items
         ipcRenderer.on('add_items', (e, copy_arr) => {
-
-            console.log('add items', copy_arr);
 
             this.add_items(copy_arr);
             this.check_for_empty_folder();
@@ -3416,8 +3706,6 @@ class FileManager {
                 let href = tr.querySelector('a');
                 href.focus();
 
-                // tr.dataset.id = utilities.stob(href.innerText);
-
             }
 
             this.check_for_empty_folder();
@@ -3468,10 +3756,8 @@ class FileManager {
         // handle updating item on rename
         ipcRenderer.on('update_item', (e, f) => {
 
-            console.log('update item', f);
-
             let active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
-            let item = active_tab_content.querySelector(`[data-id="${f.id}"]`);
+            let item = active_tab_content.querySelector(`[data-id="${f.id}"], [data-href="${f.href}"]`);
 
             if (item) {
 
@@ -3503,7 +3789,7 @@ class FileManager {
 
             } else {
                 console.log('error getting data-id', f.id);
-                utilities.set_msg(`Error: getting data-id ${f.id}`);
+                // utilities.set_msg(`Error: getting data-id ${f.id}`);
             }
 
 
@@ -3681,6 +3967,14 @@ class FileManager {
             this.run_filer();
         });
 
+        this.filter.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                e.preventDefault();
+                e.stopPropagation();
+                this.clear_filter();
+            }
+        })
+
         document.addEventListener('keydown', (e) => {
 
             if (document.activeElement.tagName.toLowerCase() === 'input') {
@@ -3761,17 +4055,21 @@ class FileManager {
     clear_filter() {
 
         let active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
-        let cards = active_tab_content.querySelectorAll('.card, .tr');
-        cards.forEach((card) => {
-            card.classList.remove('hidden');
-        })
+        if (active_tab_content) {
 
-        let filter = document.querySelector('.filter');
-        if (filter) {
-            filter.innerText = '';
-            filter.classList.remove('active');
-        } else {
-            console.log('no filter');
+            let cards = active_tab_content.querySelectorAll('.card, .tr');
+            cards.forEach((card) => {
+                card.classList.remove('hidden');
+            })
+
+            let filter = document.querySelector('.filter');
+            if (filter) {
+                filter.innerText = '';
+                filter.classList.remove('active');
+            } else {
+                console.log('no filter');
+            }
+
         }
 
         // utilities.set_msg(`Loaded ${cards.length} items`);
@@ -3826,7 +4124,7 @@ class FileManager {
     // get grid view
     get_grid_view(files_arr) {
 
-        utilities.clear_filter();
+        this.clear_filter();
 
         // active tab content
         let active_tab_content = tabManager.get_active_tab_content();
@@ -3949,8 +4247,6 @@ class FileManager {
             ipcRenderer.send('get_folder_icon', f.href);
             ipcRenderer.send('get_folder_size', f.href);
 
-            // is_dir = 1;
-
             card.classList.add('folder_card', 'lazy');
 
             // Context Menu
@@ -4003,7 +4299,7 @@ class FileManager {
     // get list view
     get_list_view(files_arr) {
 
-        utilities.clear_filter();
+        this.clear_filter();
 
         // const start = this.loaded_rows;
         // const end = Math.min(start + this.chunk_size, files_arr.length);
@@ -4137,8 +4433,6 @@ class FileManager {
         table.appendChild(tbody);
         active_tab_content.appendChild(table);
         this.lazy_load_files(files_arr);
-
-        // dragSelect.drag_select();
 
         thead.addEventListener('contextmenu', (e) => {
             e.preventDefault();
@@ -4356,6 +4650,8 @@ class FileManager {
         item.dataset.size = f.size;
         item.dataset.type = f.content_type;
         item.dataset.is_dir = f.is_dir;
+        item.dataset.is_writable = f.is_writable;
+        item.dataset.is_readable = f.is_readable;
         item.dataset.location = f.location;
         item.dataset.content_type = f.content_type;
 
@@ -4499,6 +4795,7 @@ class FileManager {
         item.addEventListener('dragover', (e) => {
 
             e.preventDefault();
+            e.stopPropagation();
 
             if (item.dataset.is_dir === 'true') {
                 // Add highlight only if not already highlighted
@@ -4563,8 +4860,10 @@ class FileManager {
                 utilities.paste();
 
             }
+
             utilities.clear();
             dragSelect.set_is_dragging(true);
+
         })
 
     }
@@ -4809,13 +5108,21 @@ class FileManager {
                     let i = document.createElement('i');
                     let label = document.createElement('div');
 
-
                     breadcrumb_item.classList.add('breadcrumb_item', 'flex');
-                    i.classList.add('bi', 'bi-home');
-                    label.innerHTML = breadcrumb;
+
+                    if (breadcrumb === utilities.user_name) {
+
+                        i.classList.add('bi', 'bi-house');
+                        breadcrumb_item.append(i)
+                        label.innerHTML = 'Home'
+                        breadcrumb_item.title = `Home`;
+
+                    } else {
+                        label.innerHTML = breadcrumb;
+                        breadcrumb_item.title = `${breadcrumb}`;
+                    }
 
                     breadcrumb_item.append(label);
-                    breadcrumb_item.title = `${breadcrumb}`;
                     breadcrumb_item.addEventListener('click', (e) => {
 
                         e.preventDefault();
@@ -4832,6 +5139,7 @@ class FileManager {
                 }
 
             });
+
         }
 
         // click event for breadcrumbs div
@@ -4883,19 +5191,19 @@ class FileManager {
         }
 
         let active_tab_content = tabManager.get_active_tab_content();
-        let items = active_tab_content.querySelectorAll('.card, .tr');
+        let items = Array.from(active_tab_content.querySelectorAll('.card, .tr'));
         if (!items) {
             utilities.set_msg('Error: Add items - No items found to add');
             return;
         }
 
         // get index of last directory
-        let idx = 0;
-        items.forEach((item, index) => {
-            if (item.dataset.is_dir === 'true') {
-                idx = index;
-            }
-        });
+        // let idx = 0;
+        // items.forEach((item, index) => {
+        //     if (item.dataset.is_dir === 'true') {
+        //         idx = index;
+        //     }
+        // });
 
         if (this.view === 'grid_view') {
 
@@ -4905,25 +5213,54 @@ class FileManager {
                 return;
             }
 
+            grid.innerHTML = '';
+
+            // Loop array
             copy_arr.forEach(f => {
 
                 // make sure f is complete
-                for (let items in f) {
-                    if (f[items] === undefined || f[items] === null) {
+                for (let a in f) {
+                    if (f[a] === undefined || f[a] === null) {
                         console.log('error getting grid view item', f);
                         return -1;
                     }
                 }
 
-                // f is wrong when sent from paste worker - wrong values
+                f.id = btoa(f.href);
                 let card = this.get_grid_view_item(f);
-                if (f.is_dir === true) {
-                    grid.prepend(card);
-                } else {
-                    grid.insertBefore(card, grid.childNodes[idx + 1]);
-                }
                 card.classList.add('highlight_select');
+                items.push(card)
+
             })
+
+            // add new items array to the grid
+            let arr = utilities.sortItems(items, this.sort_by, this.sort_direction);
+            arr.forEach(item => {
+                grid.append(item);
+            })
+
+
+            // copy_arr.forEach(f => {
+
+            //     // make sure f is complete
+            //     for (let items in f) {
+            //         if (f[items] === undefined || f[items] === null) {
+            //             console.log('error getting grid view item', f);
+            //             return -1;
+            //         }
+            //     }
+
+            //     // f is wrong when sent from paste worker - wrong values
+            //     let card = this.get_grid_view_item(f);
+            //     if (f.is_dir === true) {
+            //         grid.prepend(card);
+            //     } else {
+            //         grid.insertBefore(card, grid.childNodes[idx + 1]);
+            //     }
+
+            //     card.classList.add('highlight_select');
+
+            // })
 
         } else if (this.view === 'list_view') {
 
@@ -4939,7 +5276,42 @@ class FileManager {
                 return;
             }
 
+            // items.forEach((item, idx) => {
+
+            //     copy_arr.forEach(f => {
+
+            //         // make sure f is complete
+            //         for (let items in f) {
+            //             if (f[items] === undefined || f[items] === null) {
+            //                 console.log('error getting grid view item', f);
+            //                 return -1;
+            //             }
+            //         }
+
+            //         if (item.dataset[this.sort_by] == f[this.sort_by]) {
+
+            //             let tr = this.get_list_view_item(f);
+            //             if (f.is_dir === true) {
+            //                 table.prepend(tr);
+            //             } else {
+            //                 tbody.insertBefore(tr, tbody.childNodes[idx + 1]);
+            //             }
+            //             tr.classList.add('highlight_select')
+            //         }
+
+            //     })
+
+            // })
+
             copy_arr.forEach(f => {
+
+                for (let items in f) {
+                    if (f[items] === undefined || f[items] === null) {
+                        console.log('error getting grid view item', f);
+                        return -1;
+                    }
+                }
+
                 let tr = this.get_list_view_item(f);
                 if (f.is_dir === true) {
                     table.prepend(tr);
@@ -4947,6 +5319,7 @@ class FileManager {
                     tbody.insertBefore(tr, tbody.childNodes[idx + 1]);
                 }
                 tr.classList.add('highlight_select');
+
             })
 
         }
@@ -5486,8 +5859,8 @@ init = () => {
     deviceManager = new DeviceManager();
     workspaceManager = new WorkspaceManager();
 
-    setTimeout(() => {
-        dragSelect.initialize();
-    }, 1000);
+    // setTimeout(() => {
+    //     dragSelect.initialize();
+    // }, 1000);
 
 }
