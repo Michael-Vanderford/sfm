@@ -1308,7 +1308,7 @@ class FileManager {
     // return file from get_files
     get_ls(location, add_tab) {
 
-        console.log('get_ls location', location)
+        // console.log('get_ls location', location)
 
         if (location === '' || location === undefined) {
             win.send('set_msg', 'Location is null or undefined');

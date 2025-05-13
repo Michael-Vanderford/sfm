@@ -5197,14 +5197,6 @@ class FileManager {
             return;
         }
 
-        // get index of last directory
-        // let idx = 0;
-        // items.forEach((item, index) => {
-        //     if (item.dataset.is_dir === 'true') {
-        //         idx = index;
-        //     }
-        // });
-
         if (this.view === 'grid_view') {
 
             let grid = active_tab_content.querySelector('.grid');
@@ -5226,6 +5218,7 @@ class FileManager {
                     }
                 }
 
+                // add new items to items array
                 f.id = btoa(f.href);
                 let card = this.get_grid_view_item(f);
                 card.classList.add('highlight_select');
@@ -5238,29 +5231,7 @@ class FileManager {
             arr.forEach(item => {
                 grid.append(item);
             })
-
-
-            // copy_arr.forEach(f => {
-
-            //     // make sure f is complete
-            //     for (let items in f) {
-            //         if (f[items] === undefined || f[items] === null) {
-            //             console.log('error getting grid view item', f);
-            //             return -1;
-            //         }
-            //     }
-
-            //     // f is wrong when sent from paste worker - wrong values
-            //     let card = this.get_grid_view_item(f);
-            //     if (f.is_dir === true) {
-            //         grid.prepend(card);
-            //     } else {
-            //         grid.insertBefore(card, grid.childNodes[idx + 1]);
-            //     }
-
-            //     card.classList.add('highlight_select');
-
-            // })
+            arr = [];
 
         } else if (this.view === 'list_view') {
 
@@ -5276,32 +5247,7 @@ class FileManager {
                 return;
             }
 
-            // items.forEach((item, idx) => {
-
-            //     copy_arr.forEach(f => {
-
-            //         // make sure f is complete
-            //         for (let items in f) {
-            //             if (f[items] === undefined || f[items] === null) {
-            //                 console.log('error getting grid view item', f);
-            //                 return -1;
-            //             }
-            //         }
-
-            //         if (item.dataset[this.sort_by] == f[this.sort_by]) {
-
-            //             let tr = this.get_list_view_item(f);
-            //             if (f.is_dir === true) {
-            //                 table.prepend(tr);
-            //             } else {
-            //                 tbody.insertBefore(tr, tbody.childNodes[idx + 1]);
-            //             }
-            //             tr.classList.add('highlight_select')
-            //         }
-
-            //     })
-
-            // })
+            tbody.innerHTML = '';
 
             copy_arr.forEach(f => {
 
@@ -5312,18 +5258,22 @@ class FileManager {
                     }
                 }
 
+                f.id = btoa(f.href);
                 let tr = this.get_list_view_item(f);
-                if (f.is_dir === true) {
-                    table.prepend(tr);
-                } else {
-                    tbody.insertBefore(tr, tbody.childNodes[idx + 1]);
-                }
                 tr.classList.add('highlight_select');
+                items.push(tr);
 
             })
 
+            let arr = utilities.sortItems(items, this.sort_by, this.sort_direction);
+            arr.forEach(item => {
+                tbody.append(item);
+            })
+            arr = [];
+
         }
 
+        items = [];
         copy_arr = [];
     }
 
