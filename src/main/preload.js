@@ -5185,6 +5185,20 @@ class FileManager {
 
         console.log('running add items');
 
+        // Loop array
+        copy_arr.forEach(f => {
+
+            // make sure f is complete
+            for (let a in f) {
+                if (f[a] === undefined || f[a] === null) {
+                    console.log('error getting grid view item', f);
+                    utilities.set_msg('error getting properties for', f);
+                    return -1;
+                }
+            }
+
+        })
+
         if (copy_arr.length === 0) {
             utilities.set_msg('Error: Add items - copy_arr is empty');
             return;

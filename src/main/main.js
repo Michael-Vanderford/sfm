@@ -451,7 +451,7 @@ class Utilities {
         let paste_arr = [];
         let overwrite_arr = [];
 
-        win.send('set_msg', 'Pasting files...');
+        win.send('set_msg', '<img src="../renderer/icons/spinner.gif" style="width: 12px; height: 12px" alt="loading" /> Gathering files...');
 
         copy_arr.forEach(f => {
 
