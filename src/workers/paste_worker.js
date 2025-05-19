@@ -17,52 +17,10 @@ class Utilities {
         return href.replace(/\n/g, ' ').replace(/[^a-z0-9]/gi, '_');
     }
 
-    // get_files_arr(source, destination, callback) {
-
-    //     this.cp_recursive++;
-
-    //     let file;
-    //     try {
-    //         file = gio.get_file(source);
-    //     } catch (err) {
-    //         return callback(`Error getting file: ${err.message}`);
-    //     }
-
-    //     file.source = source;
-    //     file.destination = destination;
-    //     this.files_arr.push(file);
-
-    //     gio.ls(source, (err, dirents) => {
-
-    //         if (err) {
-    //             return callback(`Error listing directory: ${err.message}`);
-    //         }
-    //         for (let i = 0; i < dirents.length; i++) {
-    //             let f = dirents[i];
-
-    //             if (f.filesystem.toLocaleLowerCase() === 'ntfs') {
-    //                 // sanitize file name
-    //                 f.name = f.name.replace(/[^a-z0-9]/gi, '_');
-    //             }
-    //             if (f.is_dir) {
-    //                 this.get_files_arr(f.href, path.format({ dir: destination, base: f.name }), callback);
-    //             } else {
-    //                 f.source = f.href;
-    //                 f.destination = path.format({ dir: destination, base: f.name });
-    //                 this.files_arr.push(f);
-    //             }
-    //         }
-    //         if (--this.cp_recursive == 0 || this.cancel_get_files) {
-    //             let file_arr1 = this.files_arr;
-    //             this.files_arr = [];
-    //             return callback(null, file_arr1);
-    //         }
-    //     });
-    // }
-
     get_files_arr(source, destination, callback) {
-        
+
         this.cp_recursive++;
+
         let file;
         try {
             file = gio.get_file(source);
@@ -70,60 +28,102 @@ class Utilities {
             return callback(`Error getting file: ${err.message}`);
         }
 
-        this.files_arr.push({
-            source,
-            destination,
-            is_dir: true,
-        });
+        file.source = source;
+        file.destination = destination;
+        this.files_arr.push(file);
 
         gio.ls(source, (err, dirents) => {
+
             if (err) {
                 return callback(`Error listing directory: ${err.message}`);
             }
+            for (let i = 0; i < dirents.length; i++) {
+                let f = dirents[i];
 
-            let pending = dirents.length;
-            if (pending === 0) {
-                if (--this.cp_recursive === 0 || this.cancel_get_files) {
-                    const results = this.files_arr;
-                    this.files_arr = [];
-                    return callback(null, results);
-                }
-                return;
-            }
-
-            for (let f of dirents) {
-                // Sanitize NTFS filenames
-                if (f.filesystem && f.filesystem.toLowerCase() === 'ntfs') {
+                if (f.filesystem.toLocaleLowerCase() === 'ntfs') {
+                    // sanitize file name
                     f.name = f.name.replace(/[^a-z0-9]/gi, '_');
                 }
-
-                const destPath = path.format({ dir: destination, base: f.name });
-
                 if (f.is_dir) {
-                    this.get_files_arr(f.href, destPath, err => {
-                        if (err) return callback(err);
-                        if (--pending === 0 && --this.cp_recursive === 0 || this.cancel_get_files) {
-                            const results = this.files_arr;
-                            this.files_arr = [];
-                            return callback(null, results);
-                        }
-                    });
+                    this.get_files_arr(f.href, path.format({ dir: destination, base: f.name }), callback);
                 } else {
-                    this.files_arr.push({
-                        source: f.href,
-                        destination: destPath,
-                        is_dir: false,
-                    });
-
-                    if (--pending === 0 && --this.cp_recursive === 0 || this.cancel_get_files) {
-                        const results = this.files_arr;
-                        this.files_arr = [];
-                        return callback(null, results);
-                    }
+                    f.source = f.href;
+                    f.destination = path.format({ dir: destination, base: f.name });
+                    this.files_arr.push(f);
                 }
+            }
+            if (--this.cp_recursive == 0 || this.cancel_get_files) {
+                let file_arr1 = this.files_arr;
+                this.files_arr = [];
+                return callback(null, file_arr1);
             }
         });
     }
+
+    // get_files_arr(source, destination, callback) {
+
+    //     this.cp_recursive++;
+    //     let file;
+    //     try {
+    //         file = gio.get_file(source);
+    //     } catch (err) {
+    //         return callback(`Error getting file: ${err.message}`);
+    //     }
+
+    //     this.files_arr.push({
+    //         source,
+    //         destination,
+    //         is_dir: true,
+    //     });
+
+    //     gio.ls(source, (err, dirents) => {
+    //         if (err) {
+    //             return callback(`Error listing directory: ${err.message}`);
+    //         }
+
+    //         let pending = dirents.length;
+    //         if (pending === 0) {
+    //             if (--this.cp_recursive === 0 || this.cancel_get_files) {
+    //                 const results = this.files_arr;
+    //                 this.files_arr = [];
+    //                 return callback(null, results);
+    //             }
+    //             return;
+    //         }
+
+    //         for (let f of dirents) {
+    //             // Sanitize NTFS filenames
+    //             if (f.filesystem && f.filesystem.toLowerCase() === 'ntfs') {
+    //                 f.name = f.name.replace(/[^a-z0-9]/gi, '_');
+    //             }
+
+    //             const destPath = path.format({ dir: destination, base: f.name });
+
+    //             if (f.is_dir) {
+    //                 this.get_files_arr(f.href, destPath, err => {
+    //                     if (err) return callback(err);
+    //                     if (--pending === 0 && --this.cp_recursive === 0 || this.cancel_get_files) {
+    //                         const results = this.files_arr;
+    //                         this.files_arr = [];
+    //                         return callback(null, results);
+    //                     }
+    //                 });
+    //             } else {
+    //                 this.files_arr.push({
+    //                     source: f.href,
+    //                     destination: destPath,
+    //                     is_dir: false,
+    //                 });
+
+    //                 if (--pending === 0 && --this.cp_recursive === 0 || this.cancel_get_files) {
+    //                     const results = this.files_arr;
+    //                     this.files_arr = [];
+    //                     return callback(null, results);
+    //                 }
+    //             }
+    //         }
+    //     });
+    // }
 
     // paste
     poste (copy_arr) {

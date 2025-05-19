@@ -154,6 +154,7 @@ LDFLAGS_Release := \
 	-m64
 
 LIBS := \
+	-lnode \
 	-lgio-2.0 \
 	-lgobject-2.0 \
 	-lglib-2.0 \

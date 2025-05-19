@@ -420,7 +420,6 @@
     "v8_use_siphash": 1,
     "want_separate_host_toolset": 1,
     "nodedir": "/home/michael/.cache/node-gyp/31.3.1",
-    "python": "/usr/bin/python3",
     "standalone_static_library": 1,
     "target": "31.3.1"
   }

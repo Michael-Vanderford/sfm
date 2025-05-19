@@ -163,7 +163,7 @@ hr {
     height: 100%;
     width: 80%;
     font-weight: 500;
-    color: var(--text);
+    color: #ccc;
     background-color: var(--location);
     border: 1px solid var(--location-border);
     border-radius: 5px;
@@ -185,6 +185,7 @@ hr {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    font-weight: bolder;
 }
 
 .breadcrumb_item:hover {
@@ -1087,7 +1088,7 @@ td .div_name a {
 
 .highlight_target {
     border-radius: 5px;
-    background: var(--highlight-select);
+    background: var(--highlight-target);
     box-shadow: 0 0 3px var(--highlight-active);
     user-select: none;
 }
@@ -1179,7 +1180,9 @@ span {
 
         --link: #4183c4;
         --highlight: #233246;
-        --highlight-select: #233246;
+        /* --highlight-select: #233246; */
+        --highlight-select: #069;
+        --highlight-target: #233246;
         --highlight-select-border: #707070;
         --highlight-active: #C5B359;
 

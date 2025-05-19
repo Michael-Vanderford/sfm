@@ -149,6 +149,11 @@ class SettingsManager {
             ipcRenderer.send('update_settings', this.settings);
         }
 
+        if (this.settings.tabs == undefined) {
+            this.settings.tabs = [];
+            ipcRenderer.send('update_settings', this.settings);
+        }
+
     }
 
     // get settings
@@ -832,15 +837,17 @@ class Utilities {
 
         this.copy_arr = this.get_selected_files();
 
+        console.log('copy arr', this.copy_arr);
+
         // send copy arr to MenuManager in main for menu paste operation
         ipcRenderer.send('set_copy_arr', this.copy_arr, this.location);
-
         this.set_msg(`Copied ${this.copy_arr.length} items at ${this.location}`);
 
     }
 
     // cut
     cut() {
+
         this.is_cut_operation = true;
         this.cut_arr = [];
         this.cut_arr = this.get_selected_files();
@@ -886,6 +893,7 @@ class Utilities {
 
     // move
     move() {
+
         this.move_arr = this.get_selected_files();
         if (this.move_arr.length > 0) {
             console.log('move', this.move_arr, this.destination);
@@ -898,6 +906,7 @@ class Utilities {
         this.destination = this.location;
         this.move_arr = [];
         this.clear_highlight();
+
     }
 
     cancel_edit() {
@@ -1233,6 +1242,7 @@ class Utilities {
         let selected_files = [];
         let active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
         let items = active_tab_content.querySelectorAll('.highlight, .highlight_select');
+        // let items = active_tab_content.querySelectorAll('.highlight_select');
 
         if (items.length === 0) {
             this.set_msg('No items selected');
@@ -1438,7 +1448,7 @@ class DragSelect {
         // Mouseover/mouseout for highlight
         active_tab_content.addEventListener('mouseover', (e) => {
             const item = e.target.closest('.tr, .card');
-            if (item) {
+            if (item && !this.is_dragging_divs) {
                 item.classList.add('highlight');
                 let href = item.querySelector('a');
                 if (href) {
@@ -1446,18 +1456,19 @@ class DragSelect {
                 }
             }
         });
+
+
         active_tab_content.addEventListener('mouseout', (e) => {
             const item = e.target.closest('.tr, .card');
             if (item) {
                 item.classList.remove('highlight');
             }
-
         });
 
         // Dragstart
         active_tab_content.addEventListener('dragstart', (e) => {
 
-            // e.stopPropagation();
+            e.stopPropagation();
 
             const item = e.target.closest('.tr, .card');
             if (item) {
@@ -1534,7 +1545,7 @@ class DragSelect {
 
 
                 // ipcRenderer.send('is_main', 0);
-                if (!item.classList.contains('highlight') && item.classList.contains('highlight_target')) {
+                if (!item.classList.contains('highlight') && !item.classList.contains('highlight_select') && item.classList.contains('highlight_target')) {
                     utilities.copy();
                     if (e.ctrlKey) {
                         utilities.paste();
@@ -1564,6 +1575,8 @@ class DragSelect {
                 }
 
             }
+
+            this.is_dragging_divs = false;
 
         });
 
@@ -2916,6 +2929,11 @@ class TabManager {
         }
     }
 
+    /**
+     *
+     * @param {string} location
+     * @returns
+     */
     add_tab(location) {
 
         ++this.tab_id;
@@ -3142,6 +3160,12 @@ class TabManager {
             this.addTabHistory(this.location_input.value);
         }
 
+        // let settings = settingsManager.get_settings();
+        // if (settings.tabs) {
+        //     settings.tabs.push({"tab": label});
+        // }
+        // settingsManager.update_settings(settings);
+
         dragSelect.initialize();
 
     }
@@ -3150,10 +3174,13 @@ class TabManager {
     update_tab(location) {
 
         let tab = document.querySelector('.active-tab');
+        let col1 = tab.querySelector('.label');
+
+        let label0 = col1.innerHTML;
+
         tab.title = location;
         tab.dataset.href = location
         let label = utilities.get_base_name(location);
-        let col1 = tab.querySelector('.label');
         col1.innerHTML = label;
 
     }
@@ -3637,7 +3664,7 @@ class FileManager {
 
         });
 
-        // get list view item
+        // get item
         ipcRenderer.on('get_item', (e, f) => {
 
             console.log('get item', f);
@@ -3646,6 +3673,14 @@ class FileManager {
             if (!active_tab_content) {
                 console.log('error getting active tab content');
                 return;
+            }
+
+            let item = active_tab_content.querySelector(`[data-id="${f.id}"]`)
+            if (item) {
+                if (item.dataset.id === f.id) {
+                    this.update_item(f);
+                    return;
+                }
             }
 
             if (this.view === 'grid_view') {
@@ -3756,41 +3791,43 @@ class FileManager {
         // handle updating item on rename
         ipcRenderer.on('update_item', (e, f) => {
 
-            let active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
-            let item = active_tab_content.querySelector(`[data-id="${f.id}"], [data-href="${f.href}"]`);
+            this.update_item(f);
 
-            if (item) {
+            // let active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
+            // let item = active_tab_content.querySelector(`[data-id="${f.id}"], [data-href="${f.href}"]`);
 
-                if (this.view === 'grid_view') {
+            // if (item) {
 
-                    let card = this.get_grid_view_item(f);
-                    if (!card) {
-                        console.log('error getting card');
-                        utilities.set_msg('Error: getting card');
-                        return;
-                    }
-                    item.replaceWith(card);
+            //     if (this.view === 'grid_view') {
 
-                } else if (this.view === 'list_view') {
+            //         let card = this.get_grid_view_item(f);
+            //         if (!card) {
+            //             console.log('error getting card');
+            //             utilities.set_msg('Error: getting card');
+            //             return;
+            //         }
+            //         item.replaceWith(card);
 
-                    let href = item.querySelector('.href');
-                    if (!href) {
-                        console.log('error getting href');
-                        utilities.set_msg('Error: getting href');
-                        return;
-                    }
+            //     } else if (this.view === 'list_view') {
 
-                    href.innerText = this.sanitize_file_name(f.name);
-                    let tr = fileManager.get_list_view_item(f);
-                    item.replaceWith(tr);
+            //         let href = item.querySelector('.href');
+            //         if (!href) {
+            //             console.log('error getting href');
+            //             utilities.set_msg('Error: getting href');
+            //             return;
+            //         }
 
-                }
+            //         href.innerText = this.sanitize_file_name(f.name);
+            //         let tr = fileManager.get_list_view_item(f);
+            //         item.replaceWith(tr);
+
+            //     }
 
 
-            } else {
-                console.log('error getting data-id', f.id);
-                // utilities.set_msg(`Error: getting data-id ${f.id}`);
-            }
+            // } else {
+            //     console.log('error getting data-id', f.id);
+            //     // utilities.set_msg(`Error: getting data-id ${f.id}`);
+            // }
 
 
         });
@@ -3804,11 +3841,15 @@ class FileManager {
                 return;
             }
 
-            let active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
-            let item = active_tab_content.querySelector(`[data-href="${id}"]`);
+            // let active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
+            let active_tab_content = document.querySelector('.main');
+            let item = active_tab_content.querySelector(`[data-id="${id}"]`);
             if (item) {
                 item.remove();
+                this.check_for_empty_folder();
+                utilities.get_disk_space(this.location);
             } else {
+                utilities.set_msg(`Error: removing item ${id}`);
                 console.log('error removing item', id);
             }
 
@@ -3816,7 +3857,8 @@ class FileManager {
 
         // remove items
         ipcRenderer.on('remove_items', (e, files_arr) => {
-            const active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
+            // const active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
+            const active_tab_content = document.querySelector('.main');
             files_arr.forEach(f => {
                 let item = active_tab_content.querySelector(`[data-id="${f.id}"]`);
                 item.remove();
@@ -4289,6 +4331,9 @@ class FileManager {
         this.handleClick(card, f);
         this.handleClick(href, f);
         this.handleClick(img, f);
+
+        // this.handleMouseover(card);
+        // this.handleMouseout(card);
 
         content.append(header, path, mtime, ctime, atime, type, size, count);
         card.append(icon, content, tooltip);
@@ -4781,7 +4826,11 @@ class FileManager {
 
         item.addEventListener('dragstart', (e) => {
 
-            // e.stopPropagation();
+            // console.log(item);
+            // utilities.copy();
+
+            item.classList.add('highlight_select');
+
             e.dataTransfer.effectAllowed = 'copyMove';
             this.is_dragging = true;
             this.is_dragging_divs = true;
@@ -4798,13 +4847,14 @@ class FileManager {
             e.stopPropagation();
 
             if (item.dataset.is_dir === 'true') {
+
                 // Add highlight only if not already highlighted
                 if (!item.dataset.dragover) {
                     item.dataset.dragover = 'true';
                     item.classList.add('highlight_target');
                 }
 
-                if (this.ctrlKey) {
+                if (e.ctrlKey) {
                     e.dataTransfer.dropEffect = "copy";
                     utilities.set_msg(`Copy items to ${item.dataset.href}`);
                 } else {
@@ -4953,6 +5003,26 @@ class FileManager {
 
     }
 
+    // handleMouseover(item) {
+    //     if (item) {
+    //         item.addEventListener('mouseover', (e) => {
+    //             e.preventDefault()
+    //             e.stopPropagation();
+    //             item.classList.add('highlight');
+    //         })
+    //     }
+    // }
+
+    // handleMouseout(item) {
+    //     if (item) {
+    //         item.addEventListener('mouseout', (e) => {
+    //             e.preventDefault()
+    //             e.stopPropagation();
+    //             item.classList.remove('highlight');
+    //         })
+    //     }
+    // }
+
     clearHighlight() {
         let active_tab_content = document.querySelector('.main');
         let items = active_tab_content.querySelectorAll('.highlight, .highlight_select');
@@ -5087,7 +5157,7 @@ class FileManager {
             i.classList.add('bi', 'bi-hdd');
             label.innerHTML = `File System`;
 
-            breadcrumb_item.append(i);
+            breadcrumb_item.append(i, label);
             breadcrumb_item.title = `File System`;
 
             breadcrumb_div.append(breadcrumb_item);
@@ -5100,7 +5170,7 @@ class FileManager {
         breadcrumbs = location.split('/');
         if (breadcrumbs.length > 0) {
 
-            breadcrumbs.forEach((breadcrumb, index) => {
+            breadcrumbs.forEach((breadcrumb, idx) => {
 
                 if (breadcrumb !== '' && breadcrumb !== 'home') {
 
@@ -5110,7 +5180,9 @@ class FileManager {
 
                     breadcrumb_item.classList.add('breadcrumb_item', 'flex');
 
-                    if (breadcrumb === utilities.user_name) {
+                    let is_home = 0;
+                    if (breadcrumbs[1] == 'home') is_home = true;
+                    if (typeof utilities.user_name !== 'undefined' && breadcrumb === utilities.user_name && is_home && idx == 2) {
 
                         i.classList.add('bi', 'bi-house');
                         breadcrumb_item.append(i)
@@ -5128,7 +5200,7 @@ class FileManager {
                         e.preventDefault();
                         e.stopPropagation();
 
-                        let new_location = breadcrumbs.slice(0, index + 1).join('/');
+                        let new_location = breadcrumbs.slice(0, idx + 1).join('/');
                         this.get_files(new_location);
                         utilities.set_location(new_location);
 
@@ -5289,6 +5361,56 @@ class FileManager {
 
         items = [];
         copy_arr = [];
+    }
+
+    update_item(f) {
+
+        // check file object
+        for(let i in f) {
+            if (f[i] === undefined || f[i] === null) {
+                console.log('Invalid property:', i, f[i]);
+                return;
+            }
+        }
+
+        console.log(`updating item ${f}`)
+
+        let active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
+        let item = active_tab_content.querySelector(`[data-id="${f.id}"]`);
+
+        if (item) {
+
+            if (this.view === 'grid_view') {
+
+                let card = this.get_grid_view_item(f);
+                if (!card) {
+                    console.log('error getting card');
+                    utilities.set_msg('Error: getting card');
+                    return;
+                }
+                item.replaceWith(card);
+
+            } else if (this.view === 'list_view') {
+
+                let href = item.querySelector('.href');
+                if (!href) {
+                    console.log('error getting href');
+                    utilities.set_msg('Error: getting href');
+                    return;
+                }
+
+                href.innerText = this.sanitize_file_name(f.name);
+                let tr = fileManager.get_list_view_item(f);
+                item.replaceWith(tr);
+
+            }
+
+
+        } else {
+            console.log('error getting data-id', f.id);
+            // utilities.set_msg(`Error: getting data-id ${f.id}`);
+        }
+
     }
 
     // go back

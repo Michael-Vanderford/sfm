@@ -1603,37 +1603,17 @@ namespace gio {
         callback->Call(argc, argv, &async);
     }
 
-    // NAN_METHOD(watch) {
-    //     if (info.Length() < 2 || !info[0]->IsString() || !info[1]->IsFunction()) {
-    //         return Nan::ThrowTypeError("Invalid arguments. Expected a path (string) and a callback function.");
+    // NAN_METHOD(stop_watch) {
+    //     if (info.Length() < 1 || !info[0]->IsExternal()) {
+    //         return Nan::ThrowTypeError("Invalid arguments. Expected a monitor handle.");
     //     }
 
-    //     v8::String::Utf8Value path(info.GetIsolate(), info[0]);
-    //     Nan::Callback* callback = new Nan::Callback(info[1].As<v8::Function>());
+    //     GFileMonitor* monitor = static_cast<GFileMonitor*>(info[0].As<v8::External>()->Value());
+    //     g_file_monitor_cancel(monitor);
+    //     g_object_unref(monitor);
 
-    //     // Implement your file watching logic here
-    //     // This is a simplified example; you'll need to adapt it to your specific implementation
-    //     GFile* file = g_file_new_for_path(*path);
-    //     GFileMonitor* monitor = g_file_monitor_directory(file, G_FILE_MONITOR_NONE, NULL, NULL);
-
-    //     g_signal_connect(monitor, "changed", G_CALLBACK(on_file_changed), callback);
-
-    //     g_object_unref(file);
-
-    //     info.GetReturnValue().Set(Nan::New<v8::External>(monitor));
+    //     info.GetReturnValue().SetUndefined();
     // }
-
-    NAN_METHOD(stop_watch) {
-        if (info.Length() < 1 || !info[0]->IsExternal()) {
-            return Nan::ThrowTypeError("Invalid arguments. Expected a monitor handle.");
-        }
-
-        GFileMonitor* monitor = static_cast<GFileMonitor*>(info[0].As<v8::External>()->Value());
-        g_file_monitor_cancel(monitor);
-        g_object_unref(monitor);
-
-        info.GetReturnValue().SetUndefined();
-    }
 
     void directory_changed(GFileMonitor* monitor, GFile* file, GFile* other_file, GFileMonitorEvent event_type, gpointer user_data) {
         Nan::HandleScope scope;
@@ -1754,7 +1734,36 @@ namespace gio {
         // Add the new watcher to the vector
         watchers.emplace_back(watchPath, fileMonitor);
 
+
         g_object_unref(src);
+        info.GetReturnValue().SetUndefined();
+        // info.GetReturnValue().Set(Nan::New<v8::External>(fileMonitor));
+    }
+
+    // stop monitoring directory
+    NAN_METHOD(stop_watch) {
+
+        if (info.Length() < 1 || !info[0]->IsString()) {
+            return Nan::ThrowTypeError("Invalid arguments. Expected a directory path as a string.");
+        }
+
+        Nan::Utf8String utf8Str(info[0]);
+        std::string watchPath(*utf8Str);
+
+        // Find the monitor for this path
+        auto it = std::find_if(watchers.begin(), watchers.end(),
+            [&watchPath](const auto& pair) { return pair.first == watchPath; });
+
+        if (it != watchers.end()) {
+            // Cancel and unref the monitor
+            g_file_monitor_cancel(it->second);
+            g_object_unref(it->second);
+            // Remove from vector
+            watchers.erase(it);
+        } else {
+            // Optionally, you can throw or just do nothing if not found
+            Nan::ThrowError("No monitor found for the specified directory.");
+        }
 
         info.GetReturnValue().SetUndefined();
     }

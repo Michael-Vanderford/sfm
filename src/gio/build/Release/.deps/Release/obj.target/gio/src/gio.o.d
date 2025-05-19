@@ -91,6 +91,7 @@ Release/obj.target/gio/src/gio.o: ../src/gio.cc \
  /usr/lib/x86_64-linux-gnu/glib-2.0/include/glibconfig.h \
  /usr/include/glib-2.0/glib/gmacros.h \
  /usr/include/glib-2.0/glib/gversionmacros.h \
+ /usr/include/glib-2.0/glib/glib-visibility.h \
  /usr/include/glib-2.0/glib/garray.h \
  /usr/include/glib-2.0/glib/gasyncqueue.h \
  /usr/include/glib-2.0/glib/gthread.h \
@@ -121,6 +122,7 @@ Release/obj.target/gio/src/gio.o: ../src/gio.cc \
  /usr/include/glib-2.0/glib/gmain.h /usr/include/glib-2.0/glib/gpoll.h \
  /usr/include/glib-2.0/glib/gslist.h /usr/include/glib-2.0/glib/gstring.h \
  /usr/include/glib-2.0/glib/gunicode.h \
+ /usr/include/glib-2.0/glib/gstrfuncs.h \
  /usr/include/glib-2.0/glib/gkeyfile.h \
  /usr/include/glib-2.0/glib/gmappedfile.h \
  /usr/include/glib-2.0/glib/gmarkup.h \
@@ -128,6 +130,7 @@ Release/obj.target/gio/src/gio.o: ../src/gio.cc \
  /usr/include/glib-2.0/glib/gvariant.h \
  /usr/include/glib-2.0/glib/gvarianttype.h \
  /usr/include/glib-2.0/glib/goption.h \
+ /usr/include/glib-2.0/glib/gpathbuf.h \
  /usr/include/glib-2.0/glib/gpattern.h \
  /usr/include/glib-2.0/glib/gprimes.h /usr/include/glib-2.0/glib/gqsort.h \
  /usr/include/glib-2.0/glib/gqueue.h /usr/include/glib-2.0/glib/grand.h \
@@ -140,7 +143,6 @@ Release/obj.target/gio/src/gio.o: ../src/gio.cc \
  /usr/include/glib-2.0/glib/gsequence.h \
  /usr/include/glib-2.0/glib/gshell.h /usr/include/glib-2.0/glib/gslice.h \
  /usr/include/glib-2.0/glib/gspawn.h \
- /usr/include/glib-2.0/glib/gstrfuncs.h \
  /usr/include/glib-2.0/glib/gstringchunk.h \
  /usr/include/glib-2.0/glib/gstrvbuilder.h \
  /usr/include/glib-2.0/glib/gtestutils.h \
@@ -158,6 +160,7 @@ Release/obj.target/gio/src/gio.o: ../src/gio.cc \
  /usr/include/glib-2.0/glib/glib-autocleanups.h \
  /usr/include/glib-2.0/gobject/gobject.h \
  /usr/include/glib-2.0/gobject/gtype.h \
+ /usr/include/glib-2.0/gobject/gobject-visibility.h \
  /usr/include/glib-2.0/gobject/gvalue.h \
  /usr/include/glib-2.0/gobject/gparam.h \
  /usr/include/glib-2.0/gobject/gclosure.h \
@@ -176,6 +179,7 @@ Release/obj.target/gio/src/gio.o: ../src/gio.cc \
  /usr/include/glib-2.0/gobject/gvaluearray.h \
  /usr/include/glib-2.0/gobject/gvaluetypes.h \
  /usr/include/glib-2.0/gobject/gobject-autocleanups.h \
+ /usr/include/glib-2.0/gio/gio-visibility.h \
  /usr/include/glib-2.0/gio/gaction.h \
  /usr/include/glib-2.0/gio/gactiongroup.h \
  /usr/include/glib-2.0/gio/gactiongroupexporter.h \
@@ -252,6 +256,7 @@ Release/obj.target/gio/src/gio.o: ../src/gio.cc \
  /usr/include/glib-2.0/gio/gsocketaddress.h \
  /usr/include/glib-2.0/gio/gioenumtypes.h \
  /usr/include/glib-2.0/gio/giomodule.h /usr/include/glib-2.0/gmodule.h \
+ /usr/include/glib-2.0/gmodule/gmodule-visibility.h \
  /usr/include/glib-2.0/gio/gioscheduler.h \
  /usr/include/glib-2.0/gio/glistmodel.h \
  /usr/include/glib-2.0/gio/gliststore.h \
@@ -435,6 +440,7 @@ Release/obj.target/gio/src/gio.o: ../src/gio.cc \
 /usr/lib/x86_64-linux-gnu/glib-2.0/include/glibconfig.h:
 /usr/include/glib-2.0/glib/gmacros.h:
 /usr/include/glib-2.0/glib/gversionmacros.h:
+/usr/include/glib-2.0/glib/glib-visibility.h:
 /usr/include/glib-2.0/glib/garray.h:
 /usr/include/glib-2.0/glib/gasyncqueue.h:
 /usr/include/glib-2.0/glib/gthread.h:
@@ -473,6 +479,7 @@ Release/obj.target/gio/src/gio.o: ../src/gio.cc \
 /usr/include/glib-2.0/glib/gslist.h:
 /usr/include/glib-2.0/glib/gstring.h:
 /usr/include/glib-2.0/glib/gunicode.h:
+/usr/include/glib-2.0/glib/gstrfuncs.h:
 /usr/include/glib-2.0/glib/gkeyfile.h:
 /usr/include/glib-2.0/glib/gmappedfile.h:
 /usr/include/glib-2.0/glib/gmarkup.h:
@@ -480,6 +487,7 @@ Release/obj.target/gio/src/gio.o: ../src/gio.cc \
 /usr/include/glib-2.0/glib/gvariant.h:
 /usr/include/glib-2.0/glib/gvarianttype.h:
 /usr/include/glib-2.0/glib/goption.h:
+/usr/include/glib-2.0/glib/gpathbuf.h:
 /usr/include/glib-2.0/glib/gpattern.h:
 /usr/include/glib-2.0/glib/gprimes.h:
 /usr/include/glib-2.0/glib/gqsort.h:
@@ -496,7 +504,6 @@ Release/obj.target/gio/src/gio.o: ../src/gio.cc \
 /usr/include/glib-2.0/glib/gshell.h:
 /usr/include/glib-2.0/glib/gslice.h:
 /usr/include/glib-2.0/glib/gspawn.h:
-/usr/include/glib-2.0/glib/gstrfuncs.h:
 /usr/include/glib-2.0/glib/gstringchunk.h:
 /usr/include/glib-2.0/glib/gstrvbuilder.h:
 /usr/include/glib-2.0/glib/gtestutils.h:
@@ -516,6 +523,7 @@ Release/obj.target/gio/src/gio.o: ../src/gio.cc \
 /usr/include/glib-2.0/glib/glib-autocleanups.h:
 /usr/include/glib-2.0/gobject/gobject.h:
 /usr/include/glib-2.0/gobject/gtype.h:
+/usr/include/glib-2.0/gobject/gobject-visibility.h:
 /usr/include/glib-2.0/gobject/gvalue.h:
 /usr/include/glib-2.0/gobject/gparam.h:
 /usr/include/glib-2.0/gobject/gclosure.h:
@@ -534,6 +542,7 @@ Release/obj.target/gio/src/gio.o: ../src/gio.cc \
 /usr/include/glib-2.0/gobject/gvaluearray.h:
 /usr/include/glib-2.0/gobject/gvaluetypes.h:
 /usr/include/glib-2.0/gobject/gobject-autocleanups.h:
+/usr/include/glib-2.0/gio/gio-visibility.h:
 /usr/include/glib-2.0/gio/gaction.h:
 /usr/include/glib-2.0/gio/gactiongroup.h:
 /usr/include/glib-2.0/gio/gactiongroupexporter.h:
@@ -612,6 +621,7 @@ Release/obj.target/gio/src/gio.o: ../src/gio.cc \
 /usr/include/glib-2.0/gio/gioenumtypes.h:
 /usr/include/glib-2.0/gio/giomodule.h:
 /usr/include/glib-2.0/gmodule.h:
+/usr/include/glib-2.0/gmodule/gmodule-visibility.h:
 /usr/include/glib-2.0/gio/gioscheduler.h:
 /usr/include/glib-2.0/gio/glistmodel.h:
 /usr/include/glib-2.0/gio/gliststore.h:

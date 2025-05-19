@@ -133,6 +133,13 @@ class Utilities {
             cmd: 'set_msg',
             msg: `Done moving ${files_arr.length} files.`
         });
+
+        parentPort.postMessage({
+            cmd: 'mv_done',
+            files_arr: files_arr
+        })
+
+
     }
 }
 

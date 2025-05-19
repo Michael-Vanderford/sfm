@@ -22,34 +22,120 @@ const { XMLParser } = require('fast-xml-parser');
  * Class to watch for changes in the file system
  */
 class Watcher {
-
     constructor() {
-
+        this.monitors = new Map();
     }
 
-    // watch
-    watch(path) {
+    /**
+     * Start watching a path for file system changes.
+     * @param {string} path - The path to watch.
+     * @param {function} [callback] - Optional callback to handle events.
+     */
+    watch(path, callback) {
 
-        const monitor = gio.watch(path, (event) => {
+        // console.log(this.monitors)
+        // console.log(utilities.run_watcher);
+        // console.log('location', fileManager.location)
 
-            switch (event.event) {
-                case 'created':
-                    console.log('File created:', event.filename);
-                    break;
-                case 'deleted':
-                    console.log('File deleted:', event.filename);
-                    break;
-                case 'modified':
-                    console.log('File modified:', event.filename);
-                    break;
-                default:
-                    break;
+        // if (this.monitors.has(path)) {
+        //     // Already watching this path
+        //     return;
+        // }
+
+        try {
+
+            gio.watch(path, (event) => {
+
+                // Forward events to callback if provided
+                if (typeof callback === 'function') {
+                    callback(event);
+                }
+
+                if (!utilities.run_watcher) {
+                    return;
+                }
+
+                // Example: emit events to renderer or handle internally
+                switch (event.event) {
+
+                    case 'created':
+
+                        console.log('created', event);
+                        let file = gio.get_file(event.filename)
+                        if (file.href === undefined || file.href === null) {
+                            win.send('set_msg', 'Error: File not found.');
+                            return;
+                        }
+
+                        file.id = btoa(file.href);
+                        win && win.send && win.send('get_item', file);
+                        break;
+
+                    case 'deleted':
+
+                        console.log('deleted', event);
+                        win && win.send && win.send('remove_item', btoa(event.filename));
+                        break;
+
+        //             case 'modified':
+
+        //                 console.log('modified', event);
+        //                 file = gio.get_file(event.filename);
+        //                 file.id = btoa(file.href);
+        //                 win && win.send && win.send('update_item', file);
+        //                 break;
+
+        //             default:
+        //                 break;
+                }
+            });
+
+        //     this.monitors.set(path, path);
+
+        } catch (err) {
+            console.error(`Watcher error for path ${path}:`, err);
+        }
+    }
+
+    /**
+     * Stop watching a path.
+     * @param {string} path - The path to stop watching.
+     */
+    unwatch(path) {
+
+        console.log('unwatch', path);
+
+        const monitor = this.monitors.get(path);
+        if (monitor) {
+            try {
+                gio.stop_watch(path);
+                this.monitors.delete(path);
+            } catch (err) {
+                console.error(`Error closing watcher for ${path}:`, err);
+                win.send('set_msg', `Error closing watcher for ${path}: ${err}`);
             }
-
-        });
+        } else {
+            console.log('Error: getting monitor from monitors array.');
+            win.send('set_msg', `Error: getting monitor from monitors array.`);
+        }
 
     }
 
+    /**
+     * Stop all watchers.
+     */
+    unwatchAll() {
+        for (const [path, monitor] of this.monitors.entries()) {
+            if (monitor && typeof monitor.close === 'function') {
+                try {
+                    monitor.close();
+                } catch (err) {
+                    console.error(`Error closing watcher for ${path}:`, err);
+                }
+            }
+        }
+        this.monitors.clear();
+    }
 }
 
 class SettingsManager {
@@ -145,6 +231,7 @@ class Utilities {
     constructor() {
 
         this.is_main = true;
+        this.run_watcher = true;
         this.root_destination = '';
 
         this.byteUnits = [' kB', ' MB', ' GB', ' TB', 'PB', 'EB', 'ZB', 'YB'];
@@ -178,6 +265,7 @@ class Utilities {
 
         // listen for move event
         ipcMain.on('move', (e, move_arr, location) => {
+            this.root_destination = location;
             this.move(e, move_arr, location);
         })
 
@@ -198,6 +286,12 @@ class Utilities {
 
         // listen for get_disk_space event
         ipcMain.on('get_disk_space', (e, href) => {
+
+            if (href === '' || href === undefined) {
+                win.send('set_msg', `Error: getting href: ${href}`);
+                return;
+            }
+
             this.get_disk_space(href);
         })
 
@@ -210,7 +304,7 @@ class Utilities {
                     win.send('set_progress', data);
                     break;
                 case 'remove_item': {
-                    win.send('remove_item', data.id);
+                    // win.send('remove_item', data.id);
                     break;
                 }
                 case 'set_msg': {
@@ -220,6 +314,7 @@ class Utilities {
                 case 'cp_done': {
 
                     console.log('cp_done_data', data);
+                    this.run_watcher = false;
 
                     if (this.is_main) {
 
@@ -229,13 +324,10 @@ class Utilities {
                         if (file.href === undefined || file.href === null) {
                             win.send('set_msg', 'Error: File not found.');
                             break;
-
                         }
 
                         file.id = btoa(file.href);
                         win.send('update_item', file);
-
-
 
                     } else if (!this.is_main) {
 
@@ -253,6 +345,7 @@ class Utilities {
                     }
 
                     this.get_disk_space(this.root_destination);
+                    this.run_watcher = true;
 
                     break;
                 }
@@ -270,12 +363,50 @@ class Utilities {
                 case 'set_progress':
                     win.send('set_progress', data);
                     break;
-                // case 'remove_item': {
-                //     win.send('remove_item', data.id);
-                //     break;
-                // }
                 case 'set_msg': {
                     win.send('set_msg', data.msg);
+                    break;
+                }
+                case 'mv_done': {
+
+
+                    if (this.is_main) {
+
+                        // remove old items
+                        win.send('remove_items', data.files_arr);
+
+                        // get moved from location
+                        let root_source = path.dirname(data.files_arr[0].source);
+                        let file = gio.get_file(root_source);
+                        file.id = btoa(file.href);
+
+                        // check file object
+                        if (file.href === undefined || file.href === null) {
+                            win.send('set_msg', 'Error: File not found.');
+                            break;
+                        } else {
+                            // update moved from item
+                            win.send('update_item', file);
+                        }
+
+                    } else if (!this.is_main) {
+
+                        let file = gio.get_file(this.root_destination);
+                        file.id = btoa(file.href);
+
+                        if (file.href === undefined || file.href === null) {
+                            win.send('set_msg', 'Error: File not found.');
+                            break;
+                        } else {
+                            win.send('update_item', file);
+                        }
+
+                    }
+
+                    setTimeout(() => {
+                        this.run_watcher = true;
+                    }, 100);
+
                     break;
                 }
                 default:
@@ -448,6 +579,8 @@ class Utilities {
             return;
         }
 
+        this.run_watcher = false;
+
         let paste_arr = [];
         let overwrite_arr = [];
 
@@ -556,13 +689,25 @@ class Utilities {
     // move
     move(e, files_arr, location) {
 
+        if (files_arr.length === 0) {
+            win.send('set_msg', 'Error: moving files_arr is empty');
+            return;
+        }
+
+        if (location === '' || location === undefined) {
+            win.send('set_msg', `Error: Move location is not valid: ${location}`);
+        }
+
         let move_arr = [];
         let overwrite_arr = [];
+        this.run_watcher = false;
 
         files_arr.forEach(f => {
 
-            f.destination = path.join(location, f.name);
-            f.source = f.href;
+            f.destination = path.join(location, f.name); // set destination
+            f.source = f.href; // set source to current href
+            f.href = f.destination; // set href to destination
+            f.location = f.destination;
 
             // handle duplicate file names
             if (f.location == location && fs.existsSync(f.destination)) {
@@ -615,6 +760,7 @@ class Utilities {
         if (overwrite_arr.length > 0) {
             // send overwrite_arr to renderer
             win.send('set_msg', `Error: ${overwrite_arr.length} files already exist in ${location}`);
+            win.send('clear_highlight');
             // e.sender.send('overwrite_move', overwrite_arr);
         }
 
@@ -622,11 +768,18 @@ class Utilities {
         overwrite_arr = [];
         files_arr = [];
 
-
     }
 
     // make directory
     mkdir(e, location) {
+
+        if (location === '' || location === undefined) {
+            win.send('set_msg', `Error: getting mkdir location ${location}`);
+            return;
+        }
+
+        this.run_watcher = false;
+
         let dir = path.join(location, 'New Folder');
         let idx = 1;
         while (fs.existsSync(dir)) {
@@ -638,12 +791,32 @@ class Utilities {
         f.id = btoa(dir);
         e.sender.send('get_item', f);
         e.sender.send('edit_item', f);
+
+        setTimeout(() => {
+            this.run_watcher = true;
+        }, 100);
+
     }
 
     // rename
     rename(e, source, destination, id) {
 
-        console.log('rename', source, destination);
+        if (source === '' || source === undefined) {
+            win.send('set_msg', `Error: getting source for rename: ${source}`);
+            return;
+        }
+
+        if (destination === '' || destination === undefined) {
+            win.send('set_msg', `Error: getting destination for rename: ${destination}`);
+            return;
+        }
+
+        if (id === '' || id === undefined) {
+            win.send('set_msg', `Error: getting destination for rename: ${id}`);
+            return;
+        }
+
+        this.run_watcher = false;
 
         if (fs.existsSync(destination)) {
 
@@ -657,16 +830,22 @@ class Utilities {
         fs.rename(source, destination, (err) => {
 
             if (err) {
-                win.send('set_msg', err);
+                win.send('set_msg', `Error: rename: ${err}`);
                 return;
             }
 
             let f = gio.get_file(destination);
+            if (!f) {
+                win.send('set_msg', `Error: getting file object for rename: ${f}`);
+            }
             f.id = id;
             e.sender.send('update_item', f);
 
         });
 
+        setTimeout(() => {
+            this.run_watcher = true;
+        }, 100);
 
     }
 
@@ -674,6 +853,8 @@ class Utilities {
     delete(e, delete_arr) {
 
         if (delete_arr.length > 0) {
+
+            this.run_watcher = false;
 
             // Create alert dialog
             const options = {
@@ -704,9 +885,15 @@ class Utilities {
                             }
                         }
                     })
+
                     e.sender.send('remove_items', delete_arr);
                     e.sender.send('set_msg', `${delete_arr.length} items deleted.`);
                     delete_arr = [];
+
+                    setTimeout(() => {
+                        this.run_watcher = true;
+                    }, 100);
+
                 } else {
                     win.send('set_msg', 'Operation cancelled.');
                 }
@@ -731,6 +918,11 @@ class Utilities {
 
     // get disk space
     get_disk_space(href) {
+
+        if (href === '' || href === undefined) {
+            win.send('set_msg', `Error: get_disk_space href is not valid ${href}`);
+            return;
+        }
 
         try {
             let options = {
@@ -1202,6 +1394,7 @@ class FileManager {
     constructor() {
 
         this.location = '';
+        this.location0 = '';
         this.watcher_failed = 0;
         this.watcher_enabled = true;
 
@@ -1273,42 +1466,10 @@ class FileManager {
 
     }
 
-    watch(location) {
-        gio.watcher(location, (watcher) => {
-            this.watcher_failed = 0;
-            if (watcher.event !== 'unknown') {
-                // if (watcher.event === 'moved') {
-
-                // }
-                // if (watcher.event === 'deleted') {
-                //     win.send('remove_card', watcher.filename);
-                // }
-                // // if (watcher.event === 'created' || watcher.event === 'changed') {
-                if (watcher.event === 'created' && this.watcher_enabled) {
-                    try {
-                        let f = gio.get_file(watcher.filename);
-                        if (f) {
-                            win.send('get_item', f);
-                            if (f.is_dir) {
-                                // win.send('get_folder_count', watcher.filename);
-                                // win.send('get_folder_size', watcher.filename);
-                            }
-                        }
-                    } catch (err) {
-                        // win.send('msg', 'watcher error: ' + err.message);
-                    }
-                }
-
-                // win.send('clear_folder_size', path.dirname(watcher.filename));
-                // get_disk_space(href);
-            }
-        })
-    }
-
     // return file from get_files
     get_ls(location, add_tab) {
 
-        // console.log('get_ls location', location)
+        console.log('get_ls location', location)
 
         if (location === '' || location === undefined) {
             win.send('set_msg', 'Location is null or undefined');
@@ -1323,14 +1484,20 @@ class FileManager {
         // check if location is valid
         if (fs.existsSync(location) === false && !location.startsWith('mtp://')) {
             win.send('set_msg', `Error: Could not find ${location}`);
-            return;z
+            return;
         }
 
+        this.location0 = this.location;
         this.location = location;
         let ls_data = {
             cmd: 'ls',
             location: this.location,
             add_tab: add_tab
+        }
+
+        watcher.watch(this.location);
+        if (this.location0 != this.location) {
+            watcher.unwatch(this.location0);
         }
 
         this.ls_worker.postMessage(ls_data);
@@ -2601,6 +2768,7 @@ const workspaceManager = new WorkspaceManager();
 const deviceManager = new DeviceManager();
 const dialogManager = new DialogManager();
 const menuManager = new MenuManager();
+const watcher = new Watcher();
 
 // Create main window
 let win;
