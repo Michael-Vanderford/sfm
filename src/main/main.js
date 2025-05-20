@@ -28,23 +28,23 @@ class Watcher {
 
     /**
      * Start watching a path for file system changes.
-     * @param {string} path - The path to watch.
+     * @param {string} dir - The path to watch.
      * @param {function} [callback] - Optional callback to handle events.
      */
-    watch(path, callback) {
+    watch(dir, callback) {
 
         // console.log(this.monitors)
         // console.log(utilities.run_watcher);
         // console.log('location', fileManager.location)
 
-        // if (this.monitors.has(path)) {
-        //     // Already watching this path
-        //     return;
-        // }
+        if (this.monitors.has(path)) {
+            // Already watching this path
+            return;
+        }
 
         try {
 
-            gio.watch(path, (event) => {
+            gio.watch(dir, (event) => {
 
                 // Forward events to callback if provided
                 if (typeof callback === 'function') {
@@ -55,13 +55,19 @@ class Watcher {
                     return;
                 }
 
+                let location = settingsManager.get_settings().location;
+
                 // Example: emit events to renderer or handle internally
                 switch (event.event) {
 
                     case 'created':
 
-                        console.log('created', event);
-                        let file = gio.get_file(event.filename)
+                        console.log('created', event, location, path.dirname(event.filename));
+                        if (location !== path.dirname(event.filename)) {
+                            return;
+                        }
+
+                        let file = gio.get_file(event.filename);
                         if (file.href === undefined || file.href === null) {
                             win.send('set_msg', 'Error: File not found.');
                             return;
@@ -73,7 +79,11 @@ class Watcher {
 
                     case 'deleted':
 
-                        console.log('deleted', event);
+                        console.log('delete', event, location, path.dirname(event.filename));
+                        if (location !== path.dirname(event.filename)) {
+                            return;
+                        }
+
                         win && win.send && win.send('remove_item', btoa(event.filename));
                         break;
 
@@ -90,10 +100,10 @@ class Watcher {
                 }
             });
 
-        //     this.monitors.set(path, path);
+            this.monitors.set(path, path);
 
         } catch (err) {
-            console.error(`Watcher error for path ${path}:`, err);
+            console.error(`Watcher error for path ${dir}:`, err);
         }
     }
 
@@ -246,6 +256,15 @@ class Utilities {
                 win.send('folder_size', folder_data);
             }
         });
+
+        // set execute
+        ipcMain.on('set_execute', (e, href) => {
+            gio.set_execute(href);
+        })
+
+        ipcMain.on('clear_execute', (e, href) => {
+            gio.clear_execute(href);
+        })
 
         // Run external command
         ipcMain.on('command', (e, cmd) => {
