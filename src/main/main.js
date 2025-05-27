@@ -23,7 +23,7 @@ const { XMLParser } = require('fast-xml-parser');
  */
 class Watcher {
     constructor() {
-        this.monitors = new Map();
+        // this.monitors = new Map();
     }
 
     /**
@@ -37,10 +37,10 @@ class Watcher {
         // console.log(utilities.run_watcher);
         // console.log('location', fileManager.location)
 
-        if (this.monitors.has(path)) {
-            // Already watching this path
-            return;
-        }
+        // if (this.monitors.has(path)) {
+        //     // Already watching this path
+        //     return;
+        // }
 
         try {
 
@@ -100,7 +100,7 @@ class Watcher {
                 }
             });
 
-            this.monitors.set(path, path);
+            // this.monitors.set(path, path);
 
         } catch (err) {
             console.error(`Watcher error for path ${dir}:`, err);
@@ -115,19 +115,19 @@ class Watcher {
 
         console.log('unwatch', path);
 
-        const monitor = this.monitors.get(path);
-        if (monitor) {
+        // const monitor = this.monitors.get(path);
+        // if (monitor) {
             try {
                 gio.stop_watch(path);
-                this.monitors.delete(path);
+                // this.monitors.delete(path);
             } catch (err) {
                 console.error(`Error closing watcher for ${path}:`, err);
                 win.send('set_msg', `Error closing watcher for ${path}: ${err}`);
             }
-        } else {
-            console.log('Error: getting monitor from monitors array.');
-            win.send('set_msg', `Error: getting monitor from monitors array.`);
-        }
+        // } else {
+            // console.log('Error: getting monitor from monitors array.');
+            // win.send('set_msg', `Error: getting monitor from monitors array.`);
+        // }
 
     }
 
@@ -135,16 +135,16 @@ class Watcher {
      * Stop all watchers.
      */
     unwatchAll() {
-        for (const [path, monitor] of this.monitors.entries()) {
-            if (monitor && typeof monitor.close === 'function') {
-                try {
-                    monitor.close();
-                } catch (err) {
-                    console.error(`Error closing watcher for ${path}:`, err);
-                }
-            }
-        }
-        this.monitors.clear();
+        // for (const [path, monitor] of this.monitors.entries()) {
+        //     if (monitor && typeof monitor.close === 'function') {
+        //         try {
+        //             monitor.close();
+        //         } catch (err) {
+        //             console.error(`Error closing watcher for ${path}:`, err);
+        //         }
+        //     }
+        // }
+        // this.monitors.clear();
     }
 }
 
@@ -455,6 +455,7 @@ class Utilities {
         ipcMain.on('extract', (e, files_arr, location) => {
 
             let progress_id = 0;
+            this.run_watcher = false;
 
             for (let i = 0; i < files_arr.length; i++) {
 
@@ -486,6 +487,8 @@ class Utilities {
                         win.send('get_item', gio.get_file(data.destination));
                         e.sender.send('set_msg', 'Done extracting files.', 1);
 
+                        this.run_watcher = true;
+
                     }
                 })
 
@@ -505,6 +508,7 @@ class Utilities {
         ipcMain.on('compress', (e, files_arr, location, type, size) => {
 
             let progress_id = 0;
+            this.run_watcher = false;
 
             let compression_worker = new worker.Worker(path.join(__dirname, '../workers/compression_worker.js'));
             compression_worker.on('message', (data) => {
@@ -529,6 +533,8 @@ class Utilities {
                     }
                     win.send('set_progress', close_progress);
                     win.send('set_msg', 'Done compressing files.');
+
+                    this.run_watcher = false;
 
                 }
             })
@@ -1441,7 +1447,8 @@ class FileManager {
         this.ls_worker.on('message', (data) => {
             const cmd = data.cmd;
             switch (cmd) {
-                case 'ls':
+                case 'ls_done':
+                    // send ls data to renderer
                     win.send('ls', data.files_arr, data.add_tab);
                     // watcherManager.watch(this.location);
                     break;
@@ -1515,7 +1522,8 @@ class FileManager {
         }
 
         watcher.watch(this.location);
-        if (this.location0 != this.location) {
+        if (this.location0 !== '' && this.location0 != this.location) {
+            console.log('location0', this.location0)
             watcher.unwatch(this.location0);
         }
 

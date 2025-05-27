@@ -78,7 +78,7 @@ if (!isMainThread) {
             // List files in directory
             case 'ls':
                 parentPort.postMessage({
-                    cmd: 'ls',
+                    cmd: 'ls_done',
                     files_arr: fileManager.get_files(data.location),
                     add_tab: data.add_tab
                 });
