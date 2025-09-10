@@ -2151,6 +2151,9 @@ class WorkspaceManager {
                 let input = document.createElement('input');
                 input.value = file.name;
                 input.classList.add('input', 'workspace_input');
+                input.type = 'text';
+                input.tabIndex = idx;
+                input.id = idx;
 
                 a.innerHTML = file.name;
                 a.preventDefault = true;
@@ -2230,7 +2233,7 @@ class WorkspaceManager {
                 });
 
                 tr.addEventListener("mouseover", (e) => {
-                    tr.focus()
+                    a.focus();
                 })
 
                 // note: this has some undefined behavior.
@@ -2240,18 +2243,18 @@ class WorkspaceManager {
                 // })
 
                 // Edit workspace item
-                tr.addEventListener('keyup', (e) => {
+                tr.addEventListener('keydown', (e) => {
 
-                    e.preventDefault();
-                    e.stopPropagation();
+                    // e.preventDefault();
+                    // e.stopPropagation();
 
                     if (e.key === 'F2') {
 
                         href_div.classList.add('hidden');
                         input_div.classList.remove('hidden');
 
-                        input.focus();
                         input.select();
+                        input.focus();
 
                     }
 
