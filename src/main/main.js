@@ -1933,7 +1933,7 @@ class MenuManager {
                 {
                     label: 'Terminal',
                     click: () => {
-                        exec(`gnome-terminal --working-directory=${destination}`);
+                        exec(`gnome-terminal --working-directory="${destination}"`);
                     }
                 },
                 {
