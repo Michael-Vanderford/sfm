@@ -1,5 +1,11 @@
 const ipcRenderer = require('electron').ipcRenderer;
 
+// Globals
+
+// section 1 = main content
+// section 2 = workspace
+let section = 0;
+
 class EventManager {
     constructor(container) {
         this.container = container || document;
@@ -2031,6 +2037,10 @@ class WorkspaceManager {
         }
 
         this.workspace_view = document.querySelector('.workspace_view');
+        if (!this.workspace_view) {
+            utilities.set_msg('No valid workspace view found');
+            return;
+        }
 
         // Get Workspace
         ipcRenderer.on('get_workspace', (e) => {
@@ -2044,7 +2054,7 @@ class WorkspaceManager {
 
         // Rename Workspace
         ipcRenderer.on('edit_workspace', (e, href) => {
-            editWorkspace(href);
+            this.editWorkspace(href);
         })
 
         // get workspace folder icon
@@ -2055,6 +2065,14 @@ class WorkspaceManager {
         })
 
         this.get_workspace(() => { });
+
+        // handle mouse over for workspace section
+        this.workspace_view.addEventListener('mouseover', (e) => {
+            if (section == 0 || section == 1) {
+                section = 2;
+                console.log(section)
+            }
+        });
 
     }
 
@@ -2112,13 +2130,14 @@ class WorkspaceManager {
 
             })
 
-            res.forEach(file => {
+            res.forEach((file, idx) => {
 
                 // console.log('file', file);
 
                 let tr = document.createElement('tr');
                 tr.classList.add('item', 'workspace_item');
                 tr.dataset.href = file.href;
+                tr.tabIndex = idx;
 
                 let td1 = document.createElement('td');
                 let td2 = document.createElement('td');
@@ -2131,7 +2150,7 @@ class WorkspaceManager {
 
                 let input = document.createElement('input');
                 input.value = file.name;
-                input.classList.add('input');
+                input.classList.add('input', 'workspace_input');
 
                 a.innerHTML = file.name;
                 a.preventDefault = true;
@@ -2210,6 +2229,10 @@ class WorkspaceManager {
                     tr.classList.add('highlight_select');
                 });
 
+                tr.addEventListener("mouseover", (e) => {
+                    tr.focus()
+                })
+
                 // note: this has some undefined behavior.
                 // It is pushing some of the bottom elements up
                 // tr.addEventListener('mouseover', (e) => {
@@ -2219,15 +2242,17 @@ class WorkspaceManager {
                 // Edit workspace item
                 tr.addEventListener('keyup', (e) => {
 
-                    console.log(e.key);
                     e.preventDefault();
                     e.stopPropagation();
 
                     if (e.key === 'F2') {
-                        input_div.classList.remove('hidden');
+
                         href_div.classList.add('hidden');
+                        input_div.classList.remove('hidden');
+
                         input.focus();
                         input.select();
+
                     }
 
                     if (e.key === 'Escape') {
@@ -2334,44 +2359,77 @@ class WorkspaceManager {
 
 
     // edit workspace
-    editWorkspace() {
+    editWorkspace(href) {
+
 
         let workspace = document.querySelector('.workspace');
-        // console.log(workspace)
-        if (workspace) {
+        if (!workspace) {
+            utilities.msg('No workspace item found');
+            return;
+        }
 
-            let workspace_item = workspace.querySelector('.workspace_item');
-            let workspace_item_input = workspace.querySelector('.input');
+        let workspace_item = workspace.querySelector('.workspace_item');
+        if (!workspace_item) {
+            utilities.msg('No workspace item found');
+            return;
+        }
 
-            // Edit workspace item
-            workspace.addEventListener('keyup', (e) => {
+        let href_div = workspace.querySelector('.href_div');
+        if (!href_div) {
+            utilities.msg('No href div found');
+            return;
+        }
 
+        let workspace_input_div = workspace.querySelector('.input_div');
+        if (!workspace_input_div) {
+            utilities.msg('No workspace item input found');
+            return;
+        }
+
+        let workspace_input = workspace.querySelector('.workspace_input');
+        if (!workspace_input) {
+            utilities.msg('No workspace item input found');
+            return;
+        }
+        workspace_input.focus();
+        workspace_input.select();
+
+        // hide workspace item
+        href_div.classList.add('hidden');
+
+        // Show workspace item input
+        workspace_input_div.classList.remove('hidden');
+
+
+        // Edit workspace item
+        workspace.addEventListener('keyup', (e) => {
+
+            // e.preventDefault();
+            // e.stopPropagation();
+
+            if (e.key === 'F2') {
                 e.preventDefault();
                 e.stopPropagation();
-
-                if (e.key === 'F2') {
-                    workspace_item_input.classList.remove('hidden');
-                    workspace_item.classList.add('hidden');
-                    workspace_item_input.focus();
-                }
-                if (e.key === 'Escape') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    workspace_item_input.classList.add('hidden');
-                    workspace_item.classList.remove('hidden');
-                }
-
-            })
-
-            workspace_item_input.addEventListener('click', (e) => {
+                workspace_input_div.classList.remove('hidden');
+                workspace_item.classList.add('hidden');
+                workspace_input_div.focus();
+            }
+            if (e.key === 'Escape') {
+                e.preventDefault();
                 e.stopPropagation();
-            })
+                workspace_input_div.classList.add('hidden');
+                workspace_item.classList.remove('hidden');
+            }
 
-            workspace_item_input.addEventListener('change', (e) => {
-                ipcRenderer.send('rename_workspace', file.href, e.target.value)
-            })
+        })
 
-        }
+        workspace_input_div.addEventListener('click', (e) => {
+            e.stopPropagation();
+        })
+
+        workspace_input_div.addEventListener('change', (e) => {
+            ipcRenderer.send('rename_workspace', file.href, e.target.value)
+        })
 
     }
 
@@ -2435,6 +2493,15 @@ class SideBarManager {
 
         this.sidebar.append(this.home_view, this.workspace_view, this.device_view);
         this.get_home();
+
+        // set global section variable for main
+        this.main.addEventListener('mouseover', (e) => {
+            if (section == 0 || section == 2) {
+                section = 1;
+                console.log(section)
+            }
+        });
+
 
     }
 
@@ -2610,8 +2677,12 @@ class KeyBoardManager {
             // e.stopPropagation();
 
             // prevent inputs from firing global keyboard events
-            if (e.target.isContentEditable || e.target.tagName === 'INPUT') {
-                // return;
+            // if (section == 2 || (e.target.isContentEditable || e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.classList.contains('input_div'))) {
+            //     return;
+            // }
+
+            if (section == 2) {
+                return;
             }
 
             // ctrl + r to refresh
@@ -2875,7 +2946,12 @@ class TabManager {
         this.tab_history_arr = [];
         this.tab_history_idx_arr = [];
 
-        this.active_tab_content = document.querySelector('.active-tab-content');
+        // this.active_tab_content = document.querySelector('.active-tab-content');
+        // if (!this.active_tab_content) {
+        //     utilities.set_msg('Error: Active tab content not found');
+        //     // return;
+        // }
+
         this.tab_id = 0;
 
         this.location_input = document.querySelector('.location');
@@ -3997,7 +4073,7 @@ class FileManager {
 
         document.addEventListener('keydown', (e) => {
 
-            if (document.activeElement.tagName.toLowerCase() === 'input') {
+            if (document.activeElement.tagName.toLowerCase() === 'input' || section == 2) {
                 return;
             }
 
