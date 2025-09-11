@@ -3368,30 +3368,34 @@ class TabManager {
     // add tab history
     addTabHistory(href) {
 
+        console.log('add tab history', href);
+
         if (href === undefined || href === null) {
             return;
         }
 
-        let history_obj = {
-            tab_id: this.tab_id,
-            location: href
-        }
+        // let history_obj = {
+        //     tab_id: this.tab_id,
+        //     location: href
+        // }
 
-        // reset tab history idx when the history changes
-        this.tab_history_idx = 0;
+        // // reset tab history idx when the history changes
+        // this.tab_history_idx = 0;
 
-        let tab = document.querySelector('.active-tab');
-        this.tab_id = parseInt(tab.dataset.id);
+        // let tab = document.querySelector('.active-tab');
+        // this.tab_id = parseInt(tab.dataset.id);
 
-        if (this.tab_id > 0) {
-            this.tab_history_arr.unshift(history_obj);
-        }
+        // if (this.tab_id > 0) {
+        //     this.tab_history_arr.unshift(history_obj);
+        // }
 
-        // check for history
-        let tab_arr = this.tab_history_arr.filter(item => item.tab_id === parseInt(this.tab_id));
-        if (tab_arr.length > 0) {
-            this.back_btn.style = 'pointer-events: auto';
-        }
+        // // check for history
+        // let tab_arr = this.tab_history_arr.filter(item => item.tab_id === parseInt(this.tab_id));
+        // if (tab_arr.length > 0) {
+        //     this.back_btn.style = 'pointer-events: auto';
+        // }
+
+        ipcRenderer.send('add_history', href);
 
     }
 

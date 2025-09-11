@@ -236,6 +236,114 @@ class SettingsManager {
 
 }
 
+class historyManager {
+
+    constructor() {
+        this.history = [];
+        this.currentIndex = -1;
+    }
+
+    add(href) {
+        // If we're not at the end of the history, remove all forward entries
+        if (this.currentIndex < this.history.length - 1) {
+            this.history = this.history.slice(0, this.currentIndex + 1);
+        }
+        this.history.push(href);
+        this.currentIndex++;
+        this._saveHistory();
+        this._printHistory();
+        win.send('history_updated', this.history, this.currentIndex);
+    }
+
+    back() {
+        if (this.canGoBack()) {
+            this.currentIndex--;
+            this._saveHistory();
+            this._printHistory();
+            win.send('history_updated', this.history, this.currentIndex);
+            return this.history[this.currentIndex];
+        }
+        return null;
+    }
+
+    forward() {
+        if (this.canGoForward()) {
+            this.currentIndex++;
+            this._saveHistory();
+            this._printHistory();
+            win.send('history_updated', this.history, this.currentIndex);
+            return this.history[this.currentIndex];
+        }
+
+        return null;
+    }
+
+    canGoBack() {
+        return this.currentIndex > 0;
+    }
+
+    canGoForward() {
+        return this.currentIndex < this.history.length - 1;
+    }
+
+    _saveHistory() {
+        const historyFile = path.join(app.getPath('userData'), 'history.json');
+        fs.writeFileSync(historyFile, JSON.stringify({
+            history: this.history,
+            currentIndex: this.currentIndex
+        }, null, 4));
+    }
+
+    _printHistory() {
+        console.log('History:', this.history);
+        console.log('Current Index:', this.currentIndex);
+    }
+
+    loadHistory() {
+        const historyFile = path.join(app.getPath('userData'), 'history.json');
+        if (fs.existsSync(historyFile)) {
+
+            const data = JSON.parse(fs.readFileSync(historyFile, 'utf-8'));
+            this.history = data.history || [];
+            this.currentIndex = data.currentIndex || -1;
+            this._printHistory();
+            win.send('history_updated', this.history, this.currentIndex);
+        }
+
+    }
+
+}
+
+const history_manager = new historyManager();
+ipcMain.on('add_history', (e, href) => {
+    history_manager.add(href);
+});
+
+ipcMain.on('go_back', (e) => {
+    let href = history_manager.back();
+    if (href) {
+        e.sender.send('get_files', href);
+    }
+});
+
+ipcMain.on('go_forward', (e) => {
+    let href = history_manager.forward();
+    if (href) {
+        e.sender.send('get_files', href);
+    }
+});
+
+ipcMain.on('can_go_back', (e) => {
+    e.returnValue = history_manager.canGoBack();
+});
+
+ipcMain.on('can_go_forward', (e) => {
+    e.returnValue = history_manager.canGoForward();
+});
+
+history_manager.loadHistory();
+
+
 class Utilities {
 
     constructor() {
