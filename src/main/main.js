@@ -341,9 +341,19 @@ ipcMain.on('can_go_forward', (e) => {
     e.returnValue = history_manager.canGoForward();
 });
 
-history_manager.loadHistory();
+ipcMain.on('clear_history', (e) => {
+    history_manager.history = [];
+    history_manager.currentIndex = -1;
+    history_manager._saveHistory();
+    win.send('history_updated', history_manager.history, history_manager.currentIndex);
+});
 
+// Load history on startup
+ipcMain.on('load_history', (e) => {
+    history_manager.loadHistory();
+});
 
+// Utilities class
 class Utilities {
 
     constructor() {

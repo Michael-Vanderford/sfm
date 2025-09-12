@@ -478,7 +478,7 @@ class Utilities {
                         for (let i = 0; i < this.suggestions.length; i++) {
                             if (this.suggestions[i].classList.contains('highlight_select')) {
                                 this.location_input.value = this.suggestions[i].innerText;
-                                tabManager.addTabHistory(this.location);
+                                // tabManager.addTabHistory(this.location);
                                 popup.innerHTML = '';
                                 popup.remove();
                                 break;
@@ -1955,7 +1955,7 @@ class DeviceManager {
                 } else {
                     fileManager.get_files(device_path);
                 }
-                tabManager.addTabHistory(device_path);
+                tabManager.add_tab_history(device_path);
 
                 // handle highlight
                 let items = this.sidebar.querySelectorAll('.item');
@@ -2177,12 +2177,12 @@ class WorkspaceManager {
                         e.preventDefault();
                         e.stopPropagation();
                         if (e.ctrlKey) {
-                            tabManager.addTabHistory();
                             tabManager.add_tab(file.href);
                             fileManager.get_files(file.href);
                         } else {
                             fileManager.get_files(file.href);
                         }
+                        tabManager.add_tab_history(file.href);
                     });
 
                     ipcRenderer.send('get_workspace_folder_icon', file.href);
@@ -2540,8 +2540,10 @@ class SideBarManager {
                     case 'Home':
                         if (e.ctrlKey) {
                             tabManager.add_tab(home_dir);
+                            tabManager.add_tab_history(`${home_dir}`);
                             fileManager.get_files(`${home_dir}`);
                         } else {
+                            tabManager.add_tab_history(`${home_dir}`);
                             fileManager.get_files(`${home_dir}`);
                         }
                         break;
@@ -2556,20 +2558,25 @@ class SideBarManager {
                     case 'File System':
                         if (e.ctrlKey) {
                             tabManager.add_tab('/');
+                            tabManager.add_tab_history('/');
                             fileManager.get_files(`/`);
                         } else {
+                            tabManager.add_tab_history('/');
                             fileManager.get_files(`/`);
                         }
                         break;
                     default:
                         if (e.ctrlKey) {
                             tabManager.add_tab(home_dir);
+                            tabManager.add_tab_history(`${home_dir}/${dir}`);
                             fileManager.get_files(`${home_dir}/${dir}`);
                         } else {
+                            tabManager.add_tab_history(`${home_dir}/${dir}`);
                             fileManager.get_files(`${home_dir}/${dir}`);
                         }
                         break;
                 }
+
 
             });
 
@@ -3283,9 +3290,9 @@ class TabManager {
         // navigation.getCardCount(); // get new card count for navigation
         // navigation.getCardGroups();
 
-        if (label !== 'Home' && label !== 'Settings' && label !== 'Recent' && label !== 'Search Results') {
-            this.addTabHistory(this.location_input.value);
-        }
+        // if (label !== 'Home' && label !== 'Settings' && label !== 'Recent' && label !== 'Search Results') {
+        //     this.addTabHistory(this.location_input.value);
+        // }
 
         // this.settings.tabs = [];
         dragSelect.initialize();
@@ -3366,7 +3373,7 @@ class TabManager {
     }
 
     // add tab history
-    addTabHistory(href) {
+    add_tab_history(href) {
 
         console.log('add tab history', href);
 
@@ -5051,6 +5058,7 @@ class FileManager {
                     this.get_files(f.href);
                 }
 
+                tabManager.add_tab_history(f.href);
                 utilities.set_location(f.href);
 
             } else if (f.is_dir === false) {
