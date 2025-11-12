@@ -79,6 +79,7 @@ class IconManager {
             }
 
             const icon_dirs = [
+                'scalable/places/',
                 'places@2x/48/',
                 '32x32/places/',
                 '64x64/places/',
@@ -99,6 +100,8 @@ class IconManager {
             if (!theme_path) {
                 theme_path = path.join(__dirname, 'assets/icons/');
             }
+
+            console.log('Using icon theme path:', theme_path);
 
             return theme_path;
 
@@ -157,7 +160,8 @@ class IconManager {
             }
 
             // If still no icon found, use the ultimate fallback
-            final_icon = final_icon || path.join(__dirname, '../assets/icons/folder.svg');
+            final_icon = final_icon || path.join(process.cwd(), 'src', 'assets', 'icons', 'folder.svg');
+
             return final_icon;
             // e.sender.send('set_folder_icon', href, final_icon);
 

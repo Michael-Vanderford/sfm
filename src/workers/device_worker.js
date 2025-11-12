@@ -25,8 +25,6 @@ class DeviceManager {
             let filter_arr = data_arr.filter(x => x.name != 'mtp')
             for (let i = 0; i < filter_arr.length; i++) {
                 try {
-                    // remove file://
-                    // console.log(filter_arr[i]);
                     if (filter_arr[i].path.indexOf('file://') > -1) {
                         filter_arr[i].path = filter_arr[i].path.replace('file://', '');
                         let cmd = `df "${filter_arr[i].path}"`;

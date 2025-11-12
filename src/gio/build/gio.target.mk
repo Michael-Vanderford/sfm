@@ -8,14 +8,15 @@ DEFS_Debug := \
 	'-DUSING_V8_SHARED=1' \
 	'-DV8_DEPRECATION_WARNINGS=1' \
 	'-D_GLIBCXX_USE_CXX11_ABI=1' \
+	'-D_FILE_OFFSET_BITS=64' \
 	'-DELECTRON_ENSURE_CONFIG_GYPI' \
 	'-D_LARGEFILE_SOURCE' \
-	'-D_FILE_OFFSET_BITS=64' \
 	'-DUSING_ELECTRON_CONFIG_GYPI' \
 	'-DV8_COMPRESS_POINTERS' \
-	'-DV8_COMPRESS_POINTERS_IN_ISOLATE_CAGE' \
+	'-DV8_COMPRESS_POINTERS_IN_SHARED_CAGE' \
 	'-DV8_31BIT_SMIS_ON_64BIT_ARCH' \
 	'-DV8_ENABLE_SANDBOX' \
+	'-DV8_EXTERNAL_CODE_SPACE' \
 	'-D__STDC_FORMAT_MACROS' \
 	'-DOPENSSL_NO_PINSHARED' \
 	'-DOPENSSL_THREADS' \
@@ -48,19 +49,20 @@ CFLAGS_C_Debug :=
 CFLAGS_CC_Debug := \
 	-fno-rtti \
 	-fno-exceptions \
-	-std=gnu++17
+	-fno-strict-aliasing \
+	-std=gnu++20
 
 INCS_Debug := \
-	-I/home/michael/.cache/node-gyp/31.3.1/include/node \
-	-I/home/michael/.cache/node-gyp/31.3.1/src \
-	-I/home/michael/.cache/node-gyp/31.3.1/deps/openssl/config \
-	-I/home/michael/.cache/node-gyp/31.3.1/deps/openssl/openssl/include \
-	-I/home/michael/.cache/node-gyp/31.3.1/deps/uv/include \
-	-I/home/michael/.cache/node-gyp/31.3.1/deps/zlib \
-	-I/home/michael/.cache/node-gyp/31.3.1/deps/v8/include \
+	-I/home/michael/.cache/node-gyp/38.2.2/include/node \
+	-I/home/michael/.cache/node-gyp/38.2.2/src \
+	-I/home/michael/.cache/node-gyp/38.2.2/deps/openssl/config \
+	-I/home/michael/.cache/node-gyp/38.2.2/deps/openssl/openssl/include \
+	-I/home/michael/.cache/node-gyp/38.2.2/deps/uv/include \
+	-I/home/michael/.cache/node-gyp/38.2.2/deps/zlib \
+	-I/home/michael/.cache/node-gyp/38.2.2/deps/v8/include \
 	-I/usr/include/glib-2.0 \
 	-I/usr/include/gdk-pixbuf-2.0 \
-	-I$(srcdir)/../../node_modules/nan
+	-I$(srcdir)/node_modules/nan
 
 DEFS_Release := \
 	'-DNODE_GYP_MODULE_NAME=gio' \
@@ -68,14 +70,15 @@ DEFS_Release := \
 	'-DUSING_V8_SHARED=1' \
 	'-DV8_DEPRECATION_WARNINGS=1' \
 	'-D_GLIBCXX_USE_CXX11_ABI=1' \
+	'-D_FILE_OFFSET_BITS=64' \
 	'-DELECTRON_ENSURE_CONFIG_GYPI' \
 	'-D_LARGEFILE_SOURCE' \
-	'-D_FILE_OFFSET_BITS=64' \
 	'-DUSING_ELECTRON_CONFIG_GYPI' \
 	'-DV8_COMPRESS_POINTERS' \
-	'-DV8_COMPRESS_POINTERS_IN_ISOLATE_CAGE' \
+	'-DV8_COMPRESS_POINTERS_IN_SHARED_CAGE' \
 	'-DV8_31BIT_SMIS_ON_64BIT_ARCH' \
 	'-DV8_ENABLE_SANDBOX' \
+	'-DV8_EXTERNAL_CODE_SPACE' \
 	'-D__STDC_FORMAT_MACROS' \
 	'-DOPENSSL_NO_PINSHARED' \
 	'-DOPENSSL_THREADS' \
@@ -106,19 +109,20 @@ CFLAGS_C_Release :=
 CFLAGS_CC_Release := \
 	-fno-rtti \
 	-fno-exceptions \
-	-std=gnu++17
+	-fno-strict-aliasing \
+	-std=gnu++20
 
 INCS_Release := \
-	-I/home/michael/.cache/node-gyp/31.3.1/include/node \
-	-I/home/michael/.cache/node-gyp/31.3.1/src \
-	-I/home/michael/.cache/node-gyp/31.3.1/deps/openssl/config \
-	-I/home/michael/.cache/node-gyp/31.3.1/deps/openssl/openssl/include \
-	-I/home/michael/.cache/node-gyp/31.3.1/deps/uv/include \
-	-I/home/michael/.cache/node-gyp/31.3.1/deps/zlib \
-	-I/home/michael/.cache/node-gyp/31.3.1/deps/v8/include \
+	-I/home/michael/.cache/node-gyp/38.2.2/include/node \
+	-I/home/michael/.cache/node-gyp/38.2.2/src \
+	-I/home/michael/.cache/node-gyp/38.2.2/deps/openssl/config \
+	-I/home/michael/.cache/node-gyp/38.2.2/deps/openssl/openssl/include \
+	-I/home/michael/.cache/node-gyp/38.2.2/deps/uv/include \
+	-I/home/michael/.cache/node-gyp/38.2.2/deps/zlib \
+	-I/home/michael/.cache/node-gyp/38.2.2/deps/v8/include \
 	-I/usr/include/glib-2.0 \
 	-I/usr/include/gdk-pixbuf-2.0 \
-	-I$(srcdir)/../../node_modules/nan
+	-I$(srcdir)/node_modules/nan
 
 OBJS := \
 	$(obj).target/$(TARGET)/src/gio.o
@@ -158,7 +162,6 @@ LDFLAGS_Release := \
 	-m64
 
 LIBS := \
-	-lnode \
 	-lgio-2.0 \
 	-lgobject-2.0 \
 	-lglib-2.0 \

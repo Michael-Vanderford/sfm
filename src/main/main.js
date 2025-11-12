@@ -113,7 +113,7 @@ class Watcher {
      */
     unwatch(path) {
 
-        console.log('unwatch', path);
+        // console.log('unwatch', path);
 
         // const monitor = this.monitors.get(path);
         // if (monitor) {
@@ -201,7 +201,7 @@ class SettingsManager {
     // Update settings
     updateSettings(settings) {
 
-        console.log('update settings', settings);
+        // console.log('update settings', settings);
 
         this.settings = settings;
         fs.writeFileSync(this.settings_file, JSON.stringify(this.settings, null, 4));
@@ -236,17 +236,108 @@ class SettingsManager {
 
 }
 
+class tabManager {
+
+    constructor() {
+
+        let history = {
+            idx: 0,
+            location: []
+        }
+
+        let tab = {
+            id: 1,
+            location: "",
+            history: history
+        }
+
+        this.tabs = [];
+
+    }
+
+    addTab(location) {
+        let history = {
+            idx: 0,
+            location: []
+        }
+
+        let tab = {
+            id: this.tabs.length + 1,
+            location: location,
+            history: history
+        }
+
+        this.tabs.push(tab);
+        this._saveTabs();
+    }
+
+    addHistory(tab_id, location) {
+
+        let tab = this.tabs.find(t => t.id === tab_id);
+        if (tab) {
+            tab.history.location.push(location);
+        }
+        this._saveTabs();
+        // return tab;
+
+    }
+
+    // Save tabs to file
+    _saveTabs() {
+        const tabsFile = path.join(app.getPath('userData'), 'tabs.json');
+        fs.writeFileSync(tabsFile, JSON.stringify(this.tabs, null, 4));
+    }
+
+    // Load tabs from file
+    _loadTabs() {
+        const tabsFile = path.join(app.getPath('userData'), 'tabs.json');
+        if (fs.existsSync(tabsFile)) {
+            this.tabs = JSON.parse(fs.readFileSync(tabsFile, 'utf-8'));
+            console.log('loadTabs', this.tabs);
+        }
+    }
+
+
+
+}
+
+// Init Tab Manager
+const tab_manager = new tabManager()
+// tab_manager.addTab(os.homedir());
+// tab_manager.addHistory(0, os.homedir());
+// tab_manager.addHistory(0, path.join(os.homedir(), 'Documents'));
+
+// Add tab
+ipcMain.on('add_tab', (e, location) => {
+    tab_manager.addTab(location);
+});
+
+// Add history to tab
+ipcMain.on('add_tab_history', (e, tab_id, location) => {
+    tab_manager.addHistory(tab_id, location);
+});
+
+ipcMain.on('go_back', (e) => {
+    console.log(tab_manager.tabs);
+    tab_manager.addHistory(1, os.homedir());
+});
+
+/////////////////////////////////
+
+// History Manager
 class historyManager {
 
     constructor() {
         this.history = [];
         this.currentIndex = -1;
+        this.clear_history();
     }
 
+    // Add to history
     add(href) {
         // If we're not at the end of the history, remove all forward entries
         if (this.currentIndex < this.history.length - 1) {
-            this.history = this.history.slice(0, this.currentIndex + 1);
+            // this.history = this.history.slice(0, this.currentIndex + 1);
         }
         this.history.push(href);
         this.currentIndex++;
@@ -255,18 +346,21 @@ class historyManager {
         win.send('history_updated', this.history, this.currentIndex);
     }
 
-    back() {
+    // Go back in history
+    historyBack() {
         if (this.canGoBack()) {
             this.currentIndex--;
             this._saveHistory();
             this._printHistory();
+            console.log('historyBack history', this.currentIndex);
             win.send('history_updated', this.history, this.currentIndex);
             return this.history[this.currentIndex];
         }
         return null;
     }
 
-    forward() {
+    // Go forward in history
+    historyForward() {
         if (this.canGoForward()) {
             this.currentIndex++;
             this._saveHistory();
@@ -278,14 +372,17 @@ class historyManager {
         return null;
     }
 
+    // Check if can go back
     canGoBack() {
         return this.currentIndex > 0;
     }
 
+    // Check if can go forward
     canGoForward() {
         return this.currentIndex < this.history.length - 1;
     }
 
+    // Save history to file
     _saveHistory() {
         const historyFile = path.join(app.getPath('userData'), 'history.json');
         fs.writeFileSync(historyFile, JSON.stringify({
@@ -294,62 +391,77 @@ class historyManager {
         }, null, 4));
     }
 
+    // Debug: Print history to console
     _printHistory() {
-        console.log('History:', this.history);
-        console.log('Current Index:', this.currentIndex);
+        // console.log('History:', this.history);
+        // console.log('Current Index:', this.currentIndex);
     }
 
+    // Load history
     loadHistory() {
         const historyFile = path.join(app.getPath('userData'), 'history.json');
         if (fs.existsSync(historyFile)) {
 
             const data = JSON.parse(fs.readFileSync(historyFile, 'utf-8'));
             this.history = data.history || [];
-            this.currentIndex = data.currentIndex || -1;
+            // this.currentIndex = data.currentIndex || -1;
             this._printHistory();
             win.send('history_updated', this.history, this.currentIndex);
         }
 
     }
 
+    // Clear history
+    clear_history() {
+        this.history = [];
+        this.currentIndex = -1;
+        this._saveHistory();
+        // win.send('history_updated', this.history, this.currentIndex);
+    }
+
 }
 
+// History Manager
 const history_manager = new historyManager();
 ipcMain.on('add_history', (e, href) => {
     history_manager.add(href);
 });
 
-ipcMain.on('go_back', (e) => {
-    let href = history_manager.back();
-    if (href) {
-        e.sender.send('get_files', href);
-    }
-});
+// Go back
+// ipcMain.on('go_back', (e) => {
+//     let href = history_manager.historyBack();
+//     console.log('go_back href', href);
+//     if (href) {
+//         win.send('get_files', href);
+//     }
+// });
 
+// Go forward
 ipcMain.on('go_forward', (e) => {
-    let href = history_manager.forward();
+    let href = history_manager.historyForward();
     if (href) {
-        e.sender.send('get_files', href);
+        win.send('get_files', href);
     }
 });
 
+// Check if can go back
 ipcMain.on('can_go_back', (e) => {
     e.returnValue = history_manager.canGoBack();
 });
 
+// Check if can go forward
 ipcMain.on('can_go_forward', (e) => {
     e.returnValue = history_manager.canGoForward();
 });
 
+// Clear history
 ipcMain.on('clear_history', (e) => {
-    history_manager.history = [];
-    history_manager.currentIndex = -1;
-    history_manager._saveHistory();
-    win.send('history_updated', history_manager.history, history_manager.currentIndex);
+
 });
 
 // Load history on startup
 ipcMain.on('load_history', (e) => {
+    // history_manager.clear_history();
     history_manager.loadHistory();
 });
 
@@ -566,7 +678,7 @@ class Utilities {
 
         // listen for is_main event
         ipcMain.on('is_main', (e, is_main) => {
-            console.log('is_main', is_main);
+            // console.log('is_main', is_main);
             this.is_main = is_main;
         });
 
@@ -1613,7 +1725,7 @@ class FileManager {
     // return file from get_files
     get_ls(location, add_tab) {
 
-        console.log('get_ls location', location)
+        // console.log('get_ls location', location)
 
         if (location === '' || location === undefined) {
             win.send('set_msg', 'Location is null or undefined');
@@ -1641,7 +1753,7 @@ class FileManager {
 
         watcher.watch(this.location);
         if (this.location0 !== '' && this.location0 != this.location) {
-            console.log('location0', this.location0)
+            // console.log('location0', this.location0)
             watcher.unwatch(this.location0);
         }
 
@@ -1819,7 +1931,8 @@ class WindowManager {
         }
 
         let app_icon = path.join(__dirname, '..', 'assets', 'icons', 'icon.png')
-        console.log('app_icon', app_icon);
+
+        // console.log('app_icon', app_icon);
 
         let window = new BrowserWindow({
             minWidth: 400,

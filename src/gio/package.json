@@ -14,7 +14,7 @@
   "license": "GPLv3",
   "gypfile": true,
   "devDependencies": {
-    "nan": "^2.20.0",
-    "node-gyp": "^9.4.0"
+    "nan": "^2.23.0",
+    "node-gyp": "^9.4.1"
   }
 }
