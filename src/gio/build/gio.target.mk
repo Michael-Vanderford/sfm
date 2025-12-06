@@ -53,13 +53,13 @@ CFLAGS_CC_Debug := \
 	-std=gnu++20
 
 INCS_Debug := \
-	-I/home/michael/.cache/node-gyp/38.2.2/include/node \
-	-I/home/michael/.cache/node-gyp/38.2.2/src \
-	-I/home/michael/.cache/node-gyp/38.2.2/deps/openssl/config \
-	-I/home/michael/.cache/node-gyp/38.2.2/deps/openssl/openssl/include \
-	-I/home/michael/.cache/node-gyp/38.2.2/deps/uv/include \
-	-I/home/michael/.cache/node-gyp/38.2.2/deps/zlib \
-	-I/home/michael/.cache/node-gyp/38.2.2/deps/v8/include \
+	-I/home/michael/.cache/node-gyp/37.10.3/include/node \
+	-I/home/michael/.cache/node-gyp/37.10.3/src \
+	-I/home/michael/.cache/node-gyp/37.10.3/deps/openssl/config \
+	-I/home/michael/.cache/node-gyp/37.10.3/deps/openssl/openssl/include \
+	-I/home/michael/.cache/node-gyp/37.10.3/deps/uv/include \
+	-I/home/michael/.cache/node-gyp/37.10.3/deps/zlib \
+	-I/home/michael/.cache/node-gyp/37.10.3/deps/v8/include \
 	-I/usr/include/glib-2.0 \
 	-I/usr/include/gdk-pixbuf-2.0 \
 	-I$(srcdir)/node_modules/nan
@@ -113,13 +113,13 @@ CFLAGS_CC_Release := \
 	-std=gnu++20
 
 INCS_Release := \
-	-I/home/michael/.cache/node-gyp/38.2.2/include/node \
-	-I/home/michael/.cache/node-gyp/38.2.2/src \
-	-I/home/michael/.cache/node-gyp/38.2.2/deps/openssl/config \
-	-I/home/michael/.cache/node-gyp/38.2.2/deps/openssl/openssl/include \
-	-I/home/michael/.cache/node-gyp/38.2.2/deps/uv/include \
-	-I/home/michael/.cache/node-gyp/38.2.2/deps/zlib \
-	-I/home/michael/.cache/node-gyp/38.2.2/deps/v8/include \
+	-I/home/michael/.cache/node-gyp/37.10.3/include/node \
+	-I/home/michael/.cache/node-gyp/37.10.3/src \
+	-I/home/michael/.cache/node-gyp/37.10.3/deps/openssl/config \
+	-I/home/michael/.cache/node-gyp/37.10.3/deps/openssl/openssl/include \
+	-I/home/michael/.cache/node-gyp/37.10.3/deps/uv/include \
+	-I/home/michael/.cache/node-gyp/37.10.3/deps/zlib \
+	-I/home/michael/.cache/node-gyp/37.10.3/deps/v8/include \
 	-I/usr/include/glib-2.0 \
 	-I/usr/include/gdk-pixbuf-2.0 \
 	-I$(srcdir)/node_modules/nan

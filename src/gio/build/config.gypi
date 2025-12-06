@@ -84,6 +84,7 @@
     "node_debug_lib": "false",
     "node_enable_d8": "false",
     "node_enable_v8_vtunejit": "false",
+    "node_enable_v8windbg": "false",
     "node_fipsinstall": "false",
     "node_install_corepack": "true",
     "node_install_npm": "true",
@@ -190,6 +191,7 @@
       "lib/internal/encoding.js",
       "lib/internal/error_serdes.js",
       "lib/internal/errors.js",
+      "lib/internal/errors/error_source.js",
       "lib/internal/event_target.js",
       "lib/internal/events/abort_listener.js",
       "lib/internal/events/symbols.js",
@@ -217,6 +219,7 @@
       "lib/internal/http2/util.js",
       "lib/internal/inspector/network.js",
       "lib/internal/inspector/network_http.js",
+      "lib/internal/inspector/network_http2.js",
       "lib/internal/inspector/network_resources.js",
       "lib/internal/inspector/network_undici.js",
       "lib/internal/inspector_async_hook.js",
@@ -426,7 +429,7 @@
       "lib/worker_threads.js",
       "lib/zlib.js"
     ],
-    "node_module_version": 139,
+    "node_module_version": 136,
     "node_no_browser_globals": "false",
     "node_prefix": "\\usr\\local",
     "node_release_urlbase": "",
@@ -492,9 +495,9 @@
     "v8_trace_maps": 0,
     "v8_use_siphash": 1,
     "want_separate_host_toolset": 1,
-    "nodedir": "/home/michael/.cache/node-gyp/38.2.2",
+    "nodedir": "/home/michael/.cache/node-gyp/37.10.3",
     "python": "/usr/bin/python3",
     "standalone_static_library": 1,
-    "target": "38.2.2"
+    "target": "37.10.3"
   }
 }

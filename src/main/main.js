@@ -1899,6 +1899,30 @@ class WindowManager {
         fs.writeFileSync(this.window_file, JSON.stringify(this.window_settings, null, 4));
     }
 
+    // Debounce utility
+    debounce = (func, delay) => {
+
+        let timeout;
+        return () => {
+            clearTimeout(timeout);
+            timeout = setTimeout(func, delay);
+        };
+
+    };
+
+    updateBounds = this.debounce(() => {
+
+        const bounds = window.getNormalBounds();
+        console.log('bounds updated', bounds.x, bounds.y, bounds.width, bounds.height);
+
+        this.window_settings.window.x = bounds.x;
+        this.window_settings.window.y = bounds.y;
+        this.window_settings.window.width = bounds.width;
+        this.window_settings.window.height = bounds.height;
+        this.update_window_settings(this.window_settings);
+
+    }, 250);
+
     // Create main window
     create_main_window() {
 
@@ -1958,18 +1982,24 @@ class WindowManager {
         // hide menu
         window.setMenuBarVisibility(false);
 
+        // window.on('move', this.updateBounds);   // macOS drags
+        // window.on('resize', this.updateBounds); // All platforms (fires during Windows drags)
+
         // listen for window move
-        window.on('move', (e) => {
+        window.on('move', () => {
+            const bounds = window.getNormalBounds();
             setTimeout(() => {
-                this.window_settings.window.x = win.getBounds().x;
-                this.window_settings.window.y = win.getBounds().y;
+                // console.log('window moved', bounds.x, bounds.y);
+                this.window_settings.window.x = bounds.x;
+                this.window_settings.window.y = bounds.y;
                 this.update_window_settings(this.window_settings);
             }, 100);
         })
 
         // Track resizing
         window.on('resize', () => {
-            setImmediate(() => {
+            setTimeout(() => {
+                // console.log('window moved', bounds.x, bounds.y);
                 // update window settings
                 this.window_settings.window.width = window.getBounds().width;
                 this.window_settings.window.height = window.getBounds().height;
@@ -3051,11 +3081,20 @@ app.on('ready', () => {
         win.reload();
     });
 
+    // win.on('resize', () => {
+    //     let bounds = win.getBounds();
+    //     console.log('window resized', bounds);
+    // });
+
+
 });
 
 app.whenReady().then(() => {
-    const tray = new Tray(path.join(__dirname, "../assets/icons/icon.png"));
-    tray.setToolTip("File Manager");
+    // const tray = new Tray(path.join(__dirname, "../assets/icons/icon.png"));
+    // tray.setToolTip("File Manager");
+
+
+
 })
 
 // init

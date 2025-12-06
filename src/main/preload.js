@@ -5970,7 +5970,7 @@ class WindowManager {
         window.addEventListener('resize', (e) => {
 
             let window_settings = settingsManager.get_window_settings();
-            console.log('window_settings', window_settings);
+            // console.log('window_settings', window_settings);
 
             if (window_settings.main_width !== 0) {
                 main.style.width = window.innerWidth + 'px';
@@ -5979,6 +5979,7 @@ class WindowManager {
             }
 
         })
+
     }
 
 }
