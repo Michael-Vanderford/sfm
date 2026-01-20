@@ -549,6 +549,8 @@ class Utilities {
         try {
             return this.formatter.format(new Date(date * 1000));
         } catch (err) {
+            console.log('getDateTime Format error', date)
+            return "---"
             // console.log('gio getDateTime Format error')
         }
     }
@@ -994,13 +996,20 @@ class Utilities {
 
                 let input = item.querySelector('.edit_name');
                 if (input) {
+
                     input.classList.remove('hidden');
+
                     if (idx === 0) {
                         setTimeout(() => {
                             input.focus();
                             input.setSelectionRange(0, input.value.lastIndexOf('.'));
                         }, 1);
                     }
+
+                    input.addEventListener('blur', (e) => {
+                        e.preventDefault();
+                        input.focus();
+                    });
 
                 } else {
                     this.set_msg('No input found for edit');
@@ -1839,21 +1848,44 @@ class DeviceManager {
         // }
 
         this.device_arr = [];
+        this.device = '';
 
-        ipcRenderer.send('get_devices');
+        // ipcRenderer.send('get_devices');
+        // ipcRenderer.on('devices', (e, devices) => {
+        //     this.device_arr = devices;
+        //     this.get_devices();
+        // });
 
-        ipcRenderer.on('devices', (e, devices) => {
-            this.device_arr = devices;
+        ipcRenderer.send('get_mounts');
+        ipcRenderer.on('mounts', (e, mounts) => {
+
+            this.device_arr = mounts;
+            console.log('mounts', this.device_arr);
             this.get_devices();
+
         });
 
+        // handle mount done
+        ipcRenderer.on('mount_done', (e, deice_path) => {
+            fileManager.get_files(deice_path);
+        })
+
+        // handle unmount done
+        ipcRenderer.on('umount_done', (e, path) => {
+
+            this.device_arr = this.device_arr.filter(device => device.path !== path);
+            this.get_devices();
+
+        })
+
+        // add device
         ipcRenderer.on('add_device', (e, device) => {
             this.add_device(device, this.device_view);
         })
 
-        this.device_view.addEventListener('contextmenu', (e) => {
-            ipcRenderer.send('device_menu', '', '');
-        })
+        // this.device_view.addEventListener('contextmenu', (e) => {
+        //     // ipcRenderer.send('device_menu', this.device_arr);
+        // })
 
     }
 
@@ -1891,7 +1923,18 @@ class DeviceManager {
             })
 
             this.sidebar.append(this.device_view);
-            this.device_arr = [];
+            // this.device_arr = [];
+
+            let items = this.sidebar.querySelectorAll('.item');
+            items.forEach(item => {
+                item.addEventListener('click', (e) => {
+                    let sidebar_items = this.sidebar.querySelectorAll('.item');
+                    sidebar_items.forEach(sidebar_item => {
+                        sidebar_item.classList.remove('highlight_select');
+                    })
+                    item.classList.add('highlight_select');
+                })
+            })
 
         }
     }
@@ -1909,7 +1952,7 @@ class DeviceManager {
         href_div.classList.add('ellipsis');
         href_div.style = 'width: 70%';
 
-        let device_path = device.path //.replace('file://', '');
+        let device_path = device.path //.replace('file://', '');z
 
         let a = document.createElement('a');
         a.preventDefault = true;
@@ -1920,22 +1963,29 @@ class DeviceManager {
         umount_div.title = 'Unmount Drive'
         umount_icon.style = 'position: absolute; right: -30px;';
 
+        // If path is empty string, then assume it's unmounted
         if (device.path === '') {
 
-            // Mount
+            // Unmount
             umount_div.classList.add('inactive');
             umount_div.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                ipcRenderer.send('mount', device)
+                ipcRenderer.send('umount', device.name);
             })
 
+            // Mount
             item.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                let root = device.root;
-                ipcRenderer.send('mount', device)
+                console.log('mounting', device.name);
+                ipcRenderer.send('mount', device.name);
             })
+
+            // Hover title
+            item.addEventListener('mouseover', (e) => {
+                item.title = `Mount "${device.name}"`;
+            });
 
         } else {
 
@@ -1966,6 +2016,10 @@ class DeviceManager {
 
             })
 
+            item.addEventListener('mouseover', (e) => {
+                item.title = device_path;
+            })
+
         }
 
         let type = this.get_type(device.path);
@@ -1977,13 +2031,10 @@ class DeviceManager {
             icon_div.append(utilities.add_icon('hdd'), a);
         }
 
-        item.addEventListener('mouseover', (e) => {
-            item.title = device_path;
-        })
-
+        // Context Menu
         item.addEventListener('contextmenu', (e) => {
             utilities.clear();
-            ipcRenderer.send('device_menu', device.path, device.uuid);
+            ipcRenderer.send('device_menu', device.name);
             item.classList.add('highlight_select');
         })
 
@@ -2505,6 +2556,10 @@ class SideBarManager {
             }
         });
 
+        let items = this.sidebar.querySelectorAll('.item');
+        items.forEach(item => {
+            console.log('sidebar item', item);
+        });
 
     }
 
@@ -2576,6 +2631,13 @@ class SideBarManager {
                         }
                         break;
                 }
+
+                // // handle highlight
+                // let items = this.sidebar.querySelectorAll('.item');
+                // items.forEach(item => {
+                //     item.classList.remove('highlight_select');
+                // })
+                // home_view_item.classList.add('highlight_select');
 
 
             });
@@ -3574,7 +3636,9 @@ class FileManager {
         this.view = '';
         this.selected_files = [];
         this.files_arr = [];
+        this.location0 = '';
         this.location = '';
+        this.startup = 1;
 
         this.tab_data_arr = [];
         this.drag_handle = null;
@@ -3736,9 +3800,21 @@ class FileManager {
             }
 
             if (new_tab) {
-                this.location = files_arr[0].location;
+
+                if (files_arr.length > 0) {
+                    this.location = files_arr[0].location;
+                }
+
                 tabManager.add_tab(this.location);
                 utilities.set_location(this.location);
+
+                // set location in settings, utilities and breadcrumbs
+                // this handles unreachable paths on startup or when a valid location becomes unreachable
+                // get_ls(location, add_tab) in main will set the location back to home dir
+                settingsManager.set_location(this.location);
+                utilities.set_destination(this.location);
+                this.get_breadcrumbs(this.location);
+
             }
 
             if (this.view === 'list_view') {
@@ -3852,6 +3928,8 @@ class FileManager {
         // edit item mode
         ipcRenderer.on('edit_item', (e, f) => {
 
+            console.log('edit_item', f);
+
             if (f.id === undefined || f.id === null) {
                 utilities.set_msg('Error: getting file id');
                 return;
@@ -3877,14 +3955,22 @@ class FileManager {
             let input = item.querySelector('input');
             if (input) {
                 input.classList.remove('hidden');
+
+                input.focus();
+                input.setSelectionRange(0, input.value.lastIndexOf('.'));
+
+                input.addEventListener('blur', (e) => {
+                    e.preventDefault();
+                    input.focus();
+                });
+
             } else {
                 console.log('error getting input');
                 utilities.set_msg('Error: getting input');
                 return;
             }
 
-            input.focus();
-            input.setSelectionRange(0, input.value.lastIndexOf('.'));
+
 
             this.check_for_empty_folder();
 
@@ -3975,7 +4061,7 @@ class FileManager {
         div.classList.add('empty_msg');
 
         let i = document.createElement('i');
-        i.classList.add('bi', 'bi-folder-x');
+        i.classList.add('bi', 'bi-folder');
 
         let msg = document.createElement('div');
         msg.classList.add('msg');
@@ -3984,7 +4070,7 @@ class FileManager {
         div.append(i, msg);
         active_tab_content.append(div);
 
-        utilities.set_msg('Folder is Empty');
+        utilities.set_msg('');
 
     }
 
@@ -4531,7 +4617,7 @@ class FileManager {
             tr.classList.add('tr', 'lazy');
             tr.dataset.id = f.id;
             tr.dataset.href = f.href;
-            tr.dataset.name = f.name;
+            tr.dataset.name = f.display_name;
             tr.dataset.size = f.size;
             tr.dataset.mtime = f.mtime;
             tr.dataset.content_type = f.content_type;
@@ -4582,11 +4668,11 @@ class FileManager {
         let icon = utilities.add_div(['icon']);
         let img = document.createElement('img');
         let input = document.createElement('input');
-        let link = utilities.add_link(f.href, f.name);
+        let link = utilities.add_link(f.href, f.display_name);
 
         // input settings
         input.type = 'text';
-        input.value = f.name;
+        input.value = f.display_name;
         input.classList.add('edit_name', 'hidden');
         input.spellcheck = false;
 
@@ -4988,6 +5074,9 @@ class FileManager {
 
         input.addEventListener('keydown', (e) => {
 
+            if (e.key === 'Tab') {
+            }
+
             if (e.key === 'Enter') {
                 let id = f.id;
                 let source = f.href;
@@ -5000,6 +5089,11 @@ class FileManager {
                 utilities.cancel_edit();
             }
         })
+
+        // input.addEventListener('blur', (e) => {
+        //     e.preventDefault();
+        //     input.focus();
+        // });
 
     }
 
@@ -5308,23 +5402,46 @@ class FileManager {
 
         console.log('running get_files', location);
 
+        // check if location is null or empty
         if (!location || location === '' || location === undefined) {
             utilities.set_msg('Error: get_files - location is empty');
             return;
         }
 
+        // check if location is valid on the file system
+        ipcRenderer.invoke('validate_location', location).then((is_valid) => {
+           if (is_valid < 0) {
+                if (this.startup == 1) {
+                    location = this.home_dir;
+                } else {
+
+                    // alert(`Error: The location "${location}" is not valid on the file system. Setting location to previous valid location. ${this.location0}`);
+
+                    // set location to previous valid location
+                    settingsManager.set_location(this.location0);
+                    utilities.set_location(this.location0);
+                    utilities.set_destination(this.location0);
+                    this.get_breadcrumbs(this.location0);
+
+                    return;
+
+                }
+            }
+        });
+
         utilities.set_msg(`<img src="../renderer/icons/spinner.gif" style="width: 12px; height: 12px" alt="loading" /> Loading...`);
 
+        this.location0 = this.location;
         this.location = location;
+
         ipcRenderer.send('ls', this.location, add_tab);
 
         settingsManager.set_location(this.location);
-
         utilities.set_location(this.location);
         utilities.set_destination(this.location);
-
         this.get_breadcrumbs(this.location);
 
+        this.startup = 0;
         ipcRenderer.send('is_main', 1);
 
         // let main = document.querySelector('.main');

@@ -4,7 +4,7 @@ const path = require('path');
 const os = require('os');
 const { exec, execSync } = require('child_process');
 const archiver = require('archiver');
-const gio = require('../gio/bin/linux-x64-125/gio');
+const gio = require('../gio/build/Release/gio.node');
 
 class Utilities {
 

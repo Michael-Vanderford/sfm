@@ -2,7 +2,7 @@ const { parentPort, workerData, isMainThread } = require('worker_threads');
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const gio = require('../gio/bin/linux-x64-125/gio');
+const gio = require('../gio/build/Release/gio.node');
 
 class DeviceManager {
 
@@ -11,6 +11,70 @@ class DeviceManager {
 
     }
 
+    // Get Mounts
+    get_mounts() {
+
+        // gio.umount("michael.vanderford@gmail.com", (err, res) => {
+        //     console.log('umount res', err, res);
+        // });
+
+        gio.get_mounts((err, mounts) => {
+            if (err) {
+                // console.log('error getting mounts', err);
+                parentPort.postMessage({
+                    cmd: 'set_msg',
+                    msg: `Error: get_mounts ${err}`
+                });
+                return;
+            }
+
+            let mount_arr = mounts
+            let cmd = {
+                cmd: 'mounts',
+                mounts: mount_arr
+            }
+            // console.log('mounts data', mount_arr);
+            parentPort.postMessage(cmd);
+        })
+
+    }
+
+    // Mount device
+    mount(device) {
+        console.log('mounting device', device);
+        gio.mount(device, (err) => {
+            if (err) {
+                console.log('error mounting device', err);
+                parentPort.postMessage({
+                    cmd: 'set_msg',
+                    msg: `Error: mount ${err}`
+                });
+                return;
+            }
+            parentPort.postMessage({
+                cmd: 'mount_done',
+                msg: `Mounted ${device.name} successfully`
+            });
+            // console.log('mount res', res);
+        });
+    }
+
+    // Unmount device
+    umount(device) {
+        gio.umount(device, (err) => {
+            if (err) {
+                console.log('error unmounting device', err);
+                parentPort.postMessage({
+                    cmd: 'set_msg',
+                    msg: `Error: umount ${err}`
+                });
+                return;
+            }
+            // console.log('umount res', res);
+        });
+    }
+
+    // Get drives
     get_devices() {
 
         gio.get_drives((err, data_arr) => {
@@ -63,6 +127,14 @@ if (!isMainThread) {
             case 'get_devices':
                 deviceManager.get_devices();
                 break;
+            case 'get_mounts':
+                deviceManager.get_mounts();
+                break;
+            case 'mount':
+                deviceManager.mount(data.device_path);
+                break;
+            case 'umount':
+                deviceManager.umount(data.device_path);
             default:
                 break;
         }

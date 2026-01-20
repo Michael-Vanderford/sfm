@@ -539,8 +539,8 @@ tr {
 
 .active-tab-content::-webkit-scrollbar {
     background: var(--input);
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
 }
 
 .active-tab-content::-webkit-scrollbar-track {
@@ -680,6 +680,18 @@ tr {
     user-select: text;
 }
 
+.footer .button {
+    background-color: var(--menu);
+    text-align: center;
+    color: var(--text);
+    border: 1px solid red;
+    border-radius: 5px;
+    padding: 2px;
+    margin-left: 5px;
+    width: 50px;
+    height: 100%;
+}
+
 .card {
     box-sizing: border-box;
     display: flex;
@@ -807,12 +819,13 @@ tr {
 
 .table th {
     position: sticky;
-    background-color: var(--sidebar);
+    background-color: var(--main);
     border-bottom: 1px solid var(--border);
     height: 30px;
     padding: 5px;
     top: 0;
     z-index: 1;
+    cursor: pointer;
 }
 
 .table .drag_handle {
@@ -879,9 +892,9 @@ tr {
     width: 100%;
 }
 
-.table tr:hover {
+/* .table tr:hover {
     background-color: var(--highlight);
-}
+} */
 
 td .div_name {
     display: flex;
@@ -1124,7 +1137,7 @@ span {
 
 /* Style for scrollbar */
 ::-webkit-scrollbar {
-    width: 1px;
+    width: 5px;
 }
 
 ::-webkit-scrollbar-track {

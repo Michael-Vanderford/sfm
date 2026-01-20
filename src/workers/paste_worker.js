@@ -1,5 +1,5 @@
 const { parentPort, workerData, isMainThread } = require('worker_threads');
-const gio = require('../gio/bin/linux-x64-125/gio');
+const gio = require('../gio/build/Release/gio.node');
 const fs = require('fs');
 const path = require('path');
 

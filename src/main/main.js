@@ -114,20 +114,13 @@ class Watcher {
     unwatch(path) {
 
         // console.log('unwatch', path);
+        try {
+            gio.stop_watch(path);
+        } catch (err) {
+            // console.error(`Error closing watcher for ${path}:`, err);
+            // win.send('set_msg', `Error closing watcher for ${path}: ${err}`);
+        }
 
-        // const monitor = this.monitors.get(path);
-        // if (monitor) {
-            try {
-                gio.stop_watch(path);
-                // this.monitors.delete(path);
-            } catch (err) {
-                console.error(`Error closing watcher for ${path}:`, err);
-                win.send('set_msg', `Error closing watcher for ${path}: ${err}`);
-            }
-        // } else {
-            // console.log('Error: getting monitor from monitors array.');
-            // win.send('set_msg', `Error: getting monitor from monitors array.`);
-        // }
 
     }
 
@@ -538,6 +531,11 @@ class Utilities {
 
             if (href === '' || href === undefined) {
                 win.send('set_msg', `Error: getting href: ${href}`);
+                return;
+            }
+
+            if (!fs.existsSync(href)) {
+                // Error getting disk space
                 return;
             }
 
@@ -1073,6 +1071,8 @@ class Utilities {
 
         this.run_watcher = false;
 
+        console.log('rename', source, destination); 
+
         if (fs.existsSync(destination)) {
 
             if (!destination.includes('New Folder')) {
@@ -1555,29 +1555,113 @@ class DeviceManager {
 
         this.device_worker = new worker.Worker(path.join(__dirname, '../workers/device_worker.js'));
 
-        // Get Devices
-        ipcMain.on('get_devices', (e) => {
-            this.device_worker.postMessage({ cmd: 'get_devices' });
-        })
+        // Get Mounts
+        ipcMain.on('get_mounts', (e) => {
+            this.device_worker.postMessage({ cmd: 'get_mounts' });
+
+        });
+
+        // // Get Devices
+        // ipcMain.on('get_devices', (e) => {
+        //     this.device_worker.postMessage({ cmd: 'get_devices' });
+        // })
+
+        // Mount ipc
+        ipcMain.on('mount', (e, device_name) => {
+            this.mount(device_name);
+        });
+
+        // Umount ipc
+        ipcMain.on('umount', (e, device_name) => {
+            this.umount(device_name);
+            win.send('umount_done', `${device_name}`);
+        });
+
+
 
         this.device_worker.on('message', (data) => {
             const cmd = data.cmd;
             switch (cmd) {
                 case 'devices':
+                    // console.log('devices data', data);
                     win.send('devices', data.devices);
+                    break;
+                case 'mounts':
+                    // console.log('mounts data', data);
+                    win.send('mounts', data.mounts);
                     break;
                 default:
                     break;
             }
         })
 
-        // Monitor USB Devices
-        gio.monitor(data => {
-            if (data) {
-                if (data != 'mtp') {
-                    this.device_worker.postMessage({ cmd: 'get_devices' });
-                }
+        // // Monitor USB Devices
+        // gio.monitor(data => {
+        //     if (data) {
+        //         console.log('monitor data', data);
+        //         if (data != 'mtp') {
+        //             this.device_worker.postMessage({ cmd: 'get_devices' });
+        //         }
+        //     }
+        // });
+
+    }
+
+    // Mount device
+    mount(device_name) {
+
+        // this.device_worker.postMessage({ cmd: 'mount', device_path });
+
+        // Note Call this in main process.
+        // It will crash if called in a worker thread
+        // Mount device
+        gio.mount(device_name, (err, res) => {
+
+            if (err) {
+                win.send('set_msg', `Error: mounting ${device_name}: ${err}`);
+                return;
             }
+
+            // Get mounts after mounting
+            gio.get_mounts((err, mounts) => {
+
+                if (err) {
+                    win.send('set_msg', `Error: getting mounts after mounting ${device_name}: ${err}`);
+                    return;
+                }
+
+                // find device path
+                let device_path = mounts.filter(mount => mount.name === device_name).map(mount => mount.path)[0];
+
+                // send device path to renderer in mount_done event
+                win.send('mount_done', device_path);
+
+
+            });
+
+
+
+
+        });
+
+    }
+
+    // Umount device
+    umount(device_name) {
+
+        // console.log('umount device_path', device_path);/
+        // this.device_worker.postMessage({ cmd: 'umount', device_path });
+
+        // Note Call this in main process.
+        // It will crash if called in a worker thread
+        // Umount device
+        gio.umount(device_name, (err) => {
+            if (err) {
+                win.send('set_msg', `Error: unmounting ${device_name}: ${err}`);
+                return;
+            }
+            win.send('umount_done', `Successfully unmounted ${device_name}`);
+            this.device_worker.postMessage({ cmd: 'get_mounts' });
         });
 
     }
@@ -1652,9 +1736,15 @@ class FileManager {
         this.location0 = '';
         this.watcher_failed = 0;
         this.watcher_enabled = true;
+        this.startup = true;
 
         // send location to worker
         this.ls_worker = new worker.Worker(path.join(__dirname, '../workers/ls_worker.js'));
+
+        // Validate location input
+        ipcMain.handle('validate_location', async (e, location) => {
+            return this.validate_location(location);
+        })
 
         // listen for ls event
         ipcMain.on('ls', (e, location, add_tab = false) => {
@@ -1722,6 +1812,20 @@ class FileManager {
 
     }
 
+    validate_location(location) {
+
+        if (location === '' || location === undefined) {
+            return -1;
+        }
+
+        // check if location is valid
+        if (fs.existsSync(location) === false && !location.startsWith('mtp://')) {
+            return -2;
+        }
+
+        return 0;
+    }
+
     // return file from get_files
     get_ls(location, add_tab) {
 
@@ -1739,8 +1843,16 @@ class FileManager {
 
         // check if location is valid
         if (fs.existsSync(location) === false && !location.startsWith('mtp://')) {
-            win.send('set_msg', `Error: Could not find ${location}`);
-            return;
+
+            // if the program is starting up, set a valid location (home directory)
+            if (this.startup) {
+                this.location = utilities.home_dir;
+                location = this.location;
+            } else {
+                this.location = this.location0;
+                win.send('set_msg', `Error: Could not find ${location}`);
+                return;
+            }
         }
 
         this.location0 = this.location;
@@ -1751,13 +1863,14 @@ class FileManager {
             add_tab: add_tab
         }
 
+        this.ls_worker.postMessage(ls_data);
+        this.startup = false;
+
         watcher.watch(this.location);
         if (this.location0 !== '' && this.location0 != this.location) {
             // console.log('location0', this.location0)
             watcher.unwatch(this.location0);
         }
-
-        this.ls_worker.postMessage(ls_data);
 
     }
 
@@ -2600,9 +2713,12 @@ class MenuManager {
                 {
                     label: 'Unmount',
                     click: () => {
-                        execSync(`gio mount -u ${href}`);
-                        win.send('msg', `Device Unmounted`);
-                        win.send('umount_device');
+
+                        deviceManager.umount(href);
+
+                        // execSync(`gio mount -u ${href}`);
+                        // win.send('msg', `Device Unmounted`);
+                        // win.send('umount_device');
                     }
                 },
                 {
