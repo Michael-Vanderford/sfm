@@ -25,14 +25,11 @@
     },
     "license": "LGPL-2.1-or-later",
     "devDependencies": {
-        "@electron/rebuild": "^4.0.1",
         "@wdio/cli": "^9.12.2",
         "@wdio/local-runner": "^9.0.9",
         "@wdio/mocha-framework": "^9.0.8",
         "bootstrap-icons": "^1.11.3",
         "electron": "^37.10.3",
-        "electron-builder": "^24.13.3",
-        "electron-rebuild": "^3.2.9",
         "fast-xml-parser": "^4.5.3",
         "jest": "^29.7.0",
         "mock-fs": "^5.5.0",
@@ -41,6 +38,7 @@
     },
     "dependencies": {
         "archiver": "^7.0.1",
+        "material-design-icons": "^3.0.1",
         "nan": "^2.22.0"
     }
 }

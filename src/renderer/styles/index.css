@@ -156,6 +156,12 @@ hr {
     color: var(--button-nav-text);
 }
 
+.back.button.disabled i, .forward.button.disabled i {
+    /* background-color: var(--button-inactive); */
+    color: var(--inactive);
+    cursor: default;
+}
+
 .breadcrumbs {
     display: flex;
     align-items: center;
@@ -474,8 +480,11 @@ tr {
 }
 
 .tab-content {
+    container-type: inline-size;
     padding: 10px;
     padding-top: 0;
+    resize: horizontal;
+    /* background: lightblue; */
 }
 
 .tabs {
@@ -785,6 +794,13 @@ tr {
 .grid3 {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
+    gap: 5px 10px;
+    width: 100%;
+}
+
+.grid4 {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
     gap: 5px 10px;
     width: 100%;
 }
@@ -1151,6 +1167,47 @@ span {
 
 ::-webkit-scrollbar-thumb:hover {
     background: var(--scrollbar-hover);
+}
+
+/* Responsive breakpoints for standard view sizes */
+
+/* Extra small / mobile phones */
+@media (max-width: 480px) {
+
+}
+
+/* Small / large phones and small tablets */
+@media (min-width: 481px) and (max-width: 768px) {
+
+}
+
+/* Medium / tablets and small laptops */
+@media (min-width: 769px) and (max-width: 1024px) {
+
+}
+
+/* Large / laptops */
+@media (min-width: 1025px) and (max-width: 1440px) {
+}
+
+/* Extra large / desktops and wide screens */
+@media (min-width: 1441px) {
+    /* .grid_view {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 5px 10px;
+        width: 100%;
+    } */
+}
+
+/* Utility: scale icons and media inside cards for small screens */
+@media (max-width: 768px) {
+
+}
+
+/* Preserve draggable handles usability on small touch screens */
+@media (pointer: coarse) and (max-width: 1024px) {
+
 }
 
 /* Define dark color scheme */

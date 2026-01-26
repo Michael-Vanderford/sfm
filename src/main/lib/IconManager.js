@@ -101,7 +101,7 @@ class IconManager {
                 theme_path = path.join(__dirname, 'assets/icons/');
             }
 
-            console.log('Using icon theme path:', theme_path);
+            // console.log('Using icon theme path:', theme_path);
 
             return theme_path;
 

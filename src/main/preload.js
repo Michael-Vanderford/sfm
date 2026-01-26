@@ -726,6 +726,19 @@ class Utilities {
 
         this.location_input.value = location;
         this.location = location;
+
+        let sidebar = document.querySelector('.sidebar');
+        let sidebar_items = sidebar.querySelectorAll('.item');
+        sidebar_items.forEach(item => {
+            if (item) {
+                console.log('sidebar item', item.dataset.href, location);
+                item.classList.remove('highlight_select');
+                if (item.dataset.href === location) {
+                    item.classList.add('highlight_select');
+                }
+            }
+        });
+
     }
 
     // show location
@@ -2556,10 +2569,10 @@ class SideBarManager {
             }
         });
 
-        let items = this.sidebar.querySelectorAll('.item');
-        items.forEach(item => {
-            console.log('sidebar item', item);
-        });
+        // let items = this.sidebar.querySelectorAll('.item');
+        // items.forEach(item => {
+        //     console.log('sidebar item', item);
+        // });
 
     }
 
@@ -2588,6 +2601,8 @@ class SideBarManager {
 
             home_view_item.append(icon_div, link_div);
             this.home_view.append(home_view_item);
+
+            home_view_item.dataset.href = `${utilities.home_dir}/${dir}`;
 
             home_view_item.addEventListener('click', (e) => {
                 let home_dir = `${utilities.home_dir}`;
@@ -2631,14 +2646,6 @@ class SideBarManager {
                         }
                         break;
                 }
-
-                // // handle highlight
-                // let items = this.sidebar.querySelectorAll('.item');
-                // items.forEach(item => {
-                //     item.classList.remove('highlight_select');
-                // })
-                // home_view_item.classList.add('highlight_select');
-
 
             });
 
@@ -3018,12 +3025,6 @@ class TabManager {
         this.tab_history_arr = [];
         this.tab_history_idx_arr = [];
 
-        // this.active_tab_content = document.querySelector('.active-tab-content');
-        // if (!this.active_tab_content) {
-        //     utilities.set_msg('Error: Active tab content not found');
-        //     // return;
-        // }
-
         this.tab_id = 0;
 
         this.location_input = document.querySelector('.location');
@@ -3041,14 +3042,17 @@ class TabManager {
         this.back_btn = document.querySelector('.back');
         this.forward_btn = document.querySelector('.forward');
 
+        this.back_btn.classList.add('disabled')
+        this.forward_btn.classList.add('disabled')
+
         // this.back_btn.style = 'pointer-events: none';
         // this.tab_history_idx = 0;
         this.back_btn.addEventListener('click', (e) => {
-            this.tabHistoryBack();
+            this.tabHistoryBack(this.tab_id);
         })
 
         this.forward_btn.addEventListener('click', (e) => {
-            this.tabHistoryForward();
+            this.tabHistoryForward(this.tab_id);
         })
 
         // Context menu
@@ -3061,6 +3065,26 @@ class TabManager {
             e.preventDefault();
             this.getTabHistory(this.tab_id, 1);
         })
+
+        // enable back button
+        ipcRenderer.on('enable_back_button', (e) => {
+            this.enable_back_button();
+        })
+
+        // disable back button
+        ipcRenderer.on('disable_back_button', (e) => {
+            this.disable_back_button();
+        });
+
+        // enable forward button
+        ipcRenderer.on('enable_forward_button', (e) => {
+            this.enable_forward_button();
+        });
+
+        // disable forward button
+        ipcRenderer.on('disable_forward_button', (e) => {
+            this.disable_forward_button();
+        });
 
     }
 
@@ -3170,7 +3194,7 @@ class TabManager {
         tab_content.classList.add('active-tab-content');
         tab_content.classList.remove('hidden');
 
-        ipcRenderer.send('add_tab', location);
+        ipcRenderer.send('add_tab', location, this.tab_id);
 
         // Close Tab
         btn_close.addEventListener('click', (e) => {
@@ -3178,6 +3202,8 @@ class TabManager {
             let current_tabs = document.querySelectorAll('.tab');
             let current_tab_content = document.querySelectorAll('.tab-content');
             let active_tab = document.querySelector('.active-tab');
+            let tab_id = tab.dataset.id;
+
             if (active_tab === tab) {
 
                 if (current_tabs.length > 0) {
@@ -3186,11 +3212,6 @@ class TabManager {
                     let idx = Array.from(tabs).indexOf(tab) - 1
 
                     if (idx >= 0) {
-
-                        this.remove_tab_data(tab.dataset.id);
-
-                        tab.remove();
-                        tab_content.remove();
 
                         current_tabs[idx].classList.add('active-tab');
                         current_tab_content[idx].classList.add('active-tab-content');
@@ -3203,6 +3224,13 @@ class TabManager {
                         // update global location
                         utilities.set_location(current_tabs[idx].dataset.href);
 
+                        this.remove_tab_data(tab.dataset.id);
+                        tab_content.remove();
+                        tab.remove();
+
+                        // Remove tab from tabs.json
+                        ipcRenderer.send('remove_tab', tab_id);
+
                     }
 
                 }
@@ -3211,9 +3239,11 @@ class TabManager {
                 if (current_tabs.length > 0) {
 
                     this.remove_tab_data(tab.dataset.id);
-
-                    tab.remove();
                     tab_content.remove();
+                    tab.remove();
+
+                    // Remove tab from tabs.json
+                    ipcRenderer.send('remove_tab', tab_id);
 
                 }
             }
@@ -3230,6 +3260,8 @@ class TabManager {
 
             console.log('removed item', this.settings);
             settingsManager.update_settings(this.settings);
+
+
 
         })
 
@@ -3259,6 +3291,8 @@ class TabManager {
 
             // set local destination
             this.destination = tab.dataset.href;
+
+            ipcRenderer.send('switch_tab', this.tab_id);
 
             // update disk space
             utilities.get_disk_space(tab.dataset.href);
@@ -3357,6 +3391,8 @@ class TabManager {
         //     this.addTabHistory(this.location_input.value);
         // }
 
+        // ipcRenderer.send('switch_tab', this.tab_id);
+
         // this.settings.tabs = [];
         dragSelect.initialize();
 
@@ -3438,35 +3474,38 @@ class TabManager {
     // add tab history
     add_tab_history(href) {
 
-        console.log('add tab history', this.tab_id, href);
+        console.log('add tab history', href, this.tab_id,);
 
         if (href === undefined || href === null) {
             return;
         }
 
-        // let history_obj = {
-        //     tab_id: this.tab_id,
-        //     location: href
-        // }
+        ipcRenderer.send('add_tab_history', href, this.tab_id);
 
-        // // reset tab history idx when the history changes
-        // this.tab_history_idx = 0;
+    }
 
-        // let tab = document.querySelector('.active-tab');
-        // this.tab_id = parseInt(tab.dataset.id);
+    // enable back button
+    enable_back_button() {
+        this.back_btn.classList.remove('disabled')
+        this.back_btn.style = 'pointer-events: auto';
+    }
 
-        // if (this.tab_id > 0) {
-        //     this.tab_history_arr.unshift(history_obj);
-        // }
+    // disable back button
+    disable_back_button() {
+        this.back_btn.classList.add('disabled')
+        this.back_btn.style = 'pointer-events: none';
+    }
 
-        // // check for history
-        // let tab_arr = this.tab_history_arr.filter(item => item.tab_id === parseInt(this.tab_id));
-        // if (tab_arr.length > 0) {
-        //     this.back_btn.style = 'pointer-events: auto';
-        // }
+    // enable forward button
+    enable_forward_button() {
+        this.forward_btn.classList.remove('disabled')
+        this.forward_btn.style = 'pointer-events: auto';
+    }
 
-        ipcRenderer.send('add_tab_history', this.tab_id, href);
-
+    // disable forward button
+    disable_forward_button() {
+        this.forward_btn.classList.add('disabled')
+        this.forward_btn.style = 'pointer-events: none';
     }
 
     // get tab history
@@ -3571,54 +3610,13 @@ class TabManager {
     }
 
     // tab history back
-    tabHistoryBack() {
-
-        ipcRenderer.send('go_back');
-
-        // console.log('tab history back', this.tab_id);
-        // // get tab history idx from array
-        // this.tab_history_idx = this.getTabHistoryIdx(this.tab_id);
-        // let filter_arr = this.tab_history_arr.filter(item => item.tab_id === parseInt(this.tab_id));
-        // if (this.tab_history_idx > filter_arr.length - 2) {
-        //     this.tab_history_idx = 0;
-        //     // return;
-        // }
-        // this.tab_history_idx += 1;
-        // if (filter_arr.length > 1) {
-        //     let href = filter_arr[this.tab_history_idx].location;
-        //     if (href !== undefined || href !== null) {
-        //         this.location_input.value = href;
-        //         fileManager.get_files(href);
-        //         // update tab history idx
-        //         this.setTabHistoryIdx(this.tab_id, this.tab_history_idx);
-        //         console.log('tab_history_idx', this.tab_history_idx, 'history_arr', filter_arr.length)
-        //     }
-        // }
-
+    tabHistoryBack(tab_id) {
+        ipcRenderer.send('go_back', tab_id);
     }
 
     // tab history forward
-    tabHistoryForward() {
-
-        ipcRenderer.send('go_forward');
-
-        // this.tab_history_idx = this.getTabHistoryIdx(this.tab_id);
-        // if (this.tab_history_idx === 0) {
-        //     this.tab_history_arr.push(this.location_input.value);
-        // }
-        // let filter_arr = this.tab_history_arr.filter(item => item.tab_id === parseInt(this.tab_id));
-        // filter_arr.reverse();
-        // if (this.tab_history_idx > filter_arr.length - 2) {
-        //     this.tab_history_idx = 0;
-        //     // return;
-        // }
-        // this.tab_history_idx += 1;
-        // let href = filter_arr[this.tab_history_idx].location;
-        // this.location_input.value = href;
-        // fileManager.get_files(href);
-        // // update tab history idx
-        // this.setTabHistoryIdx(this.tab_id, this.tab_history_idx);
-
+    tabHistoryForward(tab_id) {
+        ipcRenderer.send('go_forward', tab_id);
     }
 
 }
@@ -4331,7 +4329,7 @@ class FileManager {
         active_tab_content.scrollTop = 0;
 
         let grid = document.createElement('div');
-        grid.classList.add('grid', 'grid3');
+        grid.classList.add('grid_view', 'grid3');
 
         // sort files array
         files_arr = utilities.sort(files_arr, this.sort_by, this.sort_direction);
@@ -6083,19 +6081,19 @@ class WindowManager {
 
     constructor() {
 
-        let main = document.querySelector('.main');
-        window.addEventListener('resize', (e) => {
+        // let main = document.querySelector('.main');
+        // window.addEventListener('resize', (e) => {
 
-            let window_settings = settingsManager.get_window_settings();
-            // console.log('window_settings', window_settings);
+        //     let window_settings = settingsManager.get_window_settings();
+        //     // console.log('window_settings', window_settings);
 
-            if (window_settings.main_width !== 0) {
-                main.style.width = window.innerWidth + 'px';
-                window_settings.main_width = window.innerWidth;
-                ipcRenderer.send('update_window_settings', window_settings);
-            }
+        //     if (window_settings.main_width !== 0) {
+        //         main.style.width = window.innerWidth + 'px';
+        //         window_settings.main_width = window.innerWidth;
+        //         ipcRenderer.send('update_window_settings', window_settings);
+        //     }
 
-        })
+        // })
 
     }
 

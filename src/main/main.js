@@ -62,7 +62,7 @@ class Watcher {
 
                     case 'created':
 
-                        console.log('created', event, location, path.dirname(event.filename));
+                        // console.log('created', event, location, path.dirname(event.filename));
                         if (location !== path.dirname(event.filename)) {
                             return;
                         }
@@ -79,7 +79,7 @@ class Watcher {
 
                     case 'deleted':
 
-                        console.log('delete', event, location, path.dirname(event.filename));
+                        // console.log('delete', event, location, path.dirname(event.filename));
                         if (location !== path.dirname(event.filename)) {
                             return;
                         }
@@ -244,53 +244,133 @@ class tabManager {
             history: history
         }
 
+        this.tab_history_idx = 0;
         this.tabs = [];
 
     }
 
-    addTab(location) {
+    addTab(location, tab_id) {
+
+        if (this.tabs.find(t => t.id === tab_id)) {
+            return;
+        }
+
         let history = {
             idx: 0,
             location: []
         }
 
         let tab = {
-            id: this.tabs.length + 1,
+            id: tab_id,
             location: location,
             history: history
         }
 
+        tab.history.location.push(location);
         this.tabs.push(tab);
-        this._saveTabs();
-    }
 
-    addHistory(tab_id, location) {
+        win.send('disable_back_button');
+        win.send('disable_forward_button');
 
-        let tab = this.tabs.find(t => t.id === tab_id);
-        if (tab) {
-            tab.history.location.push(location);
-        }
-        this._saveTabs();
-        // return tab;
-
+        this.saveTabs();
     }
 
     // Save tabs to file
-    _saveTabs() {
+    saveTabs() {
         const tabsFile = path.join(app.getPath('userData'), 'tabs.json');
         fs.writeFileSync(tabsFile, JSON.stringify(this.tabs, null, 4));
     }
 
     // Load tabs from file
-    _loadTabs() {
+    loadTabs() {
         const tabsFile = path.join(app.getPath('userData'), 'tabs.json');
         if (fs.existsSync(tabsFile)) {
             this.tabs = JSON.parse(fs.readFileSync(tabsFile, 'utf-8'));
-            console.log('loadTabs', this.tabs);
+            // console.log('loadTabs', this.tabs);
         }
     }
 
+    removeTab(tab_id) {
+        this.tabs = this.tabs.filter(t => parseInt(t.id) !== parseInt(tab_id));
+        this.saveTabs();
+    }
 
+    addHistory(location, tab_id) {
+
+        let tab = this.tabs.find(t => t.id === tab_id);
+        if (tab) {
+
+            tab.history.location.length = tab.history.idx + 1;
+            tab.history.location.push(location);
+            tab.history.idx = tab.history.location.length - 1;
+
+            if (tab.history.idx > 0) {
+                win.send('enable_back_button');
+            }
+
+        }
+        this.saveTabs();
+    }
+
+    goBack(tab_id) {
+        let tab = this.tabs.find(t => t.id === tab_id);
+        // console.log('goBack_tab', tab.history.idx);
+        if (tab) {
+            if (tab.history.idx > 0) {
+                tab.history.idx--;
+                win.send("get_files", tab.history.location[tab.history.idx]);
+                this.saveTabs(); // update the index to handle multiple tabs
+
+                // todo: this does not need to run each time goBack is called
+                win.send('enable_forward_button');
+
+            }
+
+            if (tab.history.idx === 0) {
+                win.send('disable_back_button');
+            }
+        }
+    }
+
+    goForward(tab_id) {
+        let tab = this.tabs.find(t => t.id === tab_id);
+        // console.log('goForward_tab', tab.history.idx);
+        if (tab) {
+            if (tab.history.idx < tab.history.location.length - 1) {
+                tab.history.idx++;
+                win.send("get_files", tab.history.location[tab.history.idx]);
+                this.saveTabs(); // update the index to handle multiple tabs
+                // console.log('goForward', tab.history.location[tab.history.idx]);
+
+                win.send('enable_back_button');
+            }
+
+            if (tab.history.idx === tab.history.location.length - 1) {
+                win.send('disable_forward_button');
+            }
+        }
+    }
+
+    switchTab(tab_id) {
+        let tab = this.tabs.find(t => t.id === tab_id);
+        if (tab) {
+
+            win.send("get_files", tab.location[tab.history.idx]);
+
+            // Enable or disable back and forward buttons based on history index
+            if (tab.history.idx > 0) {
+                win.send('enable_back_button');
+            } else {
+                win.send('disable_back_button');
+            }
+
+            if (tab.history.idx < tab.history.location.length - 1) {
+                win.send('enable_forward_button');
+            } else {
+                win.send('disable_forward_button');
+            }
+        }
+    }
 
 }
 
@@ -301,151 +381,51 @@ const tab_manager = new tabManager()
 // tab_manager.addHistory(0, path.join(os.homedir(), 'Documents'));
 
 // Add tab
-ipcMain.on('add_tab', (e, location) => {
-    tab_manager.addTab(location);
+ipcMain.on('add_tab', (e, location, tab_id) => {
+    tab_manager.addTab(location, tab_id);
+});
+
+// Remove tab
+ipcMain.on('remove_tab', (e, tab_id) => {
+    tab_manager.removeTab(tab_id);
 });
 
 // Add history to tab
-ipcMain.on('add_tab_history', (e, tab_id, location) => {
-    tab_manager.addHistory(tab_id, location);
+ipcMain.on('add_tab_history', (e, location, tab_id) => {
+    tab_manager.addHistory(location, tab_id);
 });
 
-ipcMain.on('go_back', (e) => {
-    console.log(tab_manager.tabs);
-    tab_manager.addHistory(1, os.homedir());
+ipcMain.on('go_back', (e, tab_id) => {
+    tab_manager.goBack(tab_id);
+});
+
+ipcMain.on('go_forward', (e, tab_id) => {
+    tab_manager.goForward(tab_id);
+});
+
+ipcMain.on('switch_tab', (e, tab_id) => {
+    tab_manager.switchTab(tab_id);
 });
 
 /////////////////////////////////
 
-// History Manager
-class historyManager {
-
-    constructor() {
-        this.history = [];
-        this.currentIndex = -1;
-        this.clear_history();
-    }
-
-    // Add to history
-    add(href) {
-        // If we're not at the end of the history, remove all forward entries
-        if (this.currentIndex < this.history.length - 1) {
-            // this.history = this.history.slice(0, this.currentIndex + 1);
-        }
-        this.history.push(href);
-        this.currentIndex++;
-        this._saveHistory();
-        this._printHistory();
-        win.send('history_updated', this.history, this.currentIndex);
-    }
-
-    // Go back in history
-    historyBack() {
-        if (this.canGoBack()) {
-            this.currentIndex--;
-            this._saveHistory();
-            this._printHistory();
-            console.log('historyBack history', this.currentIndex);
-            win.send('history_updated', this.history, this.currentIndex);
-            return this.history[this.currentIndex];
-        }
-        return null;
-    }
-
-    // Go forward in history
-    historyForward() {
-        if (this.canGoForward()) {
-            this.currentIndex++;
-            this._saveHistory();
-            this._printHistory();
-            win.send('history_updated', this.history, this.currentIndex);
-            return this.history[this.currentIndex];
-        }
-
-        return null;
-    }
-
-    // Check if can go back
-    canGoBack() {
-        return this.currentIndex > 0;
-    }
-
-    // Check if can go forward
-    canGoForward() {
-        return this.currentIndex < this.history.length - 1;
-    }
-
-    // Save history to file
-    _saveHistory() {
-        const historyFile = path.join(app.getPath('userData'), 'history.json');
-        fs.writeFileSync(historyFile, JSON.stringify({
-            history: this.history,
-            currentIndex: this.currentIndex
-        }, null, 4));
-    }
-
-    // Debug: Print history to console
-    _printHistory() {
-        // console.log('History:', this.history);
-        // console.log('Current Index:', this.currentIndex);
-    }
-
-    // Load history
-    loadHistory() {
-        const historyFile = path.join(app.getPath('userData'), 'history.json');
-        if (fs.existsSync(historyFile)) {
-
-            const data = JSON.parse(fs.readFileSync(historyFile, 'utf-8'));
-            this.history = data.history || [];
-            // this.currentIndex = data.currentIndex || -1;
-            this._printHistory();
-            win.send('history_updated', this.history, this.currentIndex);
-        }
-
-    }
-
-    // Clear history
-    clear_history() {
-        this.history = [];
-        this.currentIndex = -1;
-        this._saveHistory();
-        // win.send('history_updated', this.history, this.currentIndex);
-    }
-
-}
-
-// History Manager
-const history_manager = new historyManager();
-ipcMain.on('add_history', (e, href) => {
-    history_manager.add(href);
-});
-
-// Go back
-// ipcMain.on('go_back', (e) => {
-//     let href = history_manager.historyBack();
-//     console.log('go_back href', href);
+// // Go forward
+// ipcMain.on('go_forward', (e) => {
+//     let href = history_manager.historyForward();
 //     if (href) {
 //         win.send('get_files', href);
 //     }
 // });
 
-// Go forward
-ipcMain.on('go_forward', (e) => {
-    let href = history_manager.historyForward();
-    if (href) {
-        win.send('get_files', href);
-    }
-});
+// // Check if can go back
+// ipcMain.on('can_go_back', (e) => {
+//     e.returnValue = history_manager.canGoBack();
+// });
 
-// Check if can go back
-ipcMain.on('can_go_back', (e) => {
-    e.returnValue = history_manager.canGoBack();
-});
-
-// Check if can go forward
-ipcMain.on('can_go_forward', (e) => {
-    e.returnValue = history_manager.canGoForward();
-});
+// // Check if can go forward
+// ipcMain.on('can_go_forward', (e) => {
+//     e.returnValue = history_manager.canGoForward();
+// });
 
 // Clear history
 ipcMain.on('clear_history', (e) => {
@@ -1071,7 +1051,7 @@ class Utilities {
 
         this.run_watcher = false;
 
-        console.log('rename', source, destination); 
+        console.log('rename', source, destination);
 
         if (fs.existsSync(destination)) {
 
@@ -1330,224 +1310,7 @@ ipcMain.handle('get_readonly_icon', (e) => {
     return readonly_icon;
 })
 
-// class IconManager {
 
-//     constructor() {
-
-//         this.home = require('os').homedir();
-//         this.theme_path = this.get_theme_path();
-
-//         // Get File Icon
-//         ipcMain.handle('get_icon', async (e, href) => {
-//             return await app.getFileIcon(href, { size: 32 }).then(icon => {
-//                 return icon.toDataURL();
-//             }).catch((err) => {
-//                 return `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAADHklEQVRYhe2WX0/yVhzHP8VBW04r0pKIgjDjlRfPC3BX7vXM1+OdMXsPXi9eqEu27DUgf1ICgQrlFGkxnF0sdgrq00dxyZZ9kyb0d2i/n/b8vj0H/teS6vX69xcXF7/4vh9JKdV7j7Ozs+s0fpnlwunp6c/Hx8c/5nK53EcepFar/ZAGYgXg6Ojo6CPG3wqxApDL5bLrMM9kMgnE+fn5qxArAOuSECL5Xa1WX4X4NIB6vY5pmmia9iaEtlyQUqp1Qcznc+I4Rqm/b1kul595frcus5eUzWbJZt9uqVRToJRiMBgk58PhEM/zUEqhlMLzPIbDIfDXU3c6HcIwTAWZCqDdbtPtdgGQUhIEAYZh4HkenudhmiaTyQQpJY1GA9d1abVaz179hwBqtRq6rgMwmUxwHAfHcZBSIqWkWCziOA5BEKCUwjRNhBDMZrP1AHymvhnAtm1GoxHj8RghBEIIxuMxvu+zubmJpmnEcUwYhhiG8dX7pU5BqVQCwLIsoigiDEMqlQoA3W4X27axLIv9/X16vR57e3vJN+AtpXoDYRgynU6Zz+cAFAoF8vn8mwZpzFMBKKVotVq4rkuj0WCxWNBsNun3+wCfn4LZbEY+n8c0TZRSZDIZDg4OkvH/fgoMw+D+/p44jl+c14+mINViJKVkNBqxvb2dfNt938dxHJRSdLtddF3HdV3m8zm9Xo+trS0sy1oxtCzr44vRYDBIVjlN0ygUCskG5LHx1paCxWJBu91OUvDY7bqu43keYRjS6XQIggCA29tbSqUSzWZzPSmIogghRJKCx7XAdV2klAghKJfLyf+VUhiG8e9JwVd7QNd1ptMpURShaRq2bXN3d8discC27RevieOY6XT6vhT4vh8v74yXU/DYhDs7O2iaRhRFPDw8IIQgjmP6/T7FYvHZxhQgiqLYdV39aW1lCm5ubn5frlmWRbVaTSJYKpXY3d1NOl3X9cQsl8tRrVZXzAGur69/W65tLBeurq7+ODw8/FKpVHY2NjZWxt+jOI7nl5eXv56cnPwUBEHv6dhrYRWAuQ7zJ7oH0m0U/0n9CS0Pytp5nRYfAAAAAElFTkSuQmCC`;
-//             })
-//             // try {
-//             //     return await app.getFileIcon(href, { size: 32 }).then(icon => {
-//             //         return icon.toDataURL();
-//             //     }).catch((err) => {
-//             //         // return path.join(this.get_theme_path(), 'default-file.svg');
-//             //     })
-//             // } catch (err) {
-//             // }
-//         })
-
-//         // listen for get_folder_icon event
-//         ipcMain.on('get_folder_icon', (e, href) => {
-//             let folder_icon = this.get_folder_icon(e, href);
-//             e.sender.send('set_folder_icon', href, folder_icon);
-//         })
-
-//         ipcMain.handle('get_symlink_icon', (e) => {
-//             let icon_theme = execSync('gsettings get org.gnome.desktop.interface icon-theme').toString().replace(/'/g, '').trim();
-//             let icon_dir = path.join(__dirname, 'assets', 'icons');
-//             try {
-//                 const search_paths = [
-//                     path.join(this.home, '.local/share/icons'),
-//                     path.join(this.home, '.icons'),
-//                     '/usr/share/icons'
-//                 ];
-
-//                 // Find the first existing icon theme path
-//                 const found_path = search_paths.find(icon_path =>
-//                     fs.existsSync(path.join(icon_path, icon_theme))
-//                 );
-
-//                 icon_dir = found_path ? path.join(found_path, icon_theme) : path.join(__dirname, '../assets', 'icons');
-
-//                 const icon_dirs = [
-//                     path.join(icon_dir, 'emblems@2x/16/emblem-symbolic-link.svg'),
-//                     path.join(icon_dir, '16x16/emblems/emblem-symbolic-link.svg'),
-//                     path.join(icon_dir, 'emblems/scalable/emblem-symbolic-link.svg'),
-//                     path.join(icon_dir, 'emblems/16/emblem-symbolic-link.svg')
-//                 ];
-
-//                 // Find the first existing symlink icon
-//                 const folder_icon_path = icon_dirs.find(dir => fs.existsSync(dir)) ||
-//                                          path.join(__dirname, '../assets/icons/emblem-symbolic-link.svg');
-
-//                 return folder_icon_path;
-//             } catch (err) {
-//                 console.error('Error in symlink_icon:', err);
-//                 return path.join(__dirname, 'assets/icons/emblem-symbolic-link.svg');
-//             }
-//         });
-
-//         ipcMain.handle('get_readonly_icon', (e) => {
-//             let icon_theme = execSync('gsettings get org.gnome.desktop.interface icon-theme').toString().replace(/'/g, '').trim();
-//             let icon_dir = path.join(__dirname, 'assets', 'icons');
-//             try {
-//                 const search_paths = [
-//                     path.join(this.home, '.local/share/icons'),
-//                     path.join(this.home, '.icons'),
-//                     '/usr/share/icons'
-//                 ];
-
-//                 // Find the first existing icon theme path
-//                 const found_path = search_paths.find(icon_path =>
-//                     fs.existsSync(path.join(icon_path, icon_theme))
-//                 );
-
-//                 icon_dir = found_path ? path.join(found_path, icon_theme) : path.join(__dirname, '../assets', 'icons');
-//                 console.log('icon_dir', icon_dir);
-
-//                 const icon_dirs = [
-//                     path.join(icon_dir, 'emblems@2x/16/emblem-symbolic-readonly.svg'),
-//                     path.join(icon_dir, '16x16/emblems/emblem-symbolic-readonly.svg'),
-//                     path.join(icon_dir, 'emblems/scalable/emblem-symbolic-readonly.svg'),
-//                     path.join(icon_dir, 'emblems/16/emblem-symbolic-readonly.svg')
-//                 ];
-
-//                 // Find the first existing readonly icon
-//                 const folder_icon_path = icon_dirs.find(dir => fs.existsSync(dir)) ||
-//                 path.join(__dirname, '../assets/icons/emblem-symbolic-readonly.svg');
-
-//                 return folder_icon_path;
-
-//             } catch (err) {
-//                 console.log(err);
-//             }
-//         })
-
-//     }
-
-//     get_theme_path() {
-//         const icon_theme = execSync('gsettings get org.gnome.desktop.interface icon-theme').toString().replace(/'/g, '').trim();
-//         let icon_dir = path.join(__dirname, 'assets', 'icons');
-//         let theme_path = '';
-
-//         try {
-//             const search_paths = [
-//                 path.join(this.home, '.local/share/icons'),
-//                 path.join(this.home, '.icons'),
-//                 '/usr/share/icons'
-//             ];
-
-//             // Find the first existing icon theme path
-//             const found_path = search_paths.find(icon_path => {
-//                 const theme_path = path.join(icon_path, icon_theme);
-//                 return fs.existsSync(theme_path);
-//             });
-
-//             if (found_path) {
-//                 icon_dir = path.join(found_path, icon_theme);
-//             } else {
-//                 icon_dir = path.join(__dirname, 'assets', 'icons', 'kora');
-//             }
-
-//             const icon_dirs = [
-//                 'places@2x/48/',
-//                 '32x32/places/',
-//                 '64x64/places/',
-//                 'places/scalable/',
-//                 'scalable@2x/places/',
-//                 'places/32/',
-//                 'places/48/',
-//                 'places/64/',
-//                 'places/128/',
-//                 'places/symbolic/',
-//                 'scalable/'
-//             ].map(dir => path.join(icon_dir, dir));
-
-//             // Find the first existing icon directory
-//             theme_path = icon_dirs.find(dir => fs.existsSync(dir));
-
-//             // If no theme path found, use the fallback
-//             if (!theme_path) {
-//                 theme_path = path.join(__dirname, 'assets/icons/');
-//             }
-
-//             return theme_path;
-//         } catch (error) {
-//             console.error('Error in getIconThemePath:', error);
-//             return path.join(__dirname, 'assets/icons/');
-//         }
-//     }
-
-//     // get folder icon
-//     get_folder_icon(e, href) {
-
-//         try {
-
-//             const baseName = path.basename(href);
-
-//             const specialFolders = {
-//                 'Documents': ['folder-documents', 'folder-document'],
-//                 'Music': ['folder-music'],
-//                 'Pictures': ['folder-pictures', 'folder-image'],
-//                 'Videos': ['folder-videos', 'folder-video'],
-//                 'Downloads': ['folder-downloads', 'folder-download'],
-//                 'Desktop': ['folder-desktop']
-//             };
-
-//             const folderType = specialFolders[baseName] || ['folder', 'default-folder'];
-//             const extensions = ['.svg', '.png'];
-
-//             // Try to find a special folder icon first
-//             let final_icon = null;
-//             for (const type of folderType) {
-//                 for (const ext of extensions) {
-//                     const iconPath = path.join(this.theme_path, `${type}${ext}`);
-//                     if (fs.existsSync(iconPath)) {
-//                         final_icon = iconPath;
-//                         break;
-//                     }
-//                 }
-//                 if (final_icon) break;
-//             }
-
-//             // If no special icon found, fall back to generic folder icons
-//             if (!final_icon) {
-//                 const folder_icons = [
-//                     'folder.svg',
-//                     'folder.png',
-//                     'default-folder.svg',
-//                     'default-folder.png'
-//                 ];
-
-//                 final_icon = folder_icons.reduce((found, icon) => {
-//                     if (found) return found;
-//                     const icon_path = path.join(this.theme_path, icon);
-//                     return fs.existsSync(icon_path) ? icon_path : null;
-//                 }, null);
-//             }
-
-//             // If still no icon found, use the ultimate fallback
-//             final_icon = final_icon || path.join(__dirname, '../assets/icons/folder.svg');
-//             return final_icon;
-//             // e.sender.send('set_folder_icon', href, final_icon);
-
-//         } catch (err) {
-//             console.error('Error in folder icon selection:', err);
-//             // e.sender.send('set_folder_icon', href, path.join(__dirname, '../assets/icons/folder.svg'));
-//             return path.join(__dirname, '../assets/icons/folder.svg');
-//         }
-
-//     }
-
-// }
 
 class DeviceManager {
 
