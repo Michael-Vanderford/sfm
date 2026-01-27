@@ -644,6 +644,7 @@ class Utilities {
                                 fileManager.get_files(new_location)
                                 tabManager.add_tab(new_location)
                             } else {
+                                tabManager.addTabHistory(new_location);
                                 fileManager.get_files(new_location);
                             }
 
@@ -2602,7 +2603,7 @@ class SideBarManager {
             home_view_item.append(icon_div, link_div);
             this.home_view.append(home_view_item);
 
-            home_view_item.dataset.href = `${utilities.home_dir}/${dir}`;
+            // home_view_item.dataset.href = `${utilities.home_dir}/${dir}`;
 
             home_view_item.addEventListener('click', (e) => {
                 let home_dir = `${utilities.home_dir}`;
@@ -2610,7 +2611,6 @@ class SideBarManager {
                     case 'Home':
                         if (e.ctrlKey) {
                             tabManager.add_tab(home_dir);
-                            // tabManager.add_tab_history(`${home_dir}`);
                             fileManager.get_files(`${home_dir}`);
                         } else {
                             tabManager.add_tab_history(`${home_dir}`);
@@ -2628,7 +2628,6 @@ class SideBarManager {
                     case 'File System':
                         if (e.ctrlKey) {
                             tabManager.add_tab('/');
-                            // tabManager.add_tab_history('/');
                             fileManager.get_files(`/`);
                         } else {
                             tabManager.add_tab_history('/');
@@ -2637,8 +2636,7 @@ class SideBarManager {
                         break;
                     default:
                         if (e.ctrlKey) {
-                            tabManager.add_tab(home_dir);
-                            // tabManager.add_tab_history(`${home_dir}/${dir}`);
+                            tabManager.add_tab(`${home_dir}/${dir}`);
                             fileManager.get_files(`${home_dir}/${dir}`);
                         } else {
                             tabManager.add_tab_history(`${home_dir}/${dir}`);

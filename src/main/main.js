@@ -355,7 +355,7 @@ class tabManager {
         let tab = this.tabs.find(t => t.id === tab_id);
         if (tab) {
 
-            win.send("get_files", tab.location[tab.history.idx]);
+            // win.send("get_files", tab.location[tab.history.idx]);
 
             // Enable or disable back and forward buttons based on history index
             if (tab.history.idx > 0) {
