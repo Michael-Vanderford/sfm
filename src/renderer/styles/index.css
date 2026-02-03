@@ -130,7 +130,8 @@ hr {
     background-color: var(--highlight);
 }
 
-.back.button, .forward.button {
+.back.button,
+.forward.button {
     margin-top: 2px;
     background-color: var(--button-nav);
     color: var(--button-nav-text);
@@ -142,7 +143,8 @@ hr {
     width: 50px;
 }
 
-.back.button i, .forward.button i {
+.back.button i,
+.forward.button i {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -151,12 +153,14 @@ hr {
     color: var(--text);
 }
 
-.back.button:hover, .forward.button:hover {
+.back.button:hover,
+.forward.button:hover {
     background-color: var(--button-nav-hover);
     color: var(--button-nav-text);
 }
 
-.back.button.disabled i, .forward.button.disabled i {
+.back.button.disabled i,
+.forward.button.disabled i {
     /* background-color: var(--button-inactive); */
     color: var(--inactive);
     cursor: default;
@@ -330,7 +334,7 @@ hr {
     overflow: hidden;
     z-index: 1;
     width: 4px;
-    height:100%;
+    height: 100%;
     /* right: 0;
     bottom: 0; */
     cursor: col-resize;
@@ -427,13 +431,16 @@ hr {
 
 /* Highlight the row during dragover */
 .drag_over {
-    border-top: 2px solid blue; height: 0px;
+    border-top: 2px solid blue;
+    height: 0px;
 }
 
 /* Optional: Style the dragged row */
 .dragging {
-    opacity: 0.7; /* Slightly transparent while dragging */
-    background-color: #e9ecef; /* Neutral background to distinguish from others */
+    opacity: 0.7;
+    /* Slightly transparent while dragging */
+    background-color: #e9ecef;
+    /* Neutral background to distinguish from others */
 }
 
 /* Optional: Transition for smoother visuals */
@@ -818,6 +825,112 @@ tr {
     grid-template-rows: auto;
 }
 
+.list_view {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    width: 100%;
+}
+
+.list_view .list_view_header {
+    box-sizing: border-box;
+    display: grid;
+    position: sticky;
+    top: 0;
+    background-color: var(--main);
+    grid-template-columns: 2fr 1fr 1fr;
+    text-align: left;
+    width: 100%;
+    gap: 5px;
+    padding: 5px;
+    border-bottom: 1px solid var(--border);
+    font-weight: bold;
+    color: var(--text);
+}
+
+.list_view .sort_column {
+    width: 100%;
+}
+
+.list_view .th_sort_icon {
+    float: right;
+    padding-left: 5px;
+}
+
+.list_view .list_view_header div {
+    border-right: 1px solid #444;
+    padding-left: 5px;
+    text-align: left;
+}
+
+.list_view .card {
+    box-sizing: border-box;
+    align-items: center;
+    margin: 0;
+    padding: 0px;
+    width: 100%;
+    border-radius: 5px;
+    color: var(--text);
+}
+
+.list_view .icon {
+    margin-right: 10px;
+    padding: 0px;
+    flex-shrink: 0;
+}
+
+.list_view .content {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    width: 100%;
+    gap: 5px;
+}
+
+.list_view .header {
+    display: block;
+    width: 100%;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+
+    min-width: 250px;
+
+    /* border: 1px solid var(--border); */
+    /* background-color: red; */
+}
+
+.list_view .href {
+    width: 100%;
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+    /* border: 1px solid var(--border); */
+}
+
+.list_view .location {
+    text-overflow: ellipsis;
+    overflow: hidden;
+    white-space: nowrap;
+
+    /* min-width: 250px; */
+
+    border: none;
+    background: none;
+}
+
+.list_view .content > div {
+    /* border-right: 1px solid #444; */
+}
+
+.list_view .card:hover {
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.list_view .card:focus {
+    outline: none;
+    background: rgba(0, 102, 153, 0.2);
+}
+
 .table_container {
     overflow: auto;
     width: 100%;
@@ -876,7 +989,8 @@ tr {
 }
 
 
-.table th, .table td {
+.table th,
+.table td {
     text-align: left;
     white-space: nowrap;
     width: 100%;
@@ -1172,23 +1286,16 @@ span {
 /* Responsive breakpoints for standard view sizes */
 
 /* Extra small / mobile phones */
-@media (max-width: 480px) {
-
-}
+@media (max-width: 480px) {}
 
 /* Small / large phones and small tablets */
-@media (min-width: 481px) and (max-width: 768px) {
-
-}
+@media (min-width: 481px) and (max-width: 768px) {}
 
 /* Medium / tablets and small laptops */
-@media (min-width: 769px) and (max-width: 1024px) {
-
-}
+@media (min-width: 769px) and (max-width: 1024px) {}
 
 /* Large / laptops */
-@media (min-width: 1025px) and (max-width: 1440px) {
-}
+@media (min-width: 1025px) and (max-width: 1440px) {}
 
 /* Extra large / desktops and wide screens */
 @media (min-width: 1441px) {
@@ -1201,14 +1308,10 @@ span {
 }
 
 /* Utility: scale icons and media inside cards for small screens */
-@media (max-width: 768px) {
-
-}
+@media (max-width: 768px) {}
 
 /* Preserve draggable handles usability on small touch screens */
-@media (pointer: coarse) and (max-width: 1024px) {
-
-}
+@media (pointer: coarse) and (max-width: 1024px) {}
 
 /* Define dark color scheme */
 @media (prefers-color-scheme: dark) {
@@ -1251,7 +1354,8 @@ span {
         --link: #4183c4;
         --highlight: #233246;
         /* --highlight-select: #233246; */
-        --highlight-select: #069;
+        /* --highlight-select: #069; */
+        --highlight-select: rgba(255, 255, 255, 0.05);
         --highlight-target: #233246;
         --highlight-select-border: #707070;
         --highlight-active: #C5B359;

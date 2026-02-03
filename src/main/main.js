@@ -1842,6 +1842,12 @@ class WindowManager {
             backgroundColor: '#2e2c29',
             x: this.window_settings.window.x,
             y: this.window_settings.window.y,
+            // titleBarStyle: 'hidden',
+            // titleBarOverlay: {
+            //     color: '#2e2c29',
+            //     symbolColor: '#ffffff',
+            //     height: 30
+            // },
             webPreferences: {
                 sandbox: false,
                 nodeIntegration: false, // is default value after Electron v5
