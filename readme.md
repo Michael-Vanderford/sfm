@@ -4,9 +4,16 @@
 
 ---
 
+
 ## Screenshots
 
-_Add screenshots here_
+<div align="center">
+	<img src="screenshots/thumb_nails.png" alt="Thumbnails view" width="400"/>
+	<img src="screenshots/search.png" alt="Search UI" width="400"/>
+	<img src="screenshots/properties.png" alt="Properties dialog" width="400"/>
+	<img src="screenshots/settings.png" alt="Settings dialog" width="400"/>
+	<img src="screenshots/copy_overwrite.png" alt="Copy/Overwrite dialog" width="400"/>
+</div>
 
 ---
 
