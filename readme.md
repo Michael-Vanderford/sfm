@@ -7,7 +7,7 @@
 
 ## Screenshots
 
-<div align="center">
+<div align="left">
 	<img src="screenshots/thumb_nails.png" alt="Thumbnails view" width="400"/>
 	<img src="screenshots/search.png" alt="Search UI" width="400"/>
 	<img src="screenshots/properties.png" alt="Properties dialog" width="400"/>
