@@ -1,3 +1,4 @@
+// @ts-nocheck
 const { parentPort, workerData, isMainThread } = require('worker_threads');
 const fs = require('fs');
 const path = require('path');
@@ -84,31 +85,33 @@ if (!isMainThread) {
                 });
                 break;
 
-            // Get Folder Size for properties view
+            // Get folder size for properties view.
             case 'get_folder_size': {
+                const source = data && typeof data.source === 'string' ? data.source : '';
 
-                let cmd = `du -sb "${data.source}"`;
-                gio.exec(cmd, (err, res) => {
+                if (!source) {
+                    parentPort.postMessage({
+                        cmd: 'set_msg',
+                        msg: 'Error: invalid source path for folder size.'
+                    });
+                    break;
+                }
 
-                    if (err) {
-                        console.error(`err ${err}`);
-                        let msg = {
-                            cmd: 'msg',
-                            msg: err.message
-                        }
-                        parentPort.postMessage(msg);
-                        return;
-                    }
+                try {
+                    const size = Number(gio.du(source)) || 0;
 
-                    let size = parseFloat(res.toString().split('\t')[0])
-                    let worker_data = {
+                    parentPort.postMessage({
                         cmd: 'folder_size_done',
-                        source: data.source,
-                        size: size
-                    }
-                    parentPort.postMessage(worker_data);
+                        source,
+                        size
+                    });
+                } catch (err) {
+                    parentPort.postMessage({
+                        cmd: 'set_msg',
+                        msg: (err && err.message) ? err.message : String(err)
+                    });
+                }
 
-                });
                 break;
             }
 

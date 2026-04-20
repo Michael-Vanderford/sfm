@@ -25,19 +25,14 @@
     },
     "license": "LGPL-2.1-or-later",
     "devDependencies": {
-        "@wdio/cli": "^9.12.2",
-        "@wdio/local-runner": "^9.0.9",
-        "@wdio/mocha-framework": "^9.0.8",
         "bootstrap-icons": "^1.11.3",
         "electron": "^37.10.3",
-        "fast-xml-parser": "^5.3.4",
         "jest": "^29.7.0",
-        "mock-fs": "^5.5.0",
-        "node-gyp": "^11.4.2",
-        "wdio-electron-service": "^7.0.5"
+        "node-gyp": "^11.4.2"
     },
     "dependencies": {
         "archiver": "^7.0.1",
+        "fast-xml-parser": "^5.4.1",
         "material-design-icons": "^3.0.1",
         "nan": "^2.22.0"
     }

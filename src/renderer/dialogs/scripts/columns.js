@@ -108,7 +108,10 @@ class ColumnManager {
         ipcRenderer.on('columns', (e) => {
 
             let settings = settingsManager.get_settings();
-            for (const key in settings.columns) {
+            const current_view = settings?.view === 'grid_view' ? 'grid_view' : 'list_view';
+            const section_name = current_view === 'grid_view' ? 'Grid View Columns' : 'List View Columns';
+            let columns = settings.schema.properties[section_name].properties;
+            for (const key in columns) {
 
                 let list = document.querySelector('.columns_list');
                 const item = utilities.add_div(['item']);
@@ -156,18 +159,31 @@ class ColumnManager {
                 label.innerText = u_key;
                 label.htmlFor = key;
 
-                if (settings.columns[key]) {
+                if (columns[key].default) {
                     input.checked = true;
+                }
+
+                if (key === 'name') {
+                    input.checked = true;
+                    input.disabled = true;
+                    label.innerText = `${u_key} (always visible)`;
                 }
 
                 item.append(input, label)
                 list.append(item);
 
                 input.addEventListener('change', (e) => {
+                    if (key === 'name') {
+                        columns[key].default = true;
+                        input.checked = true;
+                        ipcRenderer.send('update_settings', settings);
+                        return;
+                    }
+
                     if (input.checked) {
-                        settings.columns[key] = true;
+                        columns[key].default = true;
                     } else {
-                        settings.columns[key] = false;
+                        columns[key].default = false;
                     }
 
                     ipcRenderer.send('update_settings', settings);

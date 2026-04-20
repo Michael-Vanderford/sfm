@@ -1,3 +1,4 @@
+// @ts-nocheck
 const { contextBridge, ipcRenderer } = require('electron');
 
 function add_div(classlist = []) {
@@ -27,7 +28,41 @@ ipcRenderer.on('connect', (e) => {
     let server = document.getElementById('txt_server');
     let username = document.getElementById('txt_username');
     let use_ssh_key = document.getElementById('chk_pk');
-    let save_connection = document.getElementById('chk_pk');
+    let save_connection = document.getElementById('chk_save_connection');
+
+    function updateCredentialInputs() {
+        const isSshConnection = connection_type.value === 'ssh' || connection_type.value === 'sshfs';
+        const usesSshKey = isSshConnection && chk_pk.checked;
+
+        username.disabled = usesSshKey;
+
+        if (usesSshKey) {
+            password.disabled = true;
+            password.classList.add('hidden');
+        } else {
+            password.disabled = connection_type.value !== 'smb';
+            if (password.disabled) {
+                password.classList.add('hidden');
+            } else {
+                password.classList.remove('hidden');
+            }
+        }
+    }
+
+    function validateRequiredInput(input) {
+        if (!input || input.disabled) {
+            return true;
+        }
+
+        if ((input.value || '').trim() !== '') {
+            return true;
+        }
+
+        input.focus();
+        msg_connect.classList.replace('msg_connect', 'msg_connect_error');
+        msg_connect.innerHTML = `${input.placeholder} Required.`;
+        return false;
+    }
 
     btn_connect.tabIndex = 1
 
@@ -42,29 +77,33 @@ ipcRenderer.on('connect', (e) => {
     }
 
     password.disabled = true;
+    password.classList.add('hidden');
 
     chk_pk.onchange = () => {
-        if (chk_pk.checked) {
-            password.disabled = true
-        } else {
-            password.disabled = false
-        }
+        updateCredentialInputs();
     }
 
     connection_type.addEventListener('change', (e) => {
         if (connection_type.value === 'sshfs') {
             msg_connect.innerHTML = `! Using sshfs requires sshfs be installed.`
             mount_point_div.classList.remove('hidden');
+            chk_pk.disabled = false;
+            chk_pk.checked = true;
         } else if (connection_type.value === 'smb') {
             msg_connect.innerHTML = '';
             mount_point_div.classList.remove('hidden');
+            chk_pk.disabled = true;
+            chk_pk.checked = false;
         } else {
             msg_connect.innerHTML = '';
             mount_point_div.classList.add('hidden');
+            chk_pk.disabled = false;
         }
+
+        updateCredentialInputs();
     })
 
-    if (connection_type.innerHTML != 'sshfs') {
+    if (connection_type.value === 'sshfs') {
         msg_connect.innerHTML = `! Using sshfs requires sshfs be installed.`
     }
 
@@ -72,33 +111,23 @@ ipcRenderer.on('connect', (e) => {
 
         e.preventDefault();
 
-        // Inputs
-        let state = 0;
         let str_server = "";
-        let use_key = 0;
+        const requiredInputs = [server];
+        const requiresMountPoint = !mount_point_div.classList.contains('hidden');
+        const requiresCredentials = connection_type.value === 'smb' || !use_ssh_key.checked;
 
-        // Process
-        let inputs = [].slice.call(document.querySelectorAll('.input, .checkbox'));
-        inputs.push(mount_point);
-        inputs.every(input => {
+        if (requiresMountPoint) {
+            requiredInputs.push(mount_point);
+        }
 
-            // console.log('input', input)
-
-            if (
-                mount_point_div.classList.contains('hidden') === false &&
-                input.disabled === false &&
-                input.value === '') {
-                input.focus();
-                msg_connect.classList.replace('msg_connect', 'msg_connect_error');
-                msg_connect.innerHTML = `${input.placeholder} Required.`
-                state = 0;
-                return false;
-            } else {
-                state = 1;
-                return true;
+        if (requiresCredentials) {
+            requiredInputs.push(username);
+            if (connection_type.value === 'smb') {
+                requiredInputs.push(password);
             }
+        }
 
-        })
+        const state = requiredInputs.every(validateRequiredInput) ? 1 : 0;
 
         // Output
         if (state == 1) {
@@ -106,30 +135,30 @@ ipcRenderer.on('connect', (e) => {
             msg_connect.classList.replace('msg_connect_error', 'msg_connect');
             msg_connect.innerHTML = `Connecting to ${server.value}`;
 
-            if (connection_type.value === 'sshfs') {
-                str_server = server.value
-            } else if (connection_type.value === 'ssh') {
-                str_server = `${server.value}`
-            } else if (connection_type.value === 'smb') {
-                str_server = `smb://${server.value}`
-            }
-
-            // if (use_ssh_key.checked) {
-            //     use_key = 1;
-            // }
+            str_server = server.value.trim();
 
             let cmd = {
                 type: connection_type.value,
                 server: str_server,
                 mount_point: mount_point.value,
-                username: username.value,
-                password: password.value,
+                username: username.disabled ? '' : username.value.trim(),
+                password: password.disabled ? '' : password.value,
                 use_ssh_key: use_ssh_key.checked,
                 save_connection: save_connection.checked
             }
 
             ipcRenderer.invoke('connect', cmd).then(res => {
-
+                if (!res) {
+                    return;
+                }
+                if (res.error) {
+                    msg_connect.classList.add('msg_connect_error');
+                    msg_connect.classList.remove('msg_connect_success');
+                } else {
+                    msg_connect.classList.add('msg_connect_success');
+                    msg_connect.classList.remove('msg_connect_error');
+                }
+                msg_connect.innerHTML = res.msg || '';
             })
 
 
@@ -276,6 +305,7 @@ ipcRenderer.on('connect', (e) => {
 
     })
 
+    connection_type.dispatchEvent(new Event('change'));
 })
 
 // Connect to network message

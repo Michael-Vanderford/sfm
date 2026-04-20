@@ -1,15 +1,44 @@
-const { app, Tray, BrowserWindow, ipcMain, shell, screen, dialog, Menu, MenuItem } = require('electron');
+// @ts-nocheck
+const { app, Tray, BrowserWindow, ipcMain, shell, screen, dialog, Menu, MenuItem, nativeImage } = require('electron');
 const window = require('electron').BrowserWindow;
 const worker = require('worker_threads');
-const { execSync } = require('child_process');
-const exec = require('child_process').exec;
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
+const exec = require('child_process').exec;
 const os = require('os');
 const gio = require('../gio/build/Release/gio.node');
 const iconManager = require('./lib/IconManager');
 const { XMLParser } = require('fast-xml-parser');
 
+const file_icon_cache = new Map();
+const MAX_FILE_ICON_CACHE_ENTRIES = 2000;
+
+function get_cached_file_icon(href) {
+    return file_icon_cache.get(href);
+}
+
+function set_cached_file_icon(href, icon_data_url) {
+    if (!href || typeof href !== 'string' || !icon_data_url || typeof icon_data_url !== 'string') {
+        return;
+    }
+
+    if (file_icon_cache.has(href)) {
+        file_icon_cache.set(href, icon_data_url);
+        return;
+    }
+
+    if (file_icon_cache.size >= MAX_FILE_ICON_CACHE_ENTRIES) {
+        const oldest_key = file_icon_cache.keys().next().value;
+        if (oldest_key) {
+            file_icon_cache.delete(oldest_key);
+        }
+    }
+
+    file_icon_cache.set(href, icon_data_url);
+}
+
+app.disableHardwareAcceleration();
 
 // // Configure electron-reload
 // electronReload(__dirname, {
@@ -18,12 +47,108 @@ const { XMLParser } = require('fast-xml-parser');
 //     hardResetMethod: 'exit'
 // });
 
+function normalize_find_results(raw_results = []) {
+    if (!Array.isArray(raw_results)) {
+        return [];
+    }
+
+    return raw_results
+        .map((item) => {
+            if (!item) {
+                return null;
+            }
+
+            if (typeof item === 'string') {
+                try {
+                    const file = gio.get_file(item);
+                    if (file && file.href) {
+                        return file;
+                    }
+                } catch (err) {
+                }
+                return {
+                    href: item,
+                    name: path.basename(item),
+                    display_name: path.basename(item),
+                    location: path.dirname(item),
+                    is_dir: false,
+                    content_type: ''
+                };
+            }
+
+            if (typeof item === 'object') {
+                return item;
+            }
+
+            return null;
+        })
+        .filter(Boolean);
+}
+
+function normalize_find_options(raw_options = {}) {
+    if (!raw_options || typeof raw_options !== 'object' || Array.isArray(raw_options)) {
+        return {};
+    }
+
+    const options = {};
+
+    if (raw_options.minSize !== undefined) {
+        const min_size = Number(raw_options.minSize);
+        if (Number.isFinite(min_size) && min_size >= 0) {
+            options.minSize = Math.floor(min_size);
+        }
+    }
+
+    if (raw_options.maxSize !== undefined) {
+        const max_size = Number(raw_options.maxSize);
+        if (Number.isFinite(max_size) && max_size >= 0) {
+            options.maxSize = Math.floor(max_size);
+        }
+    }
+
+    if (raw_options.dateFrom !== undefined) {
+        const date_from = new Date(raw_options.dateFrom);
+        if (!Number.isNaN(date_from.getTime())) {
+            options.dateFrom = raw_options.dateFrom;
+        }
+    }
+
+    if (raw_options.dateTo !== undefined) {
+        const date_to = new Date(raw_options.dateTo);
+        if (!Number.isNaN(date_to.getTime())) {
+            options.dateTo = raw_options.dateTo;
+        }
+    }
+
+    return options;
+}
+
+
 /**
  * Class to watch for changes in the file system
  */
 class Watcher {
     constructor() {
         // this.monitors = new Map();
+        this.unsupported_watch_paths = new Set();
+    }
+
+    is_unsupported_watch_path(dir) {
+        if (!dir || typeof dir !== 'string') {
+            return false;
+        }
+
+        // GVFS SMB mounts commonly do not support file monitor APIs.
+        return dir.includes('/gvfs/smb-share:');
+    }
+
+    is_unsupported_watch_error(err) {
+        if (!err) {
+            return false;
+        }
+
+        const msg = String(err.message || err).toLowerCase();
+        return msg.includes('operation not supported') || msg.includes('not supported');
     }
 
     /**
@@ -41,6 +166,14 @@ class Watcher {
         //     // Already watching this path
         //     return;
         // }
+
+        if (this.is_unsupported_watch_path(dir)) {
+            if (!this.unsupported_watch_paths.has(dir)) {
+                this.unsupported_watch_paths.add(dir);
+                console.warn(`Watcher disabled for unsupported path: ${dir}`);
+            }
+            return;
+        }
 
         try {
 
@@ -103,6 +236,14 @@ class Watcher {
             // this.monitors.set(path, path);
 
         } catch (err) {
+            if (this.is_unsupported_watch_error(err)) {
+                if (!this.unsupported_watch_paths.has(dir)) {
+                    this.unsupported_watch_paths.add(dir);
+                    console.warn(`Watcher not supported for path: ${dir}`);
+                }
+                return;
+            }
+
             console.error(`Watcher error for path ${dir}:`, err);
         }
     }
@@ -219,6 +360,7 @@ class SettingsManager {
             let list_view_settings = {};
             fs.writeFileSync(this.list_view_file, JSON.stringify(list_view_settings, null, 4));
         }
+        console.log('getListViewSetting', this.list_view_settings);
         return this.list_view_settings;
     }
 
@@ -407,6 +549,115 @@ ipcMain.on('switch_tab', (e, tab_id) => {
     tab_manager.switchTab(tab_id);
 });
 
+ipcMain.handle('find', async (e, query, location, options) => {
+    const search_query = typeof query === 'string' ? query.trim() : '';
+    const search_location = typeof location === 'string' && location.trim() !== ''
+        ? location
+        : os.homedir();
+    const search_options = normalize_find_options(options);
+    const has_search_options = Object.keys(search_options).length > 0;
+
+    if (!search_query) {
+        return {
+            error: false,
+            results: []
+        };
+    }
+
+    return await new Promise((resolve) => {
+        const find_callback = (err, res) => {
+            // Supports both callback shapes: (results) and (err, results)
+            const callback_error =
+                err &&
+                res === undefined &&
+                typeof err !== 'string' &&
+                !Array.isArray(err)
+                    ? err
+                    : null;
+
+            if (callback_error) {
+                resolve({
+                    error: true,
+                    message: String(callback_error.message || callback_error),
+                    results: []
+                });
+                return;
+            }
+
+            const raw_results = res === undefined ? err : res;
+            resolve({
+                error: false,
+                results: normalize_find_results(raw_results)
+            });
+        };
+
+        try {
+            if (has_search_options) {
+                try {
+                    gio.find(search_query, search_location, search_options, find_callback);
+                } catch (err) {
+                    // Fallback for older gio builds that do not support options.
+                    gio.find(search_query, search_location, find_callback);
+                }
+            } else {
+                gio.find(search_query, search_location, find_callback);
+            }
+        } catch (err) {
+            resolve({
+                error: true,
+                message: String(err.message || err),
+                results: []
+            });
+        }
+    });
+});
+
+// Overwrite a single conflicting file
+ipcMain.on('overwrite_one', (e, f, operation) => {
+    try {
+        if (fs.existsSync(f.destination)) {
+            if (fs.statSync(f.destination).isDirectory()) {
+                fs.rmSync(f.destination, { recursive: true, force: true });
+            } else {
+                fs.unlinkSync(f.destination);
+            }
+        }
+        if (operation === 'move') {
+            utilities.move_worker.postMessage({ cmd: 'move', move_arr: [f] });
+            utilities.move_in_progress = true;
+        } else {
+            utilities.paste_worker.postMessage({ cmd: 'paste', copy_arr: [f] });
+            utilities.copy_in_progress = true;
+        }
+    } catch (err) {
+        win.send('set_msg', `Error overwriting ${f.name}: ${err.message}`);
+    }
+});
+
+// Overwrite all remaining conflicting files
+ipcMain.on('overwrite_all', (e, files_arr, operation) => {
+    files_arr.forEach(f => {
+        try {
+            if (fs.existsSync(f.destination)) {
+                if (fs.statSync(f.destination).isDirectory()) {
+                    fs.rmSync(f.destination, { recursive: true, force: true });
+                } else {
+                    fs.unlinkSync(f.destination);
+                }
+            }
+        } catch (err) {
+            win.send('set_msg', `Error removing ${f.destination}: ${err.message}`);
+        }
+    });
+    if (operation === 'move') {
+        utilities.move_worker.postMessage({ cmd: 'move', move_arr: files_arr });
+        utilities.move_in_progress = true;
+    } else {
+        utilities.paste_worker.postMessage({ cmd: 'paste', copy_arr: files_arr });
+        utilities.copy_in_progress = true;
+    }
+});
+
 /////////////////////////////////
 
 // // Go forward
@@ -446,6 +697,10 @@ class Utilities {
         this.is_main = true;
         this.run_watcher = true;
         this.root_destination = '';
+        this.delete_sender = null;
+        this.delete_in_progress = false;
+        this.copy_in_progress = false;
+        this.move_in_progress = false;
 
         this.byteUnits = [' kB', ' MB', ' GB', ' TB', 'PB', 'EB', 'ZB', 'YB'];
 
@@ -493,7 +748,7 @@ class Utilities {
 
         // listen for make directory event
         ipcMain.on('mkdir', (e, location) => {
-            this.mkdir(e, path.normalize(location));
+              this.mkdir(e, location);
         })
 
         // listen for rename event
@@ -504,6 +759,20 @@ class Utilities {
         // listen for delete event
         ipcMain.on('delete', (e, delete_arr) => {
             this.delete(e, delete_arr);
+        })
+
+        ipcMain.on('cancel_operation', (e, operation) => {
+            if (operation === 'delete' && this.delete_in_progress) {
+                this.delete_worker.postMessage({ cmd: 'cancel' });
+                const sender = this.delete_sender || e.sender || win;
+                sender.send('set_msg', 'Cancelling delete...');
+            } else if (operation === 'copy' && this.copy_in_progress) {
+                this.paste_worker.postMessage({ cmd: 'cancel' });
+                win.send('set_msg', 'Cancelling copy...');
+            } else if (operation === 'move' && this.move_in_progress) {
+                this.move_worker.postMessage({ cmd: 'cancel' });
+                win.send('set_msg', 'Cancelling move...');
+            }
         })
 
         // listen for get_disk_space event
@@ -523,123 +792,68 @@ class Utilities {
         })
 
         // listen for message from worker
-        this.paste_worker = new worker.Worker(path.join(__dirname, '../workers/paste_worker.js'));
-        this.paste_worker.on('message', (data) => {
-            const cmd = data.cmd;
-            switch (cmd) {
-                case 'set_progress':
-                    win.send('set_progress', data);
-                    break;
-                case 'remove_item': {
-                    // win.send('remove_item', data.id);
-                    break;
-                }
-                case 'set_msg': {
-                    win.send('set_msg', data.msg);
-                    break;
-                }
-                case 'cp_done': {
-
-                    console.log('cp_done_data', data);
-                    this.run_watcher = false;
-
-                    if (this.is_main) {
-
-                        // get the base name of the file
-                        let file = gio.get_file(data.destination);
-
-                        if (file.href === undefined || file.href === null) {
-                            win.send('set_msg', 'Error: File not found.');
-                            break;
-                        }
-
-                        file.id = btoa(file.href);
-                        win.send('update_item', file);
-
-                    } else if (!this.is_main) {
-
-                        // get the base name of the file
-                        let file = gio.get_file(this.root_destination);
-                        file.id = btoa(file.href);
-
-                        if (file.href === undefined || file.href === null) {
-                            win.send('set_msg', 'Error: File not found.');
-                            break;
-                        } else {
-                            win.send('update_item', file);
-                        }
-
-                    }
-
-                    this.get_disk_space(this.root_destination);
-                    this.run_watcher = true;
-
-                    break;
-                }
-                default:
-                    break;
-            }
-
-        });
+        this.init_paste_worker();
 
         // init move worker
-        this.move_worker = new worker.Worker(path.join(__dirname, '../workers/move_worker.js'));
-        this.move_worker.on('message', (data) => {
+        this.init_move_worker();
+
+        // init delete worker
+        this.delete_worker = new worker.Worker(path.join(__dirname, '../workers/delete_worker.js'));
+        this.delete_worker.on('message', (data) => {
             const cmd = data.cmd;
+            const sender = this.delete_sender || win;
+
             switch (cmd) {
                 case 'set_progress':
-                    win.send('set_progress', data);
+                    sender.send('set_progress', data);
                     break;
-                case 'set_msg': {
-                    win.send('set_msg', data.msg);
+                case 'set_msg':
+                    sender.send('set_msg', data.msg);
                     break;
-                }
-                case 'mv_done': {
-
-
-                    if (this.is_main) {
-
-                        // remove old items
-                        win.send('remove_items', data.files_arr);
-
-                        // get moved from location
-                        let root_source = path.dirname(data.files_arr[0].source);
-                        let file = gio.get_file(root_source);
-                        file.id = btoa(file.href);
-
-                        // check file object
-                        if (file.href === undefined || file.href === null) {
-                            win.send('set_msg', 'Error: File not found.');
-                            break;
-                        } else {
-                            // update moved from item
-                            win.send('update_item', file);
-                        }
-
-                    } else if (!this.is_main) {
-
-                        let file = gio.get_file(this.root_destination);
-                        file.id = btoa(file.href);
-
-                        if (file.href === undefined || file.href === null) {
-                            win.send('set_msg', 'Error: File not found.');
-                            break;
-                        } else {
-                            win.send('update_item', file);
-                        }
-
+                case 'delete_done': {
+                    if (Array.isArray(data.deleted_items) && data.deleted_items.length > 0) {
+                        sender.send('remove_items', data.deleted_items);
                     }
 
-                    setTimeout(() => {
-                        this.run_watcher = true;
-                    }, 100);
+                    sender.send('set_progress', {
+                        cmd: 'set_progress',
+                        operation: 'delete',
+                        can_cancel: false,
+                        status: '',
+                        max: 0,
+                        value: 0
+                    });
 
+                    if (data.cancelled) {
+                        sender.send('set_msg', `Delete cancelled. ${data.deleted_files} files deleted.`);
+                    } else if (data.failed_items > 0) {
+                        sender.send('set_msg', `${data.deleted_files} files deleted, ${data.failed_items} items failed.`);
+                    } else {
+                        sender.send('set_msg', `${data.deleted_files} files deleted.`);
+                    }
+
+                    this.delete_in_progress = false;
+                    this.delete_sender = null;
+                    this.run_watcher = true;
                     break;
                 }
                 default:
                     break;
             }
+        });
 
+        this.delete_worker.on('error', (err) => {
+            const sender = this.delete_sender || win;
+            sender.send('set_progress', {
+                cmd: 'set_progress',
+                status: '',
+                max: 0,
+                value: 0
+            });
+            sender.send('set_msg', `Error deleting files: ${err.message}`);
+            this.delete_in_progress = false;
+            this.delete_sender = null;
+            this.run_watcher = true;
         });
 
         // init home directory
@@ -766,6 +980,138 @@ class Utilities {
 
     }
 
+    init_paste_worker() {
+        this.paste_worker = new worker.Worker(path.join(__dirname, '../workers/paste_worker.js'));
+        this.paste_worker.on('message', (data) => {
+            const cmd = data.cmd;
+            switch (cmd) {
+                case 'set_progress':
+                    win.send('set_progress', data);
+                    break;
+                case 'remove_item': {
+                    // win.send('remove_item', data.id);
+                    break;
+                }
+                case 'set_msg': {
+                    win.send('set_msg', data.msg);
+                    break;
+                }
+                case 'cp_done': {
+
+                    console.log('cp_done_data', data);
+                    this.run_watcher = false;
+                    this.copy_in_progress = false;
+
+                    if (data.cancelled) {
+                        win.send('set_msg', 'Copy cancelled.');
+                    }
+
+                    if (this.is_main && !data.cancelled) {
+
+                        // get the base name of the file
+                        let file = gio.get_file(data.destination);
+
+                        if (file.href === undefined || file.href === null) {
+                            win.send('set_msg', 'Error: File not found.');
+                            break;
+                        }
+
+                        file.id = btoa(file.href);
+                        win.send('update_item', file);
+
+                    } else if (!this.is_main && !data.cancelled) {
+
+                        // get the base name of the file
+                        let file = gio.get_file(this.root_destination);
+                        file.id = btoa(file.href);
+
+                        if (file.href === undefined || file.href === null) {
+                            win.send('set_msg', 'Error: File not found.');
+                            break;
+                        } else {
+                            win.send('update_item', file);
+                        }
+
+                    }
+
+                    this.get_disk_space(this.root_destination);
+                    this.run_watcher = true;
+
+                    break;
+                }
+                default:
+                    break;
+            }
+
+        });
+    }
+
+    init_move_worker() {
+        this.move_worker = new worker.Worker(path.join(__dirname, '../workers/move_worker.js'));
+        this.move_worker.on('message', (data) => {
+            const cmd = data.cmd;
+            switch (cmd) {
+                case 'set_progress':
+                    win.send('set_progress', data);
+                    break;
+                case 'set_msg': {
+                    win.send('set_msg', data.msg);
+                    break;
+                }
+                case 'mv_done': {
+
+                    this.move_in_progress = false;
+
+                    if (this.is_main && !data.cancelled) {
+
+                        // remove old items
+                        win.send('remove_items', data.files_arr);
+
+                        // get moved from location
+                        let root_source = path.dirname(data.files_arr[0].source);
+                        let file = gio.get_file(root_source);
+                        file.id = btoa(file.href);
+
+                        // check file object
+                        if (file.href === undefined || file.href === null) {
+                            win.send('set_msg', 'Error: File not found.');
+                            break;
+                        } else {
+                            // update moved from item
+                            win.send('update_item', file);
+                        }
+
+                    } else if (!this.is_main && !data.cancelled) {
+
+                        let file = gio.get_file(this.root_destination);
+                        file.id = btoa(file.href);
+
+                        if (file.href === undefined || file.href === null) {
+                            win.send('set_msg', 'Error: File not found.');
+                            break;
+                        } else {
+                            win.send('update_item', file);
+                        }
+
+                    }
+
+                    if (data.cancelled) {
+                        win.send('set_msg', 'Move cancelled.');
+                    }
+
+                    setTimeout(() => {
+                        this.run_watcher = true;
+                    }, 100);
+
+                    break;
+                }
+                default:
+                    break;
+            }
+
+        });
+    }
+
     // get folder size
     get_folder_size(e, href) {
         this.ls_worker.postMessage({ cmd: 'get_folder_size', source: href });
@@ -779,7 +1125,7 @@ class Utilities {
 
     // sanitize file name
     sanitize_file_name(href) {
-        return href.replace(/:/g, '_').replace(/\n/g, ' ');
+        return href.replace(/\n/g, ' ');
     }
 
     // open
@@ -851,7 +1197,7 @@ class Utilities {
                 return;
             }
 
-            f.destination = this.sanitize_file_name(path.join(location, f.name));
+            f.destination = path.join(location, this.sanitize_file_name(f.name));
             f.source = f.href;
             f.name = path.basename(f.destination);
             f.display_name = f.name;
@@ -904,6 +1250,7 @@ class Utilities {
                 location: location
             }
             this.paste_worker.postMessage(paste_cmd);
+                this.copy_in_progress = true;
         }
 
         if (overwrite_arr.length > 0) {
@@ -987,14 +1334,12 @@ class Utilities {
             }
 
             this.move_worker.postMessage(move_cmd);
+            this.move_in_progress = true;
 
         }
 
         if (overwrite_arr.length > 0) {
-            // send overwrite_arr to renderer
-            win.send('set_msg', `Error: ${overwrite_arr.length} files already exist in ${location}`);
-            win.send('clear_highlight');
-            // e.sender.send('overwrite_move', overwrite_arr);
+            win.send('overwrite_move', overwrite_arr);
         }
 
         move_arr = [];
@@ -1089,6 +1434,11 @@ class Utilities {
 
         if (delete_arr.length > 0) {
 
+            if (this.delete_in_progress) {
+                e.sender.send('set_msg', 'Delete already in progress.');
+                return;
+            }
+
             this.run_watcher = false;
 
             // Create alert dialog
@@ -1104,33 +1454,16 @@ class Utilities {
             // Show alert dialog
             dialog.showMessageBox(null, options).then((response) => {
                 if (response.response === 1) {
-
-                    delete_arr.forEach(f => {
-                        if (f.is_dir) {
-                            try {
-                                fs.rmSync(f.href, { recursive: true });
-                            } catch (err) {
-                                console.error(err);
-                            }
-                        } else {
-                            try {
-                                fs.unlinkSync(f.href);
-                            } catch (err) {
-                                console.error(err);
-                            }
-                        }
-                    })
-
-                    e.sender.send('remove_items', delete_arr);
-                    e.sender.send('set_msg', `${delete_arr.length} items deleted.`);
-                    delete_arr = [];
-
-                    setTimeout(() => {
-                        this.run_watcher = true;
-                    }, 100);
+                    this.delete_sender = e.sender;
+                    this.delete_in_progress = true;
+                    this.delete_worker.postMessage({
+                        cmd: 'delete',
+                        delete_arr
+                    });
 
                 } else {
                     win.send('set_msg', 'Operation cancelled.');
+                    this.run_watcher = true;
                 }
 
             });
@@ -1161,9 +1494,9 @@ class Utilities {
 
         try {
             let options = {
-                disksize: this.get_file_size(parseInt(gio.du(href).total)),
-                usedspace: this.get_file_size(parseInt(gio.du(href).used)),
-                availablespace: this.get_file_size(parseInt(gio.du(href).free))
+                disksize: this.get_file_size(parseInt(gio.disk_stats(href).total)),
+                usedspace: this.get_file_size(parseInt(gio.disk_stats(href).used)),
+                availablespace: this.get_file_size(parseInt(gio.disk_stats(href).free))
             }
             let df = [];
             df.push(options);
@@ -1287,11 +1620,52 @@ class WorkspaceManager {
 
 // Get File Icon
 ipcMain.handle('get_icon', async (e, href) => {
+
+    const cached_icon = get_cached_file_icon(href);
+    if (cached_icon) {
+        return cached_icon;
+    }
+
+    if (process.platform === 'linux' && typeof gio.get_file_icon_data_url === 'function') {
+        try {
+            const result = gio.get_file_icon_data_url(href);
+            if (typeof result === 'string' && result.startsWith('data:image/')) {
+                set_cached_file_icon(href, result);
+                return result;
+            }
+            if (result && result.icon_data_url) {
+                set_cached_file_icon(href, result.icon_data_url);
+                return result.icon_data_url;
+            }
+            if (result && result.symbolic_icon_data_url) {
+                set_cached_file_icon(href, result.symbolic_icon_data_url);
+                return result.symbolic_icon_data_url;
+            }
+        } catch (err) {
+        }
+    }
+
+    if (process.platform === 'linux' && typeof iconManager.get_file_icon === 'function') {
+        try {
+            const icon_path = iconManager.get_file_icon(href);
+            if (typeof icon_path === 'string' && icon_path.length > 0) {
+                set_cached_file_icon(href, icon_path);
+                return icon_path;
+            }
+        } catch (err) {
+        }
+    }
+
     return await app.getFileIcon(href, { size: 32 }).then(icon => {
-        return icon.toDataURL();
+        const icon_data_url = icon.toDataURL();
+        set_cached_file_icon(href, icon_data_url);
+        return icon_data_url;
     }).catch((err) => {
-        return `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAADHklEQVRYhe2WX0/yVhzHP8VBW04r0pKIgjDjlRfPC3BX7vXM1+OdMXsPXi9eqEu27DUgf1ICgQrlFGkxnF0sdgrq00dxyZZ9kyb0d2i/n/b8vj0H/teS6vX69xcXF7/4vh9JKdV7j7Ozs+s0fpnlwunp6c/Hx8c/5nK53EcepFar/ZAGYgXg6Ojo6CPG3wqxApDL5bLrMM9kMgnE+fn5qxArAOuSECL5Xa1WX4X4NIB6vY5pmmia9iaEtlyQUqp1Qcznc+I4Rqm/b1kul595frcus5eUzWbJZt9uqVRToJRiMBgk58PhEM/zUEqhlMLzPIbDIfDXU3c6HcIwTAWZCqDdbtPtdgGQUhIEAYZh4HkenudhmiaTyQQpJY1GA9d1abVaz179hwBqtRq6rgMwmUxwHAfHcZBSIqWkWCziOA5BEKCUwjRNhBDMZrP1AHymvhnAtm1GoxHj8RghBEIIxuMxvu+zubmJpmnEcUwYhhiG8dX7pU5BqVQCwLIsoigiDEMqlQoA3W4X27axLIv9/X16vR57e3vJN+AtpXoDYRgynU6Zz+cAFAoF8vn8mwZpzFMBKKVotVq4rkuj0WCxWNBsNun3+wCfn4LZbEY+n8c0TZRSZDIZDg4OkvH/fgoMw+D+/p44jl+c14+mINViJKVkNBqxvb2dfNt938dxHJRSdLtddF3HdV3m8zm9Xo+trS0sy1oxtCzr44vRYDBIVjlN0ygUCskG5LHx1paCxWJBu91OUvDY7bqu43keYRjS6XQIggCA29tbSqUSzWZzPSmIogghRJKCx7XAdV2klAghKJfLyf+VUhiG8e9JwVd7QNd1ptMpURShaRq2bXN3d8discC27RevieOY6XT6vhT4vh8v74yXU/DYhDs7O2iaRhRFPDw8IIQgjmP6/T7FYvHZxhQgiqLYdV39aW1lCm5ubn5frlmWRbVaTSJYKpXY3d1NOl3X9cQsl8tRrVZXzAGur69/W65tLBeurq7+ODw8/FKpVHY2NjZWxt+jOI7nl5eXv56cnPwUBEHv6dhrYRWAuQ7zJ7oH0m0U/0n9CS0Pytp5nRYfAAAAAElFTkSuQmCC`;
+        const fallback_icon = `data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAADHklEQVRYhe2WX0/yVhzHP8VBW04r0pKIgjDjlRfPC3BX7vXM1+OdMXsPXi9eqEu27DUgf1ICgQrlFGkxnF0sdgrq00dxyZZ9kyb0d2i/n/b8vj0H/teS6vX69xcXF7/4vh9JKdV7j7Ozs+s0fpnlwunp6c/Hx8c/5nK53EcepFar/ZAGYgXg6Ojo6CPG3wqxApDL5bLrMM9kMgnE+fn5qxArAOuSECL5Xa1WX4X4NIB6vY5pmmia9iaEtlyQUqp1Qcznc+I4Rqm/b1kul595frcus5eUzWbJZt9uqVRToJRiMBgk58PhEM/zUEqhlMLzPIbDIfDXU3c6HcIwTAWZCqDdbtPtdgGQUhIEAYZh4HkenudhmiaTyQQpJY1GA9d1abVaz179hwBqtRq6rgMwmUxwHAfHcZBSIqWkWCziOA5BEKCUwjRNhBDMZrP1AHymvhnAtm1GoxHj8RghBEIIxuMxvu+zubmJpmnEcUwYhhiG8dX7pU5BqVQCwLIsoigiDEMqlQoA3W4X27axLIv9/X16vR57e3vJN+AtpXoDYRgynU6Zz+cAFAoF8vn8mwZpzFMBKKVotVq4rkuj0WCxWNBsNun3+wCfn4LZbEY+n8c0TZRSZDIZDg4OkvH/fgoMw+D+/p44jl+c14+mINViJKVkNBqxvb2dfNt938dxHJRSdLtddF3HdV3m8zm9Xo+trS0sy1oxtCzr44vRYDBIVjlN0ygUCskG5LHx1paCxWJBu91OUvDY7bqu43keYRjS6XQIggCA29tbSqUSzWZzPSmIogghRJKCx7XAdV2klAghKJfLyf+VUhiG8e9JwVd7QNd1ptMpURShaRq2bXN3d8discC27RevieOY6XT6vhT4vh8v74yXU/DYhDs7O2iaRhRFPDw8IIQgjmP6/T7FYvHZxhQgiqLYdV39aW1lCm5ubn5frlmWRbVaTSJYKpXY3d1NOl3X9cQsl8tRrVZXzAGur69/W65tLBeurq7+ODw8/FKpVHY2NjZWxt+jOI7nl5eXv56cnPwUBEHv6dhrYRWAuQ7zJ7oH0m0U/0n9CS0Pytp5nRYfAAAAAElFTkSuQmCC`;
+        set_cached_file_icon(href, fallback_icon);
+        return fallback_icon;
     })
+
 })
 
 // Get Folder Icon
@@ -1321,13 +1695,12 @@ class DeviceManager {
         // Get Mounts
         ipcMain.on('get_mounts', (e) => {
             this.device_worker.postMessage({ cmd: 'get_mounts' });
-
         });
 
-        // // Get Devices
-        // ipcMain.on('get_devices', (e) => {
-        //     this.device_worker.postMessage({ cmd: 'get_devices' });
-        // })
+        // Get Devices
+        ipcMain.on('get_devices', (e) => {
+            this.device_worker.postMessage({ cmd: 'get_devices' });
+        })
 
         // Mount ipc
         ipcMain.on('mount', (e, device_name) => {
@@ -1340,7 +1713,19 @@ class DeviceManager {
             win.send('umount_done', `${device_name}`);
         });
 
+        // Open connect dialog from renderer
+        ipcMain.on('open_connect_dialog', (e) => {
+            if (menuManager && typeof menuManager.connect_dialog === 'function') {
+                menuManager.connect_dialog();
+            }
+        });
 
+        // Open connect dialog
+        ipcMain.on('connect', (e) => {
+            if (menuManager && typeof menuManager.connect_dialog === 'function') {
+                menuManager.connect_dialog();
+            }
+        });
 
         this.device_worker.on('message', (data) => {
             const cmd = data.cmd;
@@ -1358,15 +1743,16 @@ class DeviceManager {
             }
         })
 
-        // // Monitor USB Devices
-        // gio.monitor(data => {
-        //     if (data) {
-        //         console.log('monitor data', data);
-        //         if (data != 'mtp') {
-        //             this.device_worker.postMessage({ cmd: 'get_devices' });
-        //         }
-        //     }
-        // });
+        // Monitor USB Devices
+        gio.monitor(data => {
+            if (data) {
+                console.log('monitor data', data);
+                if (data != 'mtp') {
+                    this.device_worker.postMessage({ cmd: 'get_mounts' });
+                    // this.device_worker.postMessage({ cmd: 'get_devices' });
+                }
+            }
+        });
 
     }
 
@@ -1437,6 +1823,121 @@ class NetworkManager {
 
         this.network_settings_arr = []
 
+        ipcMain.handle('connect', async (e, network_settings) => {
+            return await this.connect(e, network_settings);
+        });
+
+    }
+
+    normalize_server(server) {
+        if (!server || typeof server !== 'string') {
+            return '';
+        }
+
+        return server
+            .trim()
+            .replace(/^smb:\/\//i, '')
+            .replace(/^ssh:\/\//i, '')
+            .replace(/^sftp:\/\//i, '')
+            .replace(/\/+$/, '');
+    }
+
+    connect(e, network_settings = {}) {
+
+        return new Promise((resolve) => {
+            const sender = e && e.sender ? e.sender : win;
+            const type = (network_settings.type || '').toLowerCase();
+            const server = this.normalize_server(network_settings.server);
+            const username = (network_settings.username || '').trim();
+            const password = network_settings.password || '';
+            const use_ssh_key = !!network_settings.use_ssh_key;
+
+            if (!['ssh', 'sshfs', 'smb'].includes(type)) {
+                const result = { error: true, msg: 'Unsupported connection type.' };
+                sender && sender.send && sender.send('msg_connect', result);
+                resolve(result);
+                return;
+            }
+
+            if (!server) {
+                const result = { error: true, msg: 'Server is required.' };
+                sender && sender.send && sender.send('msg_connect', result);
+                resolve(result);
+                return;
+            }
+
+            if (!use_ssh_key && !username) {
+                const result = { error: true, msg: 'Username is required.' };
+                sender && sender.send && sender.send('msg_connect', result);
+                resolve(result);
+                return;
+            }
+
+            if (type === 'smb' && !password) {
+                const result = { error: true, msg: 'Password is required for SMB.' };
+                sender && sender.send && sender.send('msg_connect', result);
+                resolve(result);
+                return;
+            }
+
+            if ((type === 'ssh' || type === 'sshfs') && !use_ssh_key) {
+                const result = { error: true, msg: 'This build currently supports SSH/SSHFS with public key authentication.' };
+                sender && sender.send && sender.send('msg_connect', result);
+                resolve(result);
+                return;
+            }
+
+            if (!gio || typeof gio.connect_network_drive !== 'function') {
+                const result = { error: true, msg: 'Network drive support is not available in this build.' };
+                sender && sender.send && sender.send('msg_connect', result);
+                resolve(result);
+                return;
+            }
+
+            const timeout = setTimeout(() => {
+                const result = { error: true, msg: `Connection timed out for ${server}.` };
+                sender && sender.send && sender.send('msg_connect', result);
+                resolve(result);
+            }, 20000);
+
+            try {
+                gio.connect_network_drive(
+                    server,
+                    username,
+                    password,
+                    use_ssh_key ? 1 : 0,
+                    type,
+                    (err, data) => {
+                        clearTimeout(timeout);
+
+                        if (err) {
+                            const result = { error: true, msg: String(err) };
+                            sender && sender.send && sender.send('msg_connect', result);
+                            resolve(result);
+                            return;
+                        }
+
+                        if (network_settings.save_connection) {
+                            this.setNetworkSettings({
+                                ...network_settings,
+                                server,
+                                type
+                            });
+                        }
+
+                        deviceManager.device_worker.postMessage({ cmd: 'get_mounts' });
+                        const result = { error: false, msg: `Connected to ${server}.` };
+                        sender && sender.send && sender.send('msg_connect', result);
+                        resolve(result);
+                    }
+                );
+            } catch (err) {
+                clearTimeout(timeout);
+                const result = { error: true, msg: `Error connecting to ${server}: ${err.message}` };
+                sender && sender.send && sender.send('msg_connect', result);
+                resolve(result);
+            }
+        });
     }
 
     // Save network settings to network.json
@@ -1842,27 +2343,50 @@ class WindowManager {
             backgroundColor: '#2e2c29',
             x: this.window_settings.window.x,
             y: this.window_settings.window.y,
-            // titleBarStyle: 'hidden',
-            // titleBarOverlay: {
-            //     color: '#2e2c29',
-            //     symbolColor: '#ffffff',
-            //     height: 30
-            // },
+            frame: false, // Hide native title bar
+            titleBarStyle: 'hidden',
             webPreferences: {
                 sandbox: false,
-                nodeIntegration: false, // is default value after Electron v5
-                contextIsolation: true, // protect against prototype pollution
-                enableRemoteModule: false, // turn off remote
+                nodeIntegration: true, // Needed for titlebar.js
+                contextIsolation: false, // Needed for titlebar.js
+                enableRemoteModule: false,
                 nodeIntegrationInWorker: true,
                 nativeWindowOpen: true,
                 preload: path.join(__dirname, 'preload.js'),
             },
-            // icon: path.join(__dirname, '../assets/icons/icon.png')
             icon: app_icon
         });
 
         // hide menu
         window.setMenuBarVisibility(false);
+
+        // IPC handlers for custom title bar controls
+        // IPC handlers for custom title bar controls
+        ipcMain.on('window-minimize', () => {
+            window.minimize();
+        });
+        ipcMain.on('window-maximize', () => {
+            if (window.isMaximized()) {
+                window.unmaximize();
+            } else {
+                window.maximize();
+            }
+        });
+        ipcMain.on('window-close', () => {
+            window.close();
+        });
+
+        // IPC handlers for menu actions
+        ipcMain.on('toggle-devtools', () => {
+            if (window.webContents.isDevToolsOpened()) {
+                window.webContents.closeDevTools();
+            } else {
+                window.webContents.openDevTools({ mode: 'detach' });
+            }
+        });
+        ipcMain.on('toggle-fullscreen', () => {
+            window.setFullScreen(!window.isFullScreen());
+        });
 
         // window.on('move', this.updateBounds);   // macOS drags
         // window.on('resize', this.updateBounds); // All platforms (fires during Windows drags)
@@ -1984,6 +2508,10 @@ class MenuManager {
         this.main_menu = null;
         ipcMain.on('main_menu', (e, destination) => {
 
+            // Always refresh settings snapshot before building menu state.
+            this.settings = settingsManager.get_settings() || {};
+            const current_view = this.get_current_view();
+
             utilities.set_is_main(true);
 
             const template = [
@@ -2040,14 +2568,20 @@ class MenuManager {
                     label: 'View',
                     submenu: [
                         {
+                            type: 'radio',
                             label: 'Grid',
+                            checked: current_view === 'grid_view',
                             click: (e) => {
+                                this.set_current_view('grid_view');
                                 win.send('switch_view', 'grid_view')
                             }
                         },
                         {
+                            type: 'radio',
                             label: 'List',
+                            checked: current_view === 'list_view',
                             click: () => {
+                                this.set_current_view('list_view');
                                 win.send('switch_view', 'list_view')
                             }
                         },
@@ -2105,7 +2639,18 @@ class MenuManager {
                         win.send('clear_highlight');
                     }
 
-                }
+                },
+                {
+                    type: 'separator'
+                },
+                {
+                    label: 'Properties',
+                    // icon: path.join(__dirname, 'assets/icons/menu/properties.png'),
+                    // accelerator: process.platform == 'darwin' ? settings.keyboard_shortcuts.Properties : settings.keyboard_shortcuts.Properties,
+                    click: () => {
+                        e.sender.send('context-menu-command', 'properties')
+                    }
+                },
             ]
 
             // Create menu
@@ -2122,8 +2667,7 @@ class MenuManager {
                 }
             }
 
-            const f = gio.get_file(destination);
-            if (!f.is_writable) {
+            if (!this.can_write_to_location(destination)) {
                 // disable new folder
                 this.main_menu.getMenuItemById('new_folder').enabled = false;
                 this.main_menu.getMenuItemById('templates').enabled = false;
@@ -2582,6 +3126,52 @@ class MenuManager {
 
     }
 
+    get_current_view() {
+        const settings = this.settings || {};
+        const schema_view = settings?.schema?.properties?.['Default View']?.properties?.View?.default;
+        if (schema_view === 'grid_view' || schema_view === 'list_view') {
+            return schema_view;
+        }
+        if (settings.view === 'grid_view' || settings.view === 'list_view') {
+            return settings.view;
+        }
+        return 'list_view';
+    }
+
+    set_current_view(view) {
+        if (view !== 'grid_view' && view !== 'list_view') {
+            return;
+        }
+
+        this.settings = settingsManager.get_settings() || {};
+        this.settings.view = view;
+
+        if (this.settings?.schema?.properties?.['Default View']?.properties?.View) {
+            this.settings.schema.properties['Default View'].properties.View.default = view;
+        }
+
+        settingsManager.updateSettings(this.settings);
+    }
+
+    can_write_to_location(location) {
+        if (!location) {
+            return false;
+        }
+
+        try {
+            fs.accessSync(location, fs.constants.W_OK);
+            return true;
+        } catch (err) {
+        }
+
+        try {
+            const f = gio.get_file(location);
+            return !!(f && f.is_writable);
+        } catch (err) {
+            return false;
+        }
+    }
+
     // Sidebar Menu
     home_menu(e, location) {
 
@@ -2934,11 +3524,11 @@ const settingsManager = new SettingsManager();
 const watcherManager = new Watcher();
 const windowManager = new WindowManager();
 const utilities = new Utilities();
-// const iconManager = new IconManager();
 const fileManager = new FileManager();
 const propertiesManager = new PropertiesManager();
 const workspaceManager = new WorkspaceManager();
 const deviceManager = new DeviceManager();
+const networkManager = new NetworkManager();
 const dialogManager = new DialogManager();
 const menuManager = new MenuManager();
 const watcher = new Watcher();
@@ -2966,12 +3556,70 @@ app.on('ready', () => {
         win.reload();
     });
 
+    // Start native file drag so files can be dropped into external applications.
+    ipcMain.on('start_drag_external', (event, filePath) => {
+        if (process.platform === 'linux') {
+            return;
+        }
+
+        if (!filePath || typeof filePath !== 'string') {
+            return;
+        }
+
+        if (!fs.existsSync(filePath)) {
+            return;
+        }
+
+        const iconCandidates = [
+            path.join(__dirname, '..', 'assets', 'icons', 'icon.png'),
+            path.join(__dirname, '..', 'renderer', 'icons', 'file.png')
+        ];
+
+        let dragIcon = null;
+        for (const iconPath of iconCandidates) {
+            if (!fs.existsSync(iconPath)) {
+                continue;
+            }
+
+            const img = nativeImage.createFromPath(iconPath);
+            if (!img.isEmpty()) {
+                dragIcon = img;
+                break;
+            }
+        }
+
+        if (!dragIcon) {
+            return;
+        }
+
+        try {
+            event.sender.startDrag({
+                file: filePath,
+                icon: dragIcon
+            });
+        } catch (err) {
+            console.error('start_drag_external failed:', err);
+        }
+    });
+
     // win.on('resize', () => {
     //     let bounds = win.getBounds();
     //     console.log('window resized', bounds);
     // });
 
+    iconManager.start_theme_watcher(() => {
+        file_icon_cache.clear();
+        BrowserWindow.getAllWindows().forEach((window) => {
+            if (!window.isDestroyed()) {
+                window.webContents.send('icon_theme_changed');
+            }
+        });
+    });
 
+});
+
+app.on('before-quit', () => {
+    iconManager.stop_theme_watcher();
 });
 
 app.whenReady().then(() => {
@@ -2991,7 +3639,6 @@ function init() {
     // const settingsManager = new SettingsManager();
     // const windowManager = new WindowManager();
     // const utilities = new Utilities();
-    // const iconManager = new IconManager();
     // const fileManager = new FileManager();
     // const workspaceManager = new WorkspaceManager();
     // const deviceManager = new DeviceManager();

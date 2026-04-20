@@ -38,6 +38,21 @@
 
 using namespace std;
 
+static const char* FILE_INFO_ATTRIBUTES =
+    G_FILE_ATTRIBUTE_STANDARD_NAME ","
+    G_FILE_ATTRIBUTE_STANDARD_DISPLAY_NAME ","
+    G_FILE_ATTRIBUTE_STANDARD_TYPE ","
+    G_FILE_ATTRIBUTE_STANDARD_IS_HIDDEN ","
+    G_FILE_ATTRIBUTE_STANDARD_CONTENT_TYPE ","
+    G_FILE_ATTRIBUTE_STANDARD_IS_SYMLINK ","
+    G_FILE_ATTRIBUTE_STANDARD_SIZE ","
+    G_FILE_ATTRIBUTE_ACCESS_CAN_WRITE ","
+    G_FILE_ATTRIBUTE_ACCESS_CAN_READ ","
+    G_FILE_ATTRIBUTE_FILESYSTEM_TYPE ","
+    G_FILE_ATTRIBUTE_TIME_MODIFIED ","
+    G_FILE_ATTRIBUTE_TIME_ACCESS ","
+    G_FILE_ATTRIBUTE_TIME_CREATED;
+
 class ListFilesWorker : public Nan::AsyncWorker {
 public:
     ListFilesWorker(Nan::Callback *callback, const std::string &source)
@@ -54,7 +69,7 @@ public:
 
         GError* error = NULL;
         GFileEnumerator* enumerator = g_file_enumerate_children(src,
-                                                                "*",
+                                    FILE_INFO_ATTRIBUTES,
                                                                 G_FILE_QUERY_INFO_NONE,
                                                                 NULL,
                                                                 &error);
@@ -80,10 +95,14 @@ public:
             fileResult.display_name = g_file_info_get_display_name(file_info);
             fileResult.href = g_file_get_path(g_file_get_child(src, fileResult.name.c_str()));
             fileResult.location = g_file_get_path(g_file_get_parent(g_file_get_child(src, fileResult.name.c_str())));
-            fileResult.is_hidden = g_file_info_get_is_hidden(file_info);
+            fileResult.is_hidden = g_file_info_has_attribute(file_info, G_FILE_ATTRIBUTE_STANDARD_IS_HIDDEN)
+                                  ? g_file_info_get_attribute_boolean(file_info, G_FILE_ATTRIBUTE_STANDARD_IS_HIDDEN)
+                                  : FALSE;
             fileResult.is_directory = g_file_info_get_file_type(file_info) == G_FILE_TYPE_DIRECTORY;
             fileResult.mimetype = g_file_info_get_content_type(file_info);
-            fileResult.is_symlink = g_file_info_get_is_symlink(file_info);
+            fileResult.is_symlink = g_file_info_has_attribute(file_info, G_FILE_ATTRIBUTE_STANDARD_IS_SYMLINK)
+                                   ? g_file_info_get_attribute_boolean(file_info, G_FILE_ATTRIBUTE_STANDARD_IS_SYMLINK)
+                                   : FALSE;
             fileResult.is_writeable = g_file_info_get_attribute_boolean(file_info, G_FILE_ATTRIBUTE_ACCESS_CAN_WRITE);
             fileResult.is_readable = g_file_info_get_attribute_boolean(file_info, G_FILE_ATTRIBUTE_ACCESS_CAN_READ);
             fileResult.filesystem = g_file_info_get_attribute_string(file_info, G_FILE_ATTRIBUTE_FILESYSTEM_TYPE)
@@ -227,7 +246,7 @@ namespace gio {
             GError* error = NULL;
             guint index = 0;
             GFileEnumerator* enumerator = g_file_enumerate_children(src,
-                                                                    "*",
+                                                                    FILE_INFO_ATTRIBUTES,
                                                                     G_FILE_QUERY_INFO_NONE,
                                                                     NULL,
                                                                     &error);
@@ -268,10 +287,14 @@ namespace gio {
                 const char* href = g_file_get_path(file);
                 GFile* parent = g_file_get_parent(file);
                 const char* location = g_file_get_path(parent);
-                gboolean is_hidden = g_file_info_get_is_hidden(file_info);
+                gboolean is_hidden = g_file_info_has_attribute(file_info, G_FILE_ATTRIBUTE_STANDARD_IS_HIDDEN)
+                                     ? g_file_info_get_attribute_boolean(file_info, G_FILE_ATTRIBUTE_STANDARD_IS_HIDDEN)
+                                     : FALSE;
                 gboolean is_directory = g_file_info_get_file_type(file_info) == G_FILE_TYPE_DIRECTORY;
                 const char* mimetype = g_file_info_get_content_type(file_info);
-                gboolean is_symlink = g_file_info_get_is_symlink(file_info);
+                gboolean is_symlink = g_file_info_has_attribute(file_info, G_FILE_ATTRIBUTE_STANDARD_IS_SYMLINK)
+                                      ? g_file_info_get_attribute_boolean(file_info, G_FILE_ATTRIBUTE_STANDARD_IS_SYMLINK)
+                                      : FALSE;
                 gboolean  is_writeable = g_file_info_get_attribute_boolean(file_info, G_FILE_ATTRIBUTE_ACCESS_CAN_WRITE);
                 gboolean is_readable = g_file_info_get_attribute_boolean(file_info, G_FILE_ATTRIBUTE_ACCESS_CAN_READ);
                 const char* fs_type = g_file_info_get_attribute_string(file_info, G_FILE_ATTRIBUTE_FILESYSTEM_TYPE);
@@ -381,7 +404,7 @@ namespace gio {
 
             GError* error = NULL;
             GFileInfo* file_info = g_file_query_info(src,
-                                                    "*",
+                                                    FILE_INFO_ATTRIBUTES,
                                                     G_FILE_QUERY_INFO_NONE,
                                                     NULL,
                                                     &error);
@@ -400,13 +423,17 @@ namespace gio {
 
                 const char* display_name = g_file_info_get_display_name(file_info);
                 const char* href = g_file_get_path(src);
-                gboolean is_hidden = g_file_info_get_is_hidden(file_info);
+                gboolean is_hidden = g_file_info_has_attribute(file_info, G_FILE_ATTRIBUTE_STANDARD_IS_HIDDEN)
+                                     ? g_file_info_get_attribute_boolean(file_info, G_FILE_ATTRIBUTE_STANDARD_IS_HIDDEN)
+                                     : FALSE;
                 gboolean is_directory = g_file_info_get_file_type(file_info) == G_FILE_TYPE_DIRECTORY;
                 const char* mimetype = g_file_info_get_content_type(file_info);
                 GFile* parent = g_file_get_parent(src);
                 gboolean is_writeable = g_file_info_get_attribute_boolean(file_info, G_FILE_ATTRIBUTE_ACCESS_CAN_WRITE);
                 gboolean is_readable = g_file_info_get_attribute_boolean(file_info, G_FILE_ATTRIBUTE_ACCESS_CAN_READ);
-                gboolean is_symlink = g_file_info_get_is_symlink(file_info);
+                gboolean is_symlink = g_file_info_has_attribute(file_info, G_FILE_ATTRIBUTE_STANDARD_IS_SYMLINK)
+                                      ? g_file_info_get_attribute_boolean(file_info, G_FILE_ATTRIBUTE_STANDARD_IS_SYMLINK)
+                                      : FALSE;
 
                 v8::Local<v8::Object> fileObj = Nan::New<v8::Object>();
                 Nan::Set(fileObj, Nan::New("name").ToLocalChecked(), Nan::New(filename).ToLocalChecked());
@@ -1152,6 +1179,10 @@ namespace gio {
             if (error) {
 
                 printf("Error mounting network drive: %s\n", error->message);
+                v8::Local<v8::Value> argv[] = {
+                    Nan::New(error->message).ToLocalChecked()
+                };
+                callback->Call(1, argv);
                 g_error_free(error);
 
             } else {
@@ -1172,9 +1203,8 @@ namespace gio {
 
             Nan::HandleScope scope;
 
-            if (info.Length() < 7) {
-                printf("Wrong number of arguments\n");
-                // return Nan::ThrowError("Wrong number of arguments");
+            if (info.Length() < 6 || !info[5]->IsFunction()) {
+                return Nan::ThrowError("Wrong number of arguments. Expected hostname, username, password, use_ssh_key, type, callback.");
             }
 
             v8::Local<v8::String> v8_hostname = Nan::To<v8::String>(info[0]).ToLocalChecked();
@@ -1197,14 +1227,14 @@ namespace gio {
 
             printf("type: %s, ssh_key: %d \n", cmd_type, ssh_key);
 
-            GError *error = NULL;
             GFile *location = NULL;
-            GAsyncResult *result = NULL;
 
             // Set up SSH key authentication
             GMountOperation *mount_operation = g_mount_operation_new();
+            Nan::Callback* callback = new Nan::Callback(info[5].As<v8::Function>());
 
             int is_ssh = strncmp(cmd_type, "ssh", 3);
+            int is_smb = strncmp(cmd_type, "smb", 3);
             // int is_sshfs = strncmp(hostname, "sshfs", 5);
 
             // Prioritize SSH key if provided
@@ -1223,7 +1253,33 @@ namespace gio {
                                             mount_operation,
                                             NULL,
                                             GAsyncReadyCallback(connect_network_drive_callback),
-                                            new Nan::Callback(info[info.Length() - 1].As<v8::Function>()));
+                                            callback);
+                g_free(uri);
+
+            } else if (is_smb == 0) {
+
+                printf("Using SMB username/password\n");
+
+                char *uri = g_strdup_printf("smb://%s/", hostname);
+                location = g_file_new_for_uri(uri);
+
+                g_mount_operation_set_username(mount_operation, username);
+                g_mount_operation_set_password(mount_operation, password);
+                g_mount_operation_set_password_save(mount_operation, G_PASSWORD_SAVE_NEVER);
+
+                g_file_mount_enclosing_volume(location,
+                                            G_MOUNT_MOUNT_NONE,
+                                            mount_operation,
+                                            NULL,
+                                            GAsyncReadyCallback(connect_network_drive_callback),
+                                            callback);
+                g_free(uri);
+
+            } else {
+                v8::Local<v8::Value> argv[] = {
+                    Nan::New("Unsupported network connection type.").ToLocalChecked()
+                };
+                callback->Call(1, argv);
 
             // } else if (is_sftp == 0 && !ssh_key) {
 
@@ -2192,6 +2248,12 @@ namespace gio {
                                                 NULL,
                                                 NULL);
 
+        if (file_info == NULL) {
+            g_object_unref(src);
+            info.GetReturnValue().Set(Nan::Null());
+            return;
+        }
+
 
         // if (file_info) {
         //     const gchar *icon_name = g_file_info_get_attribute_string(file_info, G_FILE_ATTRIBUTE_STANDARD_ICON);
@@ -2202,13 +2264,16 @@ namespace gio {
 
         // }
         GIcon *icon = g_file_info_get_icon(file_info);
-        gchar *icon_name = g_icon_to_string(icon);
+        gchar *icon_name = icon ? g_icon_to_string(icon) : NULL;
 
-        // // Print the filename of the icon
-        printf("%s", icon_name);
+        if (icon_name != NULL) {
+            info.GetReturnValue().Set(Nan::New(icon_name).ToLocalChecked());
+            g_free(icon_name);
+        } else {
+            info.GetReturnValue().Set(Nan::Null());
+        }
 
-        // // Cleanup
-        // g_object_unref(icon);
+        g_object_unref(file_info);
         g_object_unref(src);
 
     }

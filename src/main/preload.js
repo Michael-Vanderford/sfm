@@ -1,4 +1,6 @@
+// @ts-nocheck
 const ipcRenderer = require('electron').ipcRenderer;
+
 
 // Globals
 
@@ -65,12 +67,22 @@ class SettingsManager {
         this.settings = {};
         this.init_settings();
 
+        this.schema = this.get_schema();
+        console.log('settings schema', this.schema);
+
+
         ipcRenderer.on('settings_updated', (e, updated_settings) => {
             // console.log('settings updated', updated_settings);
             this.settings = updated_settings;
-            // fileManager.get_files(this.settings.location);
+            this.schema = this.get_schema();
         })
 
+        // settings menu
+        this.settings_menu = document.querySelector('.settings_menu');
+        this.settings_menu_button = this.settings_menu.querySelector('.button.settings');
+        this.settings_menu_button.addEventListener('click', (e) => {
+            fileManager.get_settings_view();
+        });
     }
 
     init_settings() {
@@ -80,9 +92,37 @@ class SettingsManager {
             this.settings = {};
         }
 
+        this.migrate_legacy_top_level_schema_sections();
+
+
         // view
         if (this.settings.view === '' || this.settings.view === undefined) {
             this.settings.view = 'list_view';
+            ipcRenderer.send('update_settings', this.settings);
+        }
+
+        // Initialize and migrate settings schema.
+        const default_schema = this.get_default_schema();
+        if (!this.settings.schema || this.settings.schema.properties === undefined) {
+            this.settings.schema = default_schema;
+            ipcRenderer.send('update_settings', this.settings);
+        } else {
+            this.merge_schema_defaults(this.settings.schema, default_schema);
+            ipcRenderer.send('update_settings', this.settings);
+        }
+
+        this.migrate_grid_column_defaults();
+        this.ensure_name_column_visibility();
+
+        // Keep default view in schema and flat key synchronized.
+        const schema_view = this.settings?.schema?.properties?.['Default View']?.properties?.View?.default;
+        if (this.settings.view === 'grid_view' || this.settings.view === 'list_view') {
+            if (schema_view !== this.settings.view && this.settings?.schema?.properties?.['Default View']?.properties?.View) {
+                this.settings.schema.properties['Default View'].properties.View.default = this.settings.view;
+                ipcRenderer.send('update_settings', this.settings);
+            }
+        } else if (schema_view === 'grid_view' || schema_view === 'list_view') {
+            this.settings.view = schema_view;
             ipcRenderer.send('update_settings', this.settings);
         }
 
@@ -150,6 +190,11 @@ class SettingsManager {
             ipcRenderer.send('update_settings', this.settings);
         }
 
+        // Keep legacy flat keys in sync with schema defaults used by the settings UI.
+        this.settings.icon_size = parseInt(this.get_schema_setting('Grid Icon Size')?.default, 10) || this.settings.icon_size;
+        this.settings.list_icon_size = parseInt(this.get_schema_setting('List Icon Size')?.default, 10) || this.settings.list_icon_size;
+        ipcRenderer.send('update_settings', this.settings);
+
         if (this.settings.show_hidden === undefined) {
             this.settings.show_hidden = true;
             ipcRenderer.send('update_settings', this.settings);
@@ -167,6 +212,288 @@ class SettingsManager {
         return this.settings;
     }
 
+    get_schema() {
+        let settings = ipcRenderer.sendSync('get_settings');
+        if (settings && settings.schema) {
+            return settings.schema.properties;
+        }
+        return null;
+    }
+
+    get_default_schema() {
+        return {
+            properties: {
+                'Default View': {
+                    type: 'object',
+                    properties: {
+                        View: {
+                            type: 'string',
+                            enum: ['list_view', 'grid_view'],
+                            default: 'list_view'
+                        },
+                        "Sort By": {
+                            type: 'string',
+                            enum: ['name', 'location', 'size', 'mtime', 'ctime', 'atime', 'type', 'count'],
+                            default: 'mtime'
+                        },
+                        "Sort Direction": {
+                            type: 'string',
+                            enum: ['asc', 'desc'],
+                            default: 'desc'
+                        },
+                        'Show Hidden': {
+                            type: 'boolean',
+                            default: true
+                        }
+                    }
+                },
+                'Icons': {
+                    type: 'object',
+                    properties: {
+                        'Grid Icon Size': {
+                            type: 'string',
+                            enum: ['16', '24', '32', '48', '64', '128'],
+                            default: '32'
+                        },
+                        'List Icon Size': {
+                            type: 'string',
+                            enum: ['16', '24', '32', '48', '64', '128'],
+                            default: '24'
+                        },
+                        'Ctrl+Wheel Resize Icons': {
+                            type: 'boolean',
+                            default: true
+                        }
+                    }
+                },
+                'List View Columns': {
+                    type: 'object',
+                    properties: {
+                        name: { type: 'boolean', default: true, description: 'Name' },
+                        location: { type: 'boolean', default: false, description: 'Location' },
+                        size: { type: 'boolean', default: true, description: 'Size' },
+                        mtime: { type: 'boolean', default: true, description: 'Modified Time' },
+                        ctime: { type: 'boolean', default: false, description: 'Created Time' },
+                        atime: { type: 'boolean', default: false, description: 'Accessed Time' },
+                        type: { type: 'boolean', default: false, description: 'Type' },
+                        count: { type: 'boolean', default: false, description: 'Count' }
+                    }
+                },
+                'Grid View Columns': {
+                    type: 'object',
+                    properties: {
+                        name: { type: 'boolean', default: true, description: 'Name' },
+                        location: { type: 'boolean', default: false, description: 'Location' },
+                        size: { type: 'boolean', default: false, description: 'Size' },
+                        mtime: { type: 'boolean', default: false, description: 'Modified Time' },
+                        ctime: { type: 'boolean', default: false, description: 'Created Time' },
+                        atime: { type: 'boolean', default: false, description: 'Accessed Time' },
+                        type: { type: 'boolean', default: false, description: 'Type' },
+                        count: { type: 'boolean', default: false, description: 'Count' }
+                    }
+                }
+            }
+        };
+    }
+
+    merge_schema_defaults(target_schema, default_schema) {
+        if (!target_schema.properties) {
+            target_schema.properties = {};
+        }
+
+        for (const section_name in default_schema.properties) {
+            const default_section = default_schema.properties[section_name];
+            if (!target_schema.properties[section_name]) {
+                target_schema.properties[section_name] = default_section;
+                continue;
+            }
+
+            const target_section = target_schema.properties[section_name];
+            if (!target_section.properties) {
+                target_section.properties = {};
+            }
+
+            for (const prop_name in default_section.properties) {
+                if (!target_section.properties[prop_name]) {
+                    target_section.properties[prop_name] = default_section.properties[prop_name];
+                }
+            }
+        }
+    }
+
+    migrate_legacy_top_level_schema_sections() {
+        const legacy_sections = ['Default View', 'Icons', 'List View Columns', 'Grid View Columns'];
+
+        if (!this.settings.schema || typeof this.settings.schema !== 'object') {
+            this.settings.schema = { properties: {} };
+        }
+
+        if (!this.settings.schema.properties || typeof this.settings.schema.properties !== 'object') {
+            this.settings.schema.properties = {};
+        }
+
+        let updated = false;
+
+        legacy_sections.forEach((section_name) => {
+            const legacy_section = this.settings[section_name];
+            if (!legacy_section || typeof legacy_section !== 'object' || !legacy_section.properties) {
+                return;
+            }
+
+            if (!this.settings.schema.properties[section_name]) {
+                this.settings.schema.properties[section_name] = legacy_section;
+                updated = true;
+            } else {
+                const schema_section = this.settings.schema.properties[section_name];
+                if (!schema_section.properties) {
+                    schema_section.properties = {};
+                }
+
+                for (const prop_name in legacy_section.properties) {
+                    if (!schema_section.properties[prop_name]) {
+                        schema_section.properties[prop_name] = legacy_section.properties[prop_name];
+                        updated = true;
+                    }
+                }
+            }
+
+            delete this.settings[section_name];
+            updated = true;
+        });
+
+        if (updated) {
+            ipcRenderer.send('update_settings', this.settings);
+        }
+    }
+
+    ensure_name_column_visibility() {
+        if (!this.settings?.schema?.properties) {
+            return;
+        }
+
+        let updated = false;
+        const sections = ['List View Columns', 'Grid View Columns'];
+
+        sections.forEach((section_name) => {
+            const name_prop = this.settings?.schema?.properties?.[section_name]?.properties?.name;
+            if (name_prop && name_prop.default !== true) {
+                name_prop.default = true;
+                updated = true;
+            }
+        });
+
+        if (updated) {
+            ipcRenderer.send('update_settings', this.settings);
+        }
+    }
+
+    migrate_grid_column_defaults() {
+        this.settings.migrations = this.settings.migrations || {};
+        if (this.settings.migrations.grid_columns_v2_applied) {
+            return;
+        }
+
+        const grid_columns = this.settings?.schema?.properties?.['Grid View Columns']?.properties;
+        if (!grid_columns) {
+            this.settings.migrations.grid_columns_v2_applied = true;
+            ipcRenderer.send('update_settings', this.settings);
+            return;
+        }
+
+        // Only migrate users that still have the old untouched defaults.
+        const previous_defaults = {
+            name: true,
+            location: false,
+            size: true,
+            mtime: true,
+            ctime: false,
+            atime: false,
+            type: false,
+            count: false
+        };
+
+        const is_untouched = Object.keys(previous_defaults).every((key) => {
+            return !!grid_columns[key] && grid_columns[key].default === previous_defaults[key];
+        });
+
+        if (!is_untouched) {
+            // Mark migration complete so user choices are never reinterpreted on future startups.
+            this.settings.migrations.grid_columns_v2_applied = true;
+            ipcRenderer.send('update_settings', this.settings);
+            return;
+        }
+
+        grid_columns.name.default = true;
+        grid_columns.location.default = false;
+        grid_columns.size.default = false;
+        grid_columns.mtime.default = false;
+        grid_columns.ctime.default = false;
+        grid_columns.atime.default = false;
+        grid_columns.type.default = false;
+        grid_columns.count.default = false;
+
+        this.settings.migrations.grid_columns_v2_applied = true;
+
+        ipcRenderer.send('update_settings', this.settings);
+    }
+
+    get_schema_setting(search_key) {
+
+        if (!this.schema || !search_key) {
+            return null;
+        }
+
+        const target = String(search_key).toLowerCase();
+
+        // Search nested properties in each schema section
+        for (const sectionName in this.schema) {
+            const section = this.schema[sectionName];
+            if (!section || !section.properties) continue;
+
+            for (const propName in section.properties) {
+                if (propName.toLowerCase() === target) {
+                    const def = section.properties[propName];
+                    return def === undefined ? null : def;
+                }
+            }
+        }
+
+        // Fallback: direct match on top-level (if schema was structured differently)
+        for (const topKey in this.schema) {
+            if (topKey.toLowerCase() === target) {
+                const def = this.schema[topKey];
+                return def === undefined ? null : def;
+            }
+        }
+
+        return null;
+
+
+    }
+
+    set_schema_setting(search_key, value) {
+        if (!this.settings?.schema?.properties || !search_key) {
+            return false;
+        }
+
+        const target = String(search_key).toLowerCase();
+        const sections = this.settings.schema.properties;
+
+        for (const section_name in sections) {
+            const section = sections[section_name];
+            if (!section?.properties) continue;
+
+            for (const prop_name in section.properties) {
+                if (prop_name.toLowerCase() === target) {
+                    section.properties[prop_name].default = value;
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     // update settings
     update_settings(settings) {
         this.settings = settings;
@@ -182,7 +509,11 @@ class SettingsManager {
 
     // get view
     get_view_settings() {
-        return this.settings.view;
+        const flat_view = this.settings?.view;
+        if (flat_view === 'grid_view' || flat_view === 'list_view') {
+            return flat_view;
+        }
+        return this.get_schema_setting('View')?.default || 'list_view';
     }
 
     // get list view settings
@@ -250,8 +581,23 @@ class Utilities {
 
         this.is_dragging = false;
         this.is_cut_operation = false;
+        this.current_progress_operation = null;
+        this.current_progress_can_cancel = false;
 
         this.selected_files_size = 0;
+        this.icon_request_queue = [];
+        this.icon_request_in_flight = 0;
+        this.max_icon_requests_in_flight = 8;
+
+        this.progress_cancel_button = document.querySelector('.progress_cancel');
+        if (this.progress_cancel_button) {
+            this.progress_cancel_button.addEventListener('click', () => {
+                if (this.current_progress_can_cancel && this.current_progress_operation) {
+                    ipcRenderer.send('cancel_operation', this.current_progress_operation);
+                    this.set_msg(`Cancelling ${this.current_progress_operation}...`);
+                }
+            });
+        }
 
         this.location_input.addEventListener('keydown', (e) => {
 
@@ -264,6 +610,12 @@ class Utilities {
             if (e.key === 'Enter') {
                 e.preventDefault();
                 e.stopPropagation();
+
+                if (this.location_input.value === 'settings:') {
+                    fileManager.get_settings_view();
+                    return;
+                }
+
                 this.location = this.location_input.value;
                 this.hide_location_input();
                 fileManager.get_files(this.location);
@@ -334,9 +686,10 @@ class Utilities {
             item.dataset.size = folder_data.size;
             let size_item = item.querySelector('.size');
             if (size_item) {
-                size_item.textContent = this.get_file_size(folder_data.size);
+                const effective_size = folder_data.size <= 4096 ? 0 : folder_data.size;
+                size_item.textContent = effective_size === 0 ? '0 bytes' : this.get_file_size(effective_size);
             } else {
-                console.log('no .size found for', folder_data.source);
+                // console.log('no .size found for', folder_data.source);
                 return;
             }
         });
@@ -377,6 +730,41 @@ class Utilities {
     // set destination
     set_destination(destination) {
         this.destination = destination;
+    }
+
+    queue_icon_request(href, on_success, on_error) {
+        if (!href) {
+            if (typeof on_error === 'function') {
+                on_error();
+            }
+            return;
+        }
+
+        this.icon_request_queue.push({ href, on_success, on_error });
+        this.process_icon_request_queue();
+    }
+
+    process_icon_request_queue() {
+        while (
+            this.icon_request_in_flight < this.max_icon_requests_in_flight
+            && this.icon_request_queue.length > 0
+        ) {
+            const task = this.icon_request_queue.shift();
+            this.icon_request_in_flight += 1;
+
+            ipcRenderer.invoke('get_icon', task.href).then((icon) => {
+                if (typeof task.on_success === 'function') {
+                    task.on_success(icon);
+                }
+            }).catch(() => {
+                if (typeof task.on_error === 'function') {
+                    task.on_error();
+                }
+            }).finally(() => {
+                this.icon_request_in_flight -= 1;
+                this.process_icon_request_queue();
+            });
+        }
     }
 
     // init autocomplete
@@ -682,51 +1070,6 @@ class Utilities {
 
         }
 
-        // // console.log('location', location);
-
-        // let breadcrumbs = location.split('/');
-        // let breadcrumb_div = document.querySelector('.breadcrumbs');
-
-        // if (!breadcrumb_div) {
-        //     return;
-        // }
-
-        // console.log('breadcrumbs', breadcrumbs.length, breadcrumbs);
-
-        // breadcrumb_div.innerHTML = '';
-        // breadcrumbs.forEach((breadcrumb, index) => {
-
-        //     let breadcrumb_spacer = document.createElement('div');
-        //     breadcrumb_spacer.classList.add('breadcrumb_spacer');
-        //     breadcrumb_spacer.innerHTML = '/';
-
-        //     let breadcrumb_item = document.createElement('div');
-        //     breadcrumb_item.classList.add('breadcrumb_item');
-        //     breadcrumb_item.innerHTML = `${breadcrumb}`;
-
-        //     breadcrumb_item.addEventListener('click', (e) => {
-
-        //         e.preventDefault();
-        //         e.stopPropagation();
-        //         let new_location = breadcrumbs.slice(0, index + 1).join('/');
-        //         fileManager.get_files(new_location);
-
-        //     });
-
-        //     if (breadcrumb !== '') {
-        //         breadcrumb_div.append(breadcrumb_item);
-        //     }
-
-        // });
-
-        // // click event for breadcrumbs div
-        // breadcrumb_div.addEventListener('click', (e) => {
-        //     console.log('breadcrumbs click', e.target);
-        //     e.preventDefault();
-        //     e.stopPropagation();
-        //     this.show_location_input();
-        // });
-
     }
 
     // get location
@@ -792,10 +1135,22 @@ class Utilities {
             }
             msg_div.innerHTML = '';
             msg_div.innerHTML = `${msg}`;
+            footer.classList.remove('footer-hidden');
+            this._start_footer_hide_timer();
         } catch (err) {
             console.log('set_msg error', err);
         }
 
+    }
+
+    _start_footer_hide_timer(delay = 4000) {
+        clearTimeout(this._footer_hide_timer);
+        this._footer_hide_timer = setTimeout(() => {
+            let footer = document.querySelector('.footer');
+            let progress = footer ? footer.querySelector('.progress') : null;
+            if (progress && !progress.classList.contains('hidden')) return;
+            if (footer) footer.classList.add('footer-hidden');
+        }, delay);
     }
 
     // add div
@@ -807,6 +1162,22 @@ class Utilities {
             }
         }
         return div
+    }
+
+    add_header(text) {
+        let header = this.add_div(['header']) //document.createElement('h5');
+        header.title = text
+        header.innerHTML = text
+        return header;
+    }
+
+    add_label(text, label_for = '') {
+        let label = document.createElement('label');
+        label.classList.add('label')
+        label.htmlFor = label_for;
+        label.style = 'padding-bottom: 5px;'
+        label.append(text);
+        return label;
     }
 
     add_item(text) {
@@ -1106,7 +1477,7 @@ class Utilities {
         let delete_arr = this.get_selected_delete_files();
         if (delete_arr.length > 0) {
             ipcRenderer.send('delete', delete_arr);
-            this.set_msg(`Deleting ${delete_arr.length} items`);
+            this.set_msg(`<img src="../renderer/icons/spinner.gif" style="width: 12px; height: 12px" alt="loading" />`);
         } else {
             this.set_msg('Nothing to delete');
         }
@@ -1140,9 +1511,33 @@ class Utilities {
         progress.classList.remove('hidden');
         let progress_status = document.querySelector('.progress_status');
         progress_status.innerHTML = progress_data.status;
+
+        if (progress_data.operation) {
+            this.current_progress_operation = progress_data.operation;
+        }
+        this.current_progress_can_cancel = !!progress_data.can_cancel;
+
+        if (this.progress_cancel_button) {
+            if (this.current_progress_can_cancel && progress_data.max > 0) {
+                this.progress_cancel_button.classList.remove('hidden');
+            } else {
+                this.progress_cancel_button.classList.add('hidden');
+            }
+        }
+
         if (progress_data.max === 0) {
             progress_status.innerHTML = '';
             progress.classList.add('hidden');
+            this.current_progress_operation = null;
+            this.current_progress_can_cancel = false;
+            if (this.progress_cancel_button) {
+                this.progress_cancel_button.classList.add('hidden');
+            }
+            this._start_footer_hide_timer();
+        } else {
+            clearTimeout(this._footer_hide_timer);
+            let footer = document.querySelector('.footer');
+            if (footer) footer.classList.remove('footer-hidden');
         }
 
         let progress_bar = document.querySelector('.progress_bar');
@@ -1154,6 +1549,10 @@ class Utilities {
     lazy_load_icons(table) {
 
         let lazyItems = table.querySelectorAll(".lazy");
+        const self = this;
+        const observer_root = table && table.classList && table.classList.contains('active-tab-content')
+            ? table
+            : table.closest('.active-tab-content');
 
         // listen for scroll event
         if ("IntersectionObserver" in window) {
@@ -1163,6 +1562,10 @@ class Utilities {
                         loadImage(entry.target, observer);
                     }
                 });
+            }, {
+                root: observer_root || null,
+                rootMargin: '220px 0px',
+                threshold: 0.01
             });
 
             // Immediately load images that are already in viewport
@@ -1179,15 +1582,29 @@ class Utilities {
             function isInViewport(element) {
                 const rect = element.getBoundingClientRect();
                 return (
-                    rect.top >= 0 &&
-                    rect.left >= 0 &&
-                    rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
-                    rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+                    rect.bottom >= 0 &&
+                    rect.right >= 0 &&
+                    rect.top <= (window.innerHeight || document.documentElement.clientHeight) &&
+                    rect.left <= (window.innerWidth || document.documentElement.clientWidth)
                 );
             }
 
             // Function to load the image
             function loadImage(lazyImage, observer) {
+                if (!lazyImage.dataset.src && lazyImage.dataset.iconHref) {
+                    self.queue_icon_request(lazyImage.dataset.iconHref, (icon) => {
+                        if (icon) {
+                            lazyImage.dataset.src = icon;
+                            lazyImage.src = icon;
+                            lazyImage.classList.remove("lazy");
+                            observer.unobserve(lazyImage);
+                        }
+                    }, () => {
+                        observer.unobserve(lazyImage);
+                    });
+                    return;
+                }
+
                 const src = lazyImage.dataset.src;
                 if (src) {
                     lazyImage.src = src;
@@ -1318,6 +1735,9 @@ class Utilities {
 
     // get selected files
     get_selected_files() {
+        this.icon_request_queue = [];
+        this.icon_request_in_flight = 0;
+        this.max_icon_requests_in_flight = 8;
 
         let selected_files = [];
         let active_tab_content = tabManager.get_active_tab_content(); //document.querySelector('.active-tab-content');
@@ -1349,10 +1769,11 @@ class Utilities {
                 atime: item.dataset.atime,
                 is_dir: this.stob(item.dataset.is_dir),
                 content_type: item.dataset.content_type,
-                is_hidden: this.stob(item.dataset.is_hidden),
                 is_writable: this.stob(item.dataset.is_writable),
                 is_readable: this.stob(item.dataset.is_readable),
-                location: item.dataset.location
+                location: item.dataset.location,
+                is_hidden: this.stob(item.dataset.is_hidden)
+
             }
             selected_files.push(files_obj);
             this.selected_files_size += parseInt(item.dataset.size);
@@ -1531,8 +1952,10 @@ class DragSelect {
             if (item && !this.is_dragging_divs) {
                 item.classList.add('highlight');
                 let href = item.querySelector('a');
-                if (href) {
-                    href.focus();
+                const view_container = active_tab_content.querySelector('.view_container');
+                const is_list_view = view_container?.classList.contains('list_view');
+                if (href && is_list_view) {
+                    href.focus({ preventScroll: true });
                 }
             }
         });
@@ -1661,14 +2084,36 @@ class DragSelect {
         });
 
         // Selection rectangle and scroll handling
-        active_tab_content.addEventListener('mousemove', (e) => this.updateSelection(e, selectionRectangle, active_tab_content));
+        active_tab_content.addEventListener('mousemove', (e) => {
+            this._lastClientX = e.clientX;
+            this._lastClientY = e.clientY;
+            this._lastCtrlKey = e.ctrlKey;
+            this.updateSelection(e, selectionRectangle, active_tab_content);
+        });
         active_tab_content.addEventListener('mouseup', (e) => this.endSelection(e, selectionRectangle, this.items));
         active_tab_content.addEventListener('click', (e) => this.handleOutsideClick(e, active_tab_content));
 
+        // Ensure selection state is always cleared even if mouseup happens outside the view.
+        if (this._documentMouseUpHandler) {
+            document.removeEventListener('mouseup', this._documentMouseUpHandler);
+        }
+        this._documentMouseUpHandler = (e) => {
+            if (this.is_selecting) {
+                this.endSelection(e, selectionRectangle);
+            }
+        };
+        document.addEventListener('mouseup', this._documentMouseUpHandler);
+
         active_tab_content.addEventListener('scroll', (e) => {
-            console.log('scroll');
             if (this.is_selecting) {
                 this.is_scrolling = true;
+                // Re-evaluate selection against newly visible items using last known mouse position
+                const syntheticEvent = {
+                    clientX: this._lastClientX || 0,
+                    clientY: this._lastClientY || 0,
+                    ctrlKey: this._lastCtrlKey || false
+                };
+                this.updateSelection(syntheticEvent, selectionRectangle, active_tab_content);
             }
         });
     }
@@ -1697,6 +2142,7 @@ class DragSelect {
 
         this.startPosX = e.clientX;
         this.startPosY = e.clientY;
+        this._startScrollTop = active_tab_content.scrollTop;
 
         selectionRectangle.style.left = `${this.startPosX}px`;
         selectionRectangle.style.top = `${this.startPosY}px`;
@@ -1719,6 +2165,12 @@ class DragSelect {
 
         if (!this.is_selecting || this.is_dragging) return;
 
+        // If the primary button is no longer pressed, stop selection immediately.
+        if (typeof e.buttons === 'number' && (e.buttons & 1) === 0) {
+            this.endSelection(e, selectionRectangle);
+            return;
+        }
+
         // Always get fresh DOM references
         const currentItems = Array.from(active_tab_content.querySelectorAll('.tr, .card'));
 
@@ -1740,10 +2192,12 @@ class DragSelect {
             );
         }
 
+        const scrollTop = active_tab_content.scrollTop;
+
         currentItems.forEach(item => {
 
             const itemRect = item.getBoundingClientRect();
-            const isWithinSelection = this.isWithinSelection(itemRect);
+            const isWithinSelection = this.isWithinSelection(itemRect, scrollTop);
 
             if (e.ctrlKey || this.is_scrolling) {
                 if (isWithinSelection && !this.initialSelectionState.has(item)) {
@@ -1771,14 +2225,71 @@ class DragSelect {
             this.initialSelectionState = null;
         }
 
+        // Auto-scroll when mouse is near the top or bottom edge
+        this._startAutoScroll(e, selectionRectangle, active_tab_content);
+
         // allow outside click
         this.allow_click = false;
+    }
+
+    // Start (or stop) the auto-scroll animation loop
+    _startAutoScroll(e, selectionRectangle, active_tab_content) {
+        const SCROLL_ZONE = 60;  // px from edge that triggers scrolling
+        const MAX_SPEED  = 15;  // max px scrolled per frame
+
+        const containerRect = active_tab_content.getBoundingClientRect();
+        const distFromBottom = containerRect.bottom - e.clientY;
+        const distFromTop    = e.clientY - containerRect.top;
+
+        let scrollSpeed = 0;
+        if (distFromBottom < SCROLL_ZONE && distFromBottom >= 0) {
+            // Accelerate linearly as mouse moves closer to the bottom edge
+            scrollSpeed = Math.round(MAX_SPEED * (1 - distFromBottom / SCROLL_ZONE));
+        } else if (distFromTop < SCROLL_ZONE && distFromTop >= 0) {
+            scrollSpeed = -Math.round(MAX_SPEED * (1 - distFromTop / SCROLL_ZONE));
+        }
+
+        if (scrollSpeed === 0) {
+            // Mouse is not in a scroll zone — cancel any running loop
+            if (this._autoScrollId) {
+                cancelAnimationFrame(this._autoScrollId);
+                this._autoScrollId = null;
+            }
+            return;
+        }
+
+        // Already have a loop running — just update the speed
+        this._autoScrollSpeed = scrollSpeed;
+        if (this._autoScrollId) return;
+
+        const loop = () => {
+            if (!this.is_selecting) {
+                this._autoScrollId = null;
+                return;
+            }
+            active_tab_content.scrollTop += this._autoScrollSpeed;
+            // Re-evaluate selection with the now-updated scroll position
+            const syntheticEvent = {
+                clientX: this._lastClientX || 0,
+                clientY: this._lastClientY || 0,
+                ctrlKey: this._lastCtrlKey || false
+            };
+            this.updateSelection(syntheticEvent, selectionRectangle, active_tab_content);
+            this._autoScrollId = requestAnimationFrame(loop);
+        };
+        this._autoScrollId = requestAnimationFrame(loop);
     }
 
     // End selection
     endSelection(e, selectionRectangle) {
 
         // e.stopPropagation();
+
+        // Stop any active auto-scroll
+        if (this._autoScrollId) {
+            cancelAnimationFrame(this._autoScrollId);
+            this._autoScrollId = null;
+        }
 
         this.is_selecting = false;
         selectionRectangle.style.display = 'none';
@@ -1796,13 +2307,24 @@ class DragSelect {
 
     }
 
-    // Check if an item is within the selection rectangle
-    isWithinSelection(itemRect) {
+    // Check if an item is within the selection rectangle.
+    // Uses document-space Y coordinates so items outside the visible viewport
+    // are correctly included/excluded as the container scrolls.
+    isWithinSelection(itemRect, scrollTop) {
+        const st = scrollTop || 0;
+        // Convert mouse positions to document space using scroll offsets
+        const startDocY = this.startPosY + (this._startScrollTop || 0);
+        const endDocY = this.endPosY + st;
+        const minDocY = Math.min(startDocY, endDocY);
+        const maxDocY = Math.max(startDocY, endDocY);
+        // Item position in document space
+        const itemDocTop = itemRect.top + st;
+        const itemDocBottom = itemRect.bottom + st;
+        const minX = Math.min(this.startPosX, this.endPosX);
+        const maxX = Math.max(this.startPosX, this.endPosX);
         return (
-            ((itemRect.left < this.endPosX && itemRect.right > this.startPosX) ||
-                (itemRect.left < this.startPosX && itemRect.right > this.endPosX)) &&
-            ((itemRect.top < this.endPosY && itemRect.bottom > this.startPosY) ||
-                (itemRect.top < this.startPosY && itemRect.bottom > this.endPosY))
+            itemRect.left < maxX && itemRect.right > minX &&
+            itemDocTop < maxDocY && itemDocBottom > minDocY
         );
     }
 
@@ -1934,12 +2456,27 @@ class DeviceManager {
         return type;
     }
 
+    get_device_icon_name(device) {
+        const type = (device?.type || this.get_type(device?.path || '') || '').toLowerCase();
+        if (type.includes('mtp') || type.includes('phone')) {
+            return 'phone';
+        }
+        if (type.includes('network') || type.includes('sftp') || type.includes('smb')) {
+            return 'hdd-network';
+        }
+        return 'hdd';
+    }
+
     get_devices(callback) {
 
         this.device_view.innerHTML = '';
 
         if (this.device_view) {
 
+            // Devices section label
+            let devices_label = utilities.add_div(['workspace_accordion']);
+            devices_label.textContent = 'Devices';
+            this.device_view.append(devices_label);
             this.device_view.append(document.createElement('hr'));
 
             this.device_arr.sort((a, b) => {
@@ -1952,6 +2489,18 @@ class DeviceManager {
             this.device_arr.forEach(device => {
                 this.add_device(device);
             })
+
+            // Keep connect action below device entries and visible when there are no devices.
+            let connect_btn = document.createElement('button');
+            connect_btn.classList.add('button', 'connect_network');
+            connect_btn.type = 'button';
+            connect_btn.title = 'Connect to Network';
+            connect_btn.innerHTML = '<i class="bi bi-hdd-network"></i><span>Connect</span>';
+            connect_btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                ipcRenderer.send('connect');
+            });
+            this.device_view.append(connect_btn);
 
             this.sidebar.append(this.device_view);
             // this.device_arr = [];
@@ -1978,31 +2527,28 @@ class DeviceManager {
         let href_div = utilities.add_div();
         let umount_div = utilities.add_div();
 
-        item.classList.add('flex', 'item');
-        item.style = 'width: 100%;';
-        href_div.classList.add('ellipsis');
-        href_div.style = 'width: 70%';
+        item.classList.add('flex', 'item', 'device_item');
+        href_div.classList.add('ellipsis', 'device_href');
 
-        let device_path = device.path //.replace('file://', '');z
+        let device_path = device.path;
 
         let a = document.createElement('a');
         a.preventDefault = true;
-        a.href = device_path; // device.path; //item.href;
-        a.innerHTML = device.name;
+        a.href = device_path;
+        a.textContent = device.name;
 
         let umount_icon = utilities.add_icon('eject-fill');
-        umount_div.title = 'Unmount Drive'
-        umount_icon.style = 'position: absolute; right: -30px;';
+        umount_div.classList.add('device_eject');
+        umount_div.title = 'Unmount Drive';
 
         // If path is empty string, then assume it's unmounted
         if (device.path === '') {
 
-            // Unmount
-            umount_div.classList.add('inactive');
+            // not mounted — hide eject button
+            umount_div.classList.add('hidden');
             umount_div.addEventListener('click', (e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                ipcRenderer.send('umount', device.name);
             })
 
             // Mount
@@ -2032,7 +2578,8 @@ class DeviceManager {
                 e.stopPropagation();
 
                 if (e.ctrlKey) {
-                    fileManager.get_files(device_path, 1);
+                    tabManager.add_tab(device_path);
+                    fileManager.get_files(device_path);
                 } else {
                     fileManager.get_files(device_path);
                 }
@@ -2053,14 +2600,7 @@ class DeviceManager {
 
         }
 
-        let type = this.get_type(device.path);
-        if (type === 'phone') {
-            icon_div.append(utilities.add_icon('phone'), a);
-        } else if (type === 'network') {
-            icon_div.append(utilities.add_icon('hdd-network'), a);
-        } else {
-            icon_div.append(utilities.add_icon('hdd'), a);
-        }
+        icon_div.append(utilities.add_icon(this.get_device_icon_name(device)));
 
         // Context Menu
         item.addEventListener('contextmenu', (e) => {
@@ -2793,8 +3333,26 @@ class KeyBoardManager {
                 utilities.show_location_input();
             }
 
+            // ctrl/cmd + f to toggle find form
+            if ((e.ctrlKey || e.metaKey) && e.key.toLocaleLowerCase() === 'f') {
+                e.preventDefault();
+                e.stopPropagation();
+                if (fileManager && typeof fileManager.get_find_view === 'function') {
+                    fileManager.get_find_view();
+                }
+                return;
+            }
+
             // esc to deselect all
             if (e.key === 'Escape') {
+                if (fileManager && typeof fileManager.close_find_view === 'function') {
+                    const closed_find = fileManager.close_find_view();
+                    if (closed_find) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        return;
+                    }
+                }
                 e.preventDefault();
                 e.stopPropagation();
                 utilities.clear();
@@ -2809,7 +3367,12 @@ class KeyBoardManager {
 
             // ctrl + c to copy
             if (e.ctrlKey && e.key.toLocaleLowerCase() === 'c') {
-                utilities.copy();
+                const selected_files = utilities.get_selected_files();
+                if (selected_files.length > 0) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    utilities.copy();
+                }
             }
 
             // ctrl + v to paste
@@ -2901,7 +3464,6 @@ class IconManager {
 
         this.readonly_icon = '';
         this.settings = settingsManager.get_settings();
-        this.icon_size = this.settings.icon_size;
 
 
         // listen for set_folder_icon event
@@ -2914,28 +3476,37 @@ class IconManager {
             this.set_icon(href, icon);
         });
 
+        ipcRenderer.on('icon_theme_changed', () => {
+            this.refresh_visible_icons();
+        });
+
         // resize icons on wheel event
         document.addEventListener('wheel', (e) => {
             if (e.ctrlKey) {
+                const allow_wheel_resize = settingsManager.get_schema_setting('Ctrl+Wheel Resize Icons')?.default;
+                if (!allow_wheel_resize) {
+                    return;
+                }
+
+                const view_type = fileManager?.view === 'list_view' ? 'list_view' : 'grid_view';
+                const current_size = this.get_icon_size_for_view(view_type);
                 if (e.deltaY < 0) {
 
                     // increase current icon size by n pixels
-                    if (this.icon_size >= 128) {
+                    if (current_size >= 128) {
                         return;
                     }
 
-                    this.icon_size += 16;
-                    this.resize_icons(this.icon_size);
+                    this.resize_icons(current_size + 16, view_type);
 
                 } else {
 
                     // decrease current icon size by n pixels
-                    if (this.icon_size <= 16) {
+                    if (current_size <= 16) {
                         return;
                     }
 
-                    this.icon_size -= 16;
-                    this.resize_icons(this.icon_size);
+                    this.resize_icons(current_size - 16, view_type);
                 }
             }
         });
@@ -2972,6 +3543,98 @@ class IconManager {
         return this.readonly_icon;
     }
 
+    is_in_viewport(element) {
+        if (!element) {
+            return false;
+        }
+
+        const rect = element.getBoundingClientRect();
+        return (
+            rect.bottom >= 0 &&
+            rect.right >= 0 &&
+            rect.top <= (window.innerHeight || document.documentElement.clientHeight) &&
+            rect.left <= (window.innerWidth || document.documentElement.clientWidth)
+        );
+    }
+
+    refresh_visible_icons() {
+        const active_tab_content = document.querySelector('.active-tab-content');
+        if (!active_tab_content) {
+            return;
+        }
+
+        const items = active_tab_content.querySelectorAll('.card[data-href], tr[data-href]');
+
+        items.forEach((item) => {
+            const href = item.dataset.href;
+            if (!href) {
+                return;
+            }
+
+            const is_dir = item.dataset.is_dir === 'true';
+            if (is_dir) {
+                ipcRenderer.send('get_folder_icon', href);
+                return;
+            }
+
+            const icon = item.querySelector('.icon');
+            const img = icon ? icon.querySelector('img.img') : null;
+            if (!img) {
+                return;
+            }
+
+            const current_src = img.getAttribute('src') || '';
+            if (current_src === href || current_src.startsWith('file://')) {
+                return;
+            }
+
+            img.dataset.iconHref = href;
+
+            if (!this.is_in_viewport(item)) {
+                img.dataset.src = '';
+                img.classList.add('lazy');
+                return;
+            }
+
+            ipcRenderer.invoke('get_icon', href).then((next_icon) => {
+                if (!next_icon) {
+                    return;
+                }
+
+                img.dataset.src = next_icon;
+                img.src = next_icon;
+                img.classList.remove('lazy');
+            }).catch(() => {
+            });
+        });
+
+        utilities.lazy_load_icons(active_tab_content);
+    }
+
+    get_media_icon_selector() {
+        return '.icon > img.img, .icon > video.video';
+    }
+
+    apply_icon_size_to_media(media, view_type) {
+        if (!media) {
+            return;
+        }
+
+        const size = this.get_icon_size_for_view(view_type);
+        media.style.width = `${size}px`;
+        media.style.height = `${size}px`;
+    }
+
+    apply_icon_size_to_container(view_container, view_type) {
+        if (!view_container) {
+            return;
+        }
+
+        view_container.querySelectorAll(this.get_media_icon_selector()).forEach((media) => {
+            this.apply_icon_size_to_media(media, view_type);
+        });
+    }
+
     // set icon
     set_icon(id, icon) {
         let item = document.querySelector(`[data-id="${id}"]`);
@@ -3004,8 +3667,9 @@ class IconManager {
                 if (img) {
 
                     img.src = icon;
-                    img.style.width = `${this.icon_size}px`;
-                    img.style.height = `${this.icon_size}px`;
+                    const view_container = img.closest('.view_container');
+                    const view_type = view_container?.classList.contains('list_view') ? 'list_view' : 'grid_view';
+                    this.apply_icon_size_to_media(img, view_type);
 
                 }
 
@@ -3034,16 +3698,37 @@ class IconManager {
 
     }
 
-    // resize icons
-    resize_icons(size) {
+    get_icon_size_for_view(view_type) {
+        const settings = settingsManager.get_settings();
+        if (view_type === 'list_view') {
+            return parseInt(settings.list_icon_size, 10) || 24;
+        }
+        return parseInt(settings.icon_size, 10) || 32;
+    }
 
-        let items = document.querySelectorAll('.img');
+    // resize icons
+    resize_icons(size, view_type = 'grid_view') {
+
+        this.settings = settingsManager.get_settings();
+
+        let selector = `.grid_view ${this.get_media_icon_selector()}`;
+        if (view_type === 'list_view') {
+            selector = `.list_view ${this.get_media_icon_selector()}`;
+        }
+
+        let items = document.querySelectorAll(selector);
         items.forEach(item => {
             item.style.width = `${size}px`;
             item.style.height = `${size}px`;
         })
 
-        this.settings.icon_size = size;
+        if (view_type === 'list_view') {
+            this.settings.list_icon_size = size;
+            settingsManager.set_schema_setting('List Icon Size', String(size));
+        } else {
+            this.settings.icon_size = size;
+            settingsManager.set_schema_setting('Grid Icon Size', String(size));
+        }
         settingsManager.update_settings(this.settings);
 
     }
@@ -3303,18 +3988,23 @@ class TabManager {
                 }
             }
 
+            const latest_settings = settingsManager.get_settings() || {};
+            if (!Array.isArray(latest_settings.tabs)) {
+                latest_settings.tabs = [];
+            }
+
             // find index of tab to be removed from settings
-            const idx = this.settings.tabs.findIndex(settings_tab =>
+            const idx = latest_settings.tabs.findIndex(settings_tab =>
                 parseFloat(tab.dataset.id) === parseFloat(settings_tab.tab.id)
             );
 
             // remove item from settings
             if (idx !== -1) {
-                this.settings.tabs.splice(idx, 1); // removes 1 element at that index
+                latest_settings.tabs.splice(idx, 1); // removes 1 element at that index
             }
 
-            console.log('removed item', this.settings);
-            settingsManager.update_settings(this.settings);
+            console.log('removed item', latest_settings);
+            settingsManager.update_settings(latest_settings);
 
 
 
@@ -3342,7 +4032,8 @@ class TabManager {
             settingsManager.set_location(tab.dataset.href);
             utilities.set_location(tab.dataset.href);
             utilities.set_destination(tab.dataset.href);
-            utilities.get_breadcrumbs(tab.dataset.href);
+            utilities.hide_location_input();
+            fileManager.get_breadcrumbs(tab.dataset.href);
 
             // set local destination
             this.destination = tab.dataset.href;
@@ -3453,6 +4144,14 @@ class TabManager {
 
     }
 
+    // switch tab
+    switch_tab(tab_id) {
+        let tab = document.querySelector(`.tab[data-id="${tab_id}"]`);
+        if (tab) {
+            tab.click();
+        }
+    }
+
     // update tab
     update_tab(location) {
 
@@ -3463,10 +4162,14 @@ class TabManager {
         }
         let col1 = tab.querySelector('.label');
 
-        this.settings = settingsManager.get_settings();
-        if (this.settings.tabs.length > 0) {
+        const latest_settings = settingsManager.get_settings() || {};
+        if (!Array.isArray(latest_settings.tabs)) {
+            latest_settings.tabs = [];
+        }
+
+        if (latest_settings.tabs.length > 0) {
             let is_update = 0;
-            this.settings.tabs.forEach(settings_tab => {
+            latest_settings.tabs.forEach(settings_tab => {
 
                 // if id's match then update the existing one
                 if (parseInt(tab.dataset.id) === parseInt(settings_tab.tab.id)) {
@@ -3483,24 +4186,24 @@ class TabManager {
                     id: this.tab_id,
                     location: location
                 }
-                this.settings.tabs.push({ "tab": settings_tab });
+                latest_settings.tabs.push({ "tab": settings_tab });
             }
 
         } else {
 
-            if (this.settings.tabs) {
+            if (latest_settings.tabs) {
                 let settings_tab = {
                     id: this.tab_id,
                     location: location
                 }
-                this.settings.tabs.push({ "tab": settings_tab });
+                latest_settings.tabs.push({ "tab": settings_tab });
             }
 
         }
 
         // settingsManager.update_settings(this.settings);
-        console.log('tabs', this.settings.tabs);
-        settingsManager.update_settings(this.settings);
+        console.log('tabs', latest_settings.tabs);
+        settingsManager.update_settings(latest_settings);
 
         tab.title = location;
         tab.dataset.href = location
@@ -3678,11 +4381,14 @@ class TabManager {
 
 class FileManager {
 
-    constructor(tabManager, iconManager) {
+    constructor() {
 
         // this.events = [];
-        this.tabManager = tabManager;
-        this.iconManager = iconManager;
+        // this.tabManager = tabManager;
+        // this.iconManager = iconManager;
+
+        this.schema = null;
+        this.show_hidden = false;
 
         this.loaded_rows = 0;
         this.chunk_size = 1000;
@@ -3714,6 +4420,7 @@ class FileManager {
 
         // get view settings
         this.view = settingsManager.get_view_settings();
+        console.log('view setting default', this.view);
 
         if (settingsManager.get_location() === '') {
             this.location = utilities.home_dir;
@@ -3735,6 +4442,12 @@ class FileManager {
         }
 
         this.filter = document.querySelector('.filter');
+        this.find_view_button = document.querySelector('.find_menu .button.find');
+        if (this.find_view_button) {
+            this.find_view_button.addEventListener('click', () => {
+                this.toggle_find_view();
+            });
+        }
         this.specialKeys = [
             'ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Enter', 'Shift', 'Backspace',
             'Tab', 'PageUp', 'PageDown', 'Home', 'End', 'Control', 'Alt', 'Meta', 'Escape',
@@ -3749,8 +4462,8 @@ class FileManager {
         this.settings = settingsManager.get_settings();
 
         // get sort settings
-        this.sort_by = this.settings.sort_by;
-        this.sort_direction = this.settings.sort_direction;
+        this.sort_by = settingsManager.get_schema_setting('Sort By')?.default;
+        this.sort_direction = settingsManager.get_schema_setting('Sort Direction')?.default;
 
         if (this.sort_by === undefined || this.sort_by === null || this.sort_by === '') {
             this.sort_by = 'mtime';
@@ -3806,9 +4519,17 @@ class FileManager {
             sortedItems.forEach(item => view_container.appendChild(item));
 
             // Save sort settings
-            this.settings.sort_by = this.sort_by;
-            this.settings.sort_direction = this.sort_direction;
-            settingsManager.update_settings(this.settings);
+            const latest_settings = settingsManager.get_settings() || {};
+            if (latest_settings?.schema?.properties?.['Default View']?.properties?.['Sort By']) {
+                latest_settings.schema.properties['Default View'].properties['Sort By'].default = this.sort_by;
+            }
+            if (latest_settings?.schema?.properties?.['Default View']?.properties?.['Sort Direction']) {
+                latest_settings.schema.properties['Default View'].properties['Sort Direction'].default = this.sort_direction;
+            }
+            latest_settings.sort_by = this.sort_by;
+            latest_settings.sort_direction = this.sort_direction;
+            settingsManager.update_settings(latest_settings);
+            this.settings = latest_settings;
 
             // this.get_files(this.location);
 
@@ -3827,67 +4548,43 @@ class FileManager {
                 return;
             }
 
-            let tab_content = document.querySelectorAll('.tab-content');
-            tab_content.forEach(tc => {
+             if (view === this.view) {
+                return;
+            }
 
-                let view_container = tc.querySelector('.view_container');
-                if (!view_container) {
-                    utilities.set_msg('Error: getting view container');
+            this.view = view;
+
+            let tab_contents = document.querySelectorAll('.tab-content');
+            tab_contents.forEach(tab_content => {
+                let tab = document.querySelector(`.tab[data-id="${tab_content.dataset.id}"]`);
+                if (tab && tab.dataset.href === 'Settings') {
                     return;
                 }
 
-                this.view = view;
-                if (this.view === 'list_view') {
-
-                    view_container.classList.remove('grid_view', 'grid3');
-                    view_container.classList.add('list_view');
-
-                    // add list view header
-                    let header = this.get_list_view_header(); //document.createElement('div');
-                    view_container.prepend(header);
-
-                } else if (this.view === 'grid_view') {
-
-                    view_container.classList.add('grid_view', 'grid3');
-                    view_container.classList.remove('list_view');
-
-                    let header = tc.querySelector('.list_view_header');
-                    if (header) {
-                        header.remove();
-                    }
-
+                let v = tab_content.querySelector('.view_container');
+                if (!v) {
+                    return;
                 }
 
-            })
+                // Never transform non-file special views.
+                if (v.classList.contains('settings_view')) {
+                    return;
+                }
 
-            this.settings.view = this.view;
-            ipcRenderer.send('update_settings', this.settings);
+                this.apply_view_settings_to_container(v, this.view);
+                iconManager.apply_icon_size_to_container(v, this.view);
 
-            // console.log('data', data, this.files_arr)
+            });
 
-            // this.location = settingsManager.get_location();
-            // if (this.location === null || this.location === undefined || this.location === '') {
-            //     this.location = utilities.home_dir;
-            // }
+            const latest_settings = settingsManager.get_settings() || {};
+            latest_settings.view = this.view;
 
-            // this.view = view;
+            if (latest_settings?.schema?.properties?.['Default View']?.properties?.View) {
+                latest_settings.schema.properties['Default View'].properties.View.default = this.view;
+            }
 
-            // switch (this.view) {
-            //     case 'list_view':
-            //         this.get_files(this.location);
-            //         break;
-            //     case 'grid_view':
-            //         // this.get_files(this.location);
-            //         this.get_grid_view(this.files_arr);
-            //         break;
-            //     default:
-            //         console.error(`Unknown view: ${this.view}`);
-            //         break;
-            // }
-
-            // this.settings.view = this.view;
-            // this.settings.location = this.location;
-            // ipcRenderer.send('update_settings', this.settings);
+            settingsManager.update_settings(latest_settings);
+            this.settings = latest_settings;
 
         });
 
@@ -4178,19 +4875,147 @@ class FileManager {
             utilities.get_disk_space(this.location);
         });
 
-        ipcRenderer.on('overwrite', (e, overwrite_arr) => {
-            // this.overwrite(overwrite_arr);
+        ipcRenderer.on('overwrite_copy', (e, overwrite_arr) => {
+            this.show_overwrite_view(overwrite_arr, 'copy');
+        });
+
+        ipcRenderer.on('overwrite_move', (e, overwrite_arr) => {
+            this.show_overwrite_view(overwrite_arr, 'move');
         });
 
         ipcRenderer.on('recent_files', (e, files_arr) => {
-            if (this.view == 'grid_view') {
-                tabManager.add_tab('Recent');
-                this.get_grid_view(files_arr);
-            } else if (this.view == 'list_view') {
-                this.get_list_view(files_arr);
-            }
-        })
+            tabManager.add_tab('Recent');
+            this.get_view(files_arr);
+        });
 
+    }
+
+    get_active_find_panel() {
+        const active_tab_content = tabManager.get_active_tab_content();
+        if (!active_tab_content) {
+            return null;
+        }
+        return active_tab_content.querySelector('.find_panel');
+    }
+
+    restore_list_view_header_handlers(container) {
+        if (!container) {
+            return;
+        }
+
+        const header = container.querySelector('.list_view_header');
+        if (!header) {
+            return;
+        }
+
+        header.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.show_column_menu(e);
+        });
+
+        header.querySelectorAll('.sort_column').forEach((col) => {
+            this.handleSort(col);
+        });
+    }
+
+    close_find_view() {
+        const active_tab_content = tabManager.get_active_tab_content();
+        if (!active_tab_content) {
+            return false;
+        }
+
+        const find_main_container = active_tab_content.querySelector('.find_main_container');
+        const find_panel = active_tab_content.querySelector('.find_panel');
+        if (!find_panel && !find_main_container) {
+            return false;
+        }
+
+        // If find was opened as an overlay panel (no find_main_container),
+        // remove only the panel so existing DOM listeners remain intact.
+        if (!find_main_container && find_panel) {
+            find_panel.remove();
+            if (active_tab_content.dataset.savedContent) {
+                delete active_tab_content.dataset.savedContent;
+            }
+            return true;
+        }
+
+        let restored_from_saved = false;
+
+        const fallback_view = find_main_container?.querySelector('.find_results_window > .view_container');
+        if (fallback_view) {
+            active_tab_content.innerHTML = '';
+            active_tab_content.appendChild(fallback_view);
+            if (active_tab_content.dataset.savedContent) {
+                delete active_tab_content.dataset.savedContent;
+            }
+            if (Array.isArray(this.files_arr) && this.files_arr.length > 0) {
+                this.lazy_load_files(this.files_arr);
+            }
+            return true;
+        }
+
+        const saved = active_tab_content.dataset.savedContent;
+        if (saved) {
+            try {
+                active_tab_content.innerHTML = atob(saved);
+                delete active_tab_content.dataset.savedContent;
+                restored_from_saved = true;
+
+                // Saved HTML may contain lazy placeholders; hydrate restored cards.
+                if (Array.isArray(this.files_arr) && this.files_arr.length > 0) {
+                    this.lazy_load_files(this.files_arr);
+                }
+            } catch (e) {
+                active_tab_content.innerHTML = '<div>Unable to restore view.</div>';
+            }
+        } else if (find_main_container) {
+            const fallback_view = find_main_container.querySelector('.find_results_window .view_container');
+            active_tab_content.innerHTML = '';
+            if (fallback_view) {
+                active_tab_content.appendChild(fallback_view);
+                if (Array.isArray(this.files_arr) && this.files_arr.length > 0) {
+                    this.lazy_load_files(this.files_arr);
+                }
+            }
+        } else {
+            find_panel.remove();
+        }
+
+        if (restored_from_saved) {
+            this.restore_list_view_header_handlers(active_tab_content);
+        }
+
+        return true;
+    }
+
+    toggle_find_view() {
+        if (this.close_find_view()) {
+            return;
+        }
+        this.get_find_view();
+    }
+
+    reset_find_view() {
+        const active_tab_content = tabManager.get_active_tab_content();
+        if (!active_tab_content) {
+            return;
+        }
+
+        const find_main_container = active_tab_content.querySelector('.find_main_container');
+        if (find_main_container) {
+            find_main_container.remove();
+        }
+
+        const find_panel = active_tab_content.querySelector('.find_panel');
+        if (find_panel) {
+            find_panel.remove();
+        }
+
+        if (active_tab_content.dataset.savedContent) {
+            delete active_tab_content.dataset.savedContent;
+        }
     }
 
     // set / remove empty folder message
@@ -4317,7 +5142,7 @@ class FileManager {
         })
 
         this.filter.addEventListener('input', (e) => {
-            this.run_filer();
+            this.run_filer(e);
         });
 
         this.filter.addEventListener('keydown', (e) => {
@@ -4369,46 +5194,38 @@ class FileManager {
     // run filter
     run_filer() {
 
-        setTimeout(() => {
+    // Accept event for direct value, fallback to DOM if not provided
+    let filterValue = '';
+    if (arguments.length > 0 && arguments[0] && arguments[0].target) {
+        filterValue = arguments[0].target.innerText;
+    } else {
+        filterValue = this.filter.innerText;
+    }
+    this.quick_search_sting = filterValue;
+    this.filter.focus();
 
-            this.filter.focus();
-            this.quick_search_sting = this.filter.innerText;
+    if (this.quick_search_sting === '') {
+        this.clear_filter();
+    } else {
+        this.filter.classList.add('active');
+    }
 
-            if (this.quick_search_sting === '') {
-                this.clear_filter();
+    if (!this.specialKeys.includes(this.quick_search_sting) && this.quick_search_sting.match(/[a-z0-9-_.]/i)) {
+        let active_tab_content = document.querySelector('.active-tab-content');
+        let items = active_tab_content.querySelectorAll('.card');
+        items.forEach((item) => {
+            if (item.dataset.name.toLocaleLowerCase().includes(this.quick_search_sting)) {
+                item.classList.remove('hidden');
             } else {
-                this.filter.classList.add('active');
+                item.classList.remove('highlight_select');
+                item.classList.add('hidden');
             }
-
-            if (!this.specialKeys.includes(this.quick_search_sting) && this.quick_search_sting.match(/[a-z0-9-_.]/i)) {
-
-                let active_tab_content = document.querySelector('.active-tab-content');
-                let items = active_tab_content.querySelectorAll('.card');
-
-                items.forEach((item) => {
-                    if (item.dataset.name.toLocaleLowerCase().includes(this.quick_search_sting)) {
-
-                        item.classList.remove('hidden');
-
-                        console.log('filtering items', item.dataset.name);
-                        console.log('')
-
-                    } else {
-                        item.classList.remove('highlight_select');
-                        item.classList.add('hidden');
-                    }
-
-                })
-
-                // reset nav idx for up down navigation
-                // navigation.clearNavIdx();
-
-                // set indexes for up down navigation
-                // navigation.getCardGroups();
-
-            }
-
-        }, 100);
+        });
+        // reset nav idx for up down navigation
+        // navigation.clearNavIdx();
+        // set indexes for up down navigation
+        // navigation.getCardGroups();
+    }
 
     }
 
@@ -4448,53 +5265,116 @@ class FileManager {
         return href.replace(/\n/g, ' ');
     }
 
-    // overwrite
-
-
-    // chunk load files array
-    chunk_load_files(idx, files_arr, table) {
-
-        // const last_idx = Math.min(idx + this.chunk_size, files_arr.length);
-        // const chunk = files_arr.slice(idx, last_idx);
-
-        // console.log('loading next chunk', idx);
-        // let start = new Date().getTime();
-        // chunk.forEach(f => {
-        //     let tr = this.get_list_view_item(f);
-        //     table.appendChild(tr);
-        // });
-        // let end = new Date().getTime();
-        // console.log('chunk load time', (end - start) / 1000);
-
-        // idx += this.chunk_size;
-
-        // // Check if more chunks need to be loaded
-        // if (idx < files_arr.length) {
-        //     setTimeout(() => {
-        //         this.chunk_load_files(idx, files_arr, table);
-        //     }, 0);
-        //     // this.chunk_load_files(idx, files_arr, table);
-        // } else {
-        //     if (files_arr.length > 0) {
-        //         utilities.set_msg(`Loaded ${files_arr.length} items`);
-        //     }
-        // }
-
+    get_column_settings_for_view(view_name = this.view) {
+        const schema = settingsManager.get_schema() || {};
+        const section_name = view_name === 'grid_view' ? 'Grid View Columns' : 'List View Columns';
+        return schema[section_name]?.properties || schema['List View Columns']?.properties || {};
     }
 
+    get_visible_column_keys(view_name = this.view) {
+        const columns = this.get_column_settings_for_view(view_name);
+        return Object.keys(columns).filter((key) => key === 'name' || columns[key].default);
+    }
+
+    get_list_grid_template_columns(view_name = this.view) {
+        const visible_keys = this.get_visible_column_keys(view_name);
+        this.list_view_settings = settingsManager.get_list_view_settings();
+
+        return visible_keys.map((key) => {
+            if (key === 'name') {
+                return '1fr';
+            }
+
+            const width = this.list_view_settings?.col_width?.[key] || 100;
+            return `${width}px`;
+        }).join(' ');
+    }
+
+    apply_column_settings_to_header(header, view_name = this.view) {
+        if (!header) {
+            return;
+        }
+
+        const visible_keys = new Set(this.get_visible_column_keys(view_name));
+        header.querySelectorAll('.sort_column').forEach((column) => {
+            column.classList.toggle('hidden', !visible_keys.has(column.dataset.col_name));
+        });
+
+        header.style.gridTemplateColumns = this.get_list_grid_template_columns(view_name);
+    }
+
+    apply_column_settings_to_card(card, view_name = this.view) {
+        if (!card) {
+            return;
+        }
+
+        const visible_keys = new Set(this.get_visible_column_keys(view_name));
+        const content = card.querySelector('.content');
+        if (!content) {
+            return;
+        }
+
+        content.querySelectorAll('[data-column-key]').forEach((item) => {
+            item.classList.toggle('hidden', !visible_keys.has(item.dataset.columnKey));
+        });
+
+        if (view_name === 'list_view') {
+            content.style.gridTemplateColumns = this.get_list_grid_template_columns(view_name);
+        } else {
+            content.style.gridTemplateColumns = '';
+        }
+    }
+
+    apply_view_settings_to_container(view_container, view_name = this.view) {
+        if (!view_container) {
+            return;
+        }
+
+        if (view_name === 'list_view') {
+            view_container.classList.remove('grid_view', 'grid3');
+            view_container.classList.add('list_view');
+        } else {
+            view_container.classList.add('grid_view', 'grid3');
+            view_container.classList.remove('list_view');
+        }
+
+        let header = view_container.querySelector('.list_view_header');
+        if (!header && view_name === 'list_view') {
+            header = this.get_list_view_header();
+            view_container.prepend(header);
+        }
+
+        if (header) {
+            header.classList.toggle('hidden', view_name !== 'list_view');
+            this.apply_column_settings_to_header(header, 'list_view');
+        }
+
+        view_container.querySelectorAll('.card').forEach((card) => {
+            this.apply_column_settings_to_card(card, view_name);
+        });
+    }
+
+    //
     get_list_view_header() {
 
         console.log('get list view header');
 
-        this.settings = settingsManager.get_settings();
+        // this.settings = settingsManager.get_settings();
+        this.settings = settingsManager.get_schema();
         this.list_view_settings = settingsManager.get_list_view_settings();
 
+        const list_view_columns = this.settings['List View Columns'].properties
+        const sort_by = settingsManager.get_schema_setting('Sort By')?.default || 'mtime'
+        const sort_direction = settingsManager.get_schema_setting('Sort Direction')?.default || 'desc'
+
+
         let header = utilities.add_div(['list_view_header']);
-        let col_widths = [];
 
-        for (const key in this.settings.columns) {
+        for (const key in list_view_columns) {
 
-            if (this.settings.columns[key]) {
+            console.log('columns', key, list_view_columns[key])
+
+            if (list_view_columns[key]) {
 
                 let col_width = this.list_view_settings.col_width[key] ? this.list_view_settings.col_width[key] : 100;
 
@@ -4503,10 +5383,10 @@ class FileManager {
 
                 let sort_icon = document.createElement('i');
                 sort_icon.classList.add('th_sort_icon');
-                if (this.settings.sort_by === key) {
+                if (sort_by === key) {
 
                     // th_sort_icon.classList.add('bi', 'bi-caret-up-fill');
-                    if (this.settings.sort_direction === 'desc') {
+                    if (sort_direction === 'desc') {
                         sort_icon.classList.remove('bi', 'bi-caret-up-fill');
                         sort_icon.classList.add('bi', 'bi-caret-down-fill');
                     } else {
@@ -4528,10 +5408,6 @@ class FileManager {
                     // th.appendChild(drag_handle);
                     col.dataset.col_name = key;
                     header.appendChild(col);
-
-                    // add column width to array
-                    // col_widths.push(this.list_view_settings.col_width[key]);
-                    col_widths.push('1fr');
 
                 } else {
 
@@ -4566,9 +5442,6 @@ class FileManager {
                     col.dataset.col_name = key;
                     header.appendChild(col);
 
-                    // add column width to array
-                    col_widths.push(`${col_width}px`);
-
                 }
 
             }
@@ -4579,15 +5452,106 @@ class FileManager {
         header.addEventListener('contextmenu', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            ipcRenderer.send('columns_menu');
+            this.show_column_menu(e);
         });
 
         // set grid template columns
-        header.style.gridTemplateColumns = col_widths.join(' ');
+        header.style.gridTemplateColumns = this.get_list_grid_template_columns('list_view');
+        this.apply_column_settings_to_header(header, 'list_view');
 
         return header;
 
     };
+
+    show_column_menu(e) {
+        // Remove any existing column menu
+        const existing = document.getElementById('col_context_menu');
+        if (existing) {
+            existing.remove();
+        }
+
+        const schema = settingsManager.get_schema();
+        const columns = schema?.['List View Columns']?.properties || {};
+
+        const menu = document.createElement('div');
+        menu.id = 'col_context_menu';
+        menu.classList.add('col_context_menu');
+
+        const title = document.createElement('div');
+        title.classList.add('col_context_menu_title');
+        title.textContent = 'Show columns';
+        menu.append(title);
+
+        for (const key in columns) {
+            const col_def = columns[key];
+            const is_name = key === 'name';
+
+            const row = document.createElement('label');
+            row.classList.add('col_context_menu_item');
+
+            const checkbox = document.createElement('input');
+            checkbox.type = 'checkbox';
+            checkbox.checked = is_name ? true : !!col_def.default;
+            checkbox.disabled = is_name;
+            checkbox.dataset.col_key = key;
+
+            checkbox.addEventListener('change', () => {
+                const latest_settings = settingsManager.get_settings() || {};
+                const col_props = latest_settings?.schema?.properties?.['List View Columns']?.properties;
+                if (col_props && col_props[key]) {
+                    col_props[key].default = checkbox.checked;
+                }
+                settingsManager.update_settings(latest_settings);
+
+                // Apply to all visible headers and cards
+                document.querySelectorAll('.list_view_header').forEach((h) => {
+                    this.apply_column_settings_to_header(h, 'list_view');
+                });
+                document.querySelectorAll('.card').forEach((card) => {
+                    this.apply_column_settings_to_card(card, 'list_view');
+                });
+            });
+
+            const label_text = document.createElement('span');
+            label_text.textContent = col_def.description || key;
+
+            row.append(checkbox, label_text);
+            menu.append(row);
+        }
+
+        // Position near cursor, keeping within viewport
+        document.body.append(menu);
+        const rect = menu.getBoundingClientRect();
+        const x = Math.min(e.clientX, window.innerWidth - rect.width - 8);
+        const y = Math.min(e.clientY, window.innerHeight - rect.height - 8);
+        menu.style.left = `${x}px`;
+        menu.style.top = `${y}px`;
+
+        // Dismiss on outside click or Escape
+        const dismiss = (ev) => {
+            if (ev.type === 'keydown' && ev.key !== 'Escape') {
+                return;
+            }
+            if (ev.type === 'mousedown' && menu.contains(ev.target)) {
+                return;
+            }
+            menu.remove();
+            document.removeEventListener('mousedown', dismiss);
+            document.removeEventListener('keydown', dismiss);
+        };
+
+        // Use setTimeout so the current mousedown that triggered contextmenu doesn't immediately dismiss
+        setTimeout(() => {
+            document.addEventListener('mousedown', dismiss);
+            document.addEventListener('keydown', dismiss);
+        }, 0);
+
+            menu.addEventListener('mouseleave', () => {
+                menu.remove();
+                document.removeEventListener('mousedown', dismiss);
+                document.removeEventListener('keydown', dismiss);
+            });
+        }
 
     handleSort(col) {
 
@@ -4596,18 +5560,25 @@ class FileManager {
             e.preventDefault();
             e.stopPropagation();
 
-            this.settings.sort_by = col.dataset.col_name;
+            this.sort_by = col.dataset.col_name;
 
-            if (this.settings.sort_direction === 'asc') {
-                this.settings.sort_direction = 'desc';
+            if (this.sort_direction === 'asc') {
+                this.sort_direction = 'desc';
             } else {
-                this.settings.sort_direction = 'asc';
+                this.sort_direction = 'asc';
             }
 
-            this.sort_by = this.settings.sort_by;
-            this.sort_direction = this.settings.sort_direction;
-
-            ipcRenderer.send('update_settings', this.settings);
+            const latest_settings = settingsManager.get_settings() || {};
+            if (latest_settings?.schema?.properties?.['Default View']?.properties?.['Sort By']) {
+                latest_settings.schema.properties['Default View'].properties['Sort By'].default = this.sort_by;
+            }
+            if (latest_settings?.schema?.properties?.['Default View']?.properties?.['Sort Direction']) {
+                latest_settings.schema.properties['Default View'].properties['Sort Direction'].default = this.sort_direction;
+            }
+            latest_settings.sort_by = this.sort_by;
+            latest_settings.sort_direction = this.sort_direction;
+            settingsManager.update_settings(latest_settings);
+            this.settings = latest_settings;
 
             let view_container = document.querySelector('.view_container');
             if (!view_container) {
@@ -4649,9 +5620,22 @@ class FileManager {
         // active tab content
         let active_tab_content = tabManager.get_active_tab_content();
         if (!active_tab_content) {
-            this.tabManager.add_tab(utilities.get_location());
+            tabManager.add_tab(utilities.get_location());
             active_tab_content = document.querySelector('.active-tab-content');
         }
+
+        // Preserve find UI so it stays visible across view re-renders.
+        let preserved_find_main_container = active_tab_content.querySelector('.find_main_container');
+        let preserved_find_panel = null;
+        if (preserved_find_main_container) {
+            preserved_find_main_container.remove();
+        } else {
+            preserved_find_panel = active_tab_content.querySelector('.find_panel');
+            if (preserved_find_panel) {
+                preserved_find_panel.remove();
+            }
+        }
+
         active_tab_content.innerHTML = '';
 
         // scroll to top of active tab content
@@ -4661,19 +5645,18 @@ class FileManager {
         view_container.classList.add('view_container');
 
         if (this.view === 'list_view') {
-
-            view_container.classList.remove('grid_view', 'grid3');
-            view_container.classList.add('list_view');
-
             let header = this.get_list_view_header();
             view_container.appendChild(header);
-
-        } else if (this.view === 'grid_view') {
-
-            view_container.classList.remove('list_view');
-            view_container.classList.add('grid_view', 'grid3');
-
         }
+
+        this.apply_view_settings_to_container(view_container, this.view);
+
+        // hide hidden files if schema setting exists and default is false
+        this.schema = settingsManager.get_schema();
+        this.show_hidden = this.schema['Default View'] ? this.schema['Default View'].properties['Show Hidden'].default : null;
+        // if (show_hidden ==  true) {
+        //     files_arr = files_arr.filter(f => f.is_hidden === false);
+        // }
 
         // sort files array
         files_arr = utilities.sort(files_arr, this.sort_by, this.sort_direction);
@@ -4690,12 +5673,41 @@ class FileManager {
             card.dataset.is_dir = files_arr[i].is_dir;
             card.dataset.location = files_arr[i].location;
             card.dataset.content_type = files_arr[i].content_type;
+            card.dataset.is_hidden = files_arr[i].is_hidden;
             view_container.appendChild(card);
 
         }
 
-        active_tab_content.appendChild(view_container);
+
+        if (preserved_find_main_container) {
+            const preserved_results_window = preserved_find_main_container.querySelector('.find_results_window');
+            if (preserved_results_window) {
+                preserved_results_window.innerHTML = '';
+                preserved_results_window.appendChild(view_container);
+            }
+
+            // Keep close behavior restoring the latest rendered view.
+            active_tab_content.dataset.savedContent = btoa(view_container.outerHTML);
+            active_tab_content.appendChild(preserved_find_main_container);
+        } else {
+            if (preserved_find_panel) {
+                // Keep close behavior restoring the latest rendered view.
+                active_tab_content.dataset.savedContent = btoa(view_container.outerHTML);
+                active_tab_content.appendChild(preserved_find_panel);
+            }
+            active_tab_content.appendChild(view_container);
+        }
+
         this.lazy_load_files(files_arr);
+
+        // // hide hidden files if schema setting exists and default is false
+        // let schema = settingsManager.get_schema().properties;
+        // let show_hidden = schema['Default View'] ? schema['Default View'].properties['Show Hidden'].default : null;
+        // if (show_hidden ==  true) {
+        //     this.show_hidden_files();
+        // } else if (show_hidden ==  false) {
+        //     this.hide_hidden_files();
+        // }
 
     }
 
@@ -4735,14 +5747,18 @@ class FileManager {
 
     get_view_item(f) {
 
-        for (let items in f) {
-            if (f[items] === undefined || f[items] === null) {
-                console.log('error getting grid view item', f);
-                return -1;
-            }
+        if (!f || !f.href) {
+            console.log('error getting view item', f);
+            return -1;
         }
 
-        this.settings = settingsManager.get_settings();
+        this.settings = settingsManager.get_schema();
+        const columns_section = this.view === 'grid_view' ? 'Grid View Columns' : 'List View Columns';
+        let columns = this.settings[columns_section] ? this.settings[columns_section].properties : null;
+        if (!columns) {
+            columns = this.settings['List View Columns'] ? this.settings['List View Columns'].properties : null;
+        }
+        const all_columns = this.settings['List View Columns'] ? this.settings['List View Columns'].properties : columns;
         this.list_view_settings = settingsManager.get_list_view_settings();
 
         let card = utilities.add_div(['card', 'lazy']);
@@ -4755,18 +5771,20 @@ class FileManager {
         let href = document.createElement('a');
         let input = document.createElement('input');
 
-        let col_widths = [];
-
         card.draggable = true;
+
+        if (this.show_hidden === false && f.is_hidden === true) {
+            card.classList.add('hidden');
+        }
 
         // handle icon
         icon.append(img);
         icon.style = 'cursor: pointer';
         img.classList.add('img');
 
-        for (const key in this.settings.columns) {
+        for (const key in all_columns) {
 
-            if (this.settings.columns[key]) {
+            if (all_columns[key]) {
 
                 let col_width = this.list_view_settings.col_width[key] ? this.list_view_settings.col_width[key] : 100;
 
@@ -4785,13 +5803,10 @@ class FileManager {
                     input.spellcheck = false;
                     input.type = 'text';
                     input.dataset.href = f.href;
+                    filename.dataset.columnKey = key;
 
                     filename.append(href, input);
                     content.appendChild(filename);
-
-                    // filename.style.width = `${col_width - 40}px`;
-                    // col_widths.push(col_width - 40);
-                    col_widths.push('1fr');
 
                 } else {
 
@@ -4800,10 +5815,11 @@ class FileManager {
 
                     item.innerHTML = f[key] ? f[key] : '';
                     item.classList.add(key);
+                    item.dataset.columnKey = key;
 
                     switch (key) {
                         case 'size':
-                            item.innerHTML = utilities.get_file_size(f["size"]);
+                            item.innerHTML = f.is_dir ? '—' : utilities.get_file_size(f["size"]);
                             break;
                         case 'mtime':
                             item.innerHTML = utilities.get_date_time(f.mtime);
@@ -4824,9 +5840,6 @@ class FileManager {
                             item.innerHTML = f.count;
                             break;
                     }
-
-                    col_widths.push(`${col_width}px`);
-
                 }
 
 
@@ -4834,10 +5847,6 @@ class FileManager {
             }
 
         }
-
-        // set grid template columns
-        content.style.gridTemplateColumns = col_widths.join(' ');
-        // console.log('col widths', col_widths.map(w => `${w}px`).join(' '));
 
         // Directory
         if (f.is_dir || f.type === 'inode/directory') {
@@ -4889,11 +5898,776 @@ class FileManager {
         // this.handleMouseout(card);
 
         // Get Icon
-        this.handleIcon(icon, f);
+        this.handleIcon(icon, f, this.view);
 
         card.append(icon, content);
+        this.apply_column_settings_to_card(card, this.view);
         return card;
 
+    }
+
+    // Find View
+    get_find_view() {
+
+        const active_tab_content = tabManager.get_active_tab_content();
+        if (!active_tab_content) {
+            utilities.set_msg('Error: Unable to open Find view');
+            return;
+        }
+
+        const existing_find_input = active_tab_content.querySelector('.find_input');
+        if (existing_find_input) {
+            existing_find_input.focus();
+            existing_find_input.select();
+            return;
+        }
+
+        // Store original content if not already in find mode
+        if (!active_tab_content.querySelector('.find_panel')) {
+            const saved_content = active_tab_content.innerHTML;
+            active_tab_content.dataset.savedContent = btoa(saved_content);
+        }
+
+        const main_container = utilities.add_div(['find_main_container']);
+        const find_panel = utilities.add_div(['find_panel']);
+        const find_form = utilities.add_div(['find_form']);
+        const find_row_primary = utilities.add_div(['find_row', 'find_row_primary']);
+        const find_row_filters = utilities.add_div(['find_row', 'find_row_filters']);
+        const find_actions_inline = utilities.add_div(['find_actions_inline']);
+        const find_date_range = utilities.add_div(['find_range_group', 'find_date_range']);
+        const find_size_range = utilities.add_div(['find_range_group', 'find_size_range']);
+        const query_field = utilities.add_div(['find_field', 'find_field_query']);
+        const min_size_field = utilities.add_div(['find_field']);
+        const max_size_field = utilities.add_div(['find_field']);
+        const date_from_field = utilities.add_div(['find_field']);
+        const date_to_field = utilities.add_div(['find_field']);
+        const find_input = document.createElement('input');
+        const min_size_input = document.createElement('input');
+        const max_size_input = document.createElement('input');
+        const date_from_input = document.createElement('input');
+        const date_to_input = document.createElement('input');
+        const query_label = document.createElement('label');
+        const min_size_label = document.createElement('label');
+        const max_size_label = document.createElement('label');
+        const date_from_label = document.createElement('label');
+        const date_to_label = document.createElement('label');
+        const find_submit = document.createElement('button');
+        const close_button = document.createElement('button');
+        const filters_toggle = document.createElement('button');
+        const results_window = utilities.add_div(['find_results_window']);
+        const results_header = utilities.add_div(['find_results_header']);
+        const results_list = utilities.add_div(['find_results_list']);
+
+        query_label.classList.add('find_label');
+        min_size_label.classList.add('find_label');
+        max_size_label.classList.add('find_label');
+        date_from_label.classList.add('find_label');
+        date_to_label.classList.add('find_label');
+
+        query_label.textContent = 'Search term';
+        min_size_label.textContent = 'Minimum size (bytes)';
+        max_size_label.textContent = 'Maximum size (bytes)';
+        date_from_label.textContent = 'Modified from';
+        date_to_label.textContent = 'Modified to';
+
+        find_input.type = 'text';
+        find_input.classList.add('find_input');
+        find_input.placeholder = 'Search from current location';
+
+        min_size_input.type = 'number';
+        min_size_input.classList.add('find_option_input');
+        min_size_input.min = '0';
+        min_size_input.step = '1';
+        min_size_input.placeholder = 'Min size (bytes)';
+        min_size_input.title = 'Only include files at or above this size in bytes';
+
+        max_size_input.type = 'number';
+        max_size_input.classList.add('find_option_input');
+        max_size_input.min = '0';
+        max_size_input.step = '1';
+        max_size_input.placeholder = 'Max size (bytes)';
+        max_size_input.title = 'Only include files at or below this size in bytes';
+
+        date_from_input.type = 'datetime-local';
+        date_from_input.classList.add('find_option_input');
+        date_from_input.placeholder = 'Modified after';
+        date_from_input.title = 'Only include files modified on or after this date and time';
+
+        date_to_input.type = 'datetime-local';
+        date_to_input.classList.add('find_option_input');
+        date_to_input.placeholder = 'Modified before';
+        date_to_input.title = 'Only include files modified on or before this date and time';
+
+        find_submit.type = 'button';
+        find_submit.classList.add('button', 'find_submit');
+        find_submit.textContent = 'Search';
+
+        close_button.type = 'button';
+        close_button.classList.add('button', 'find_close');
+        close_button.title = 'Close search';
+        close_button.textContent = 'Close';
+
+        filters_toggle.type = 'button';
+        filters_toggle.classList.add('button', 'find_filters_toggle');
+        filters_toggle.textContent = 'More options';
+        filters_toggle.title = 'Show additional search filters';
+
+        results_header.textContent = 'Enter a search term and press Enter or click Search.';
+        let has_search_run = false;
+
+        const normalize_find_match = (f) => {
+            const href = f?.href || '';
+            const location = f?.location || (href ? path.dirname(href) : '');
+            const name = f?.name || f?.display_name || (href ? path.basename(href) : 'Unknown');
+
+            return {
+                ...f,
+                id: f?.id || (href ? btoa(href) : btoa(`${name}-${Date.now()}`)),
+                href,
+                location,
+                name,
+                display_name: f?.display_name || name,
+                is_dir: !!f?.is_dir,
+                is_symlink: !!f?.is_symlink,
+                is_writable: f?.is_writable !== false,
+                is_readable: f?.is_readable !== false,
+                content_type: f?.content_type || '',
+                size: f?.size || 0,
+                mtime: f?.mtime || 0,
+                ctime: f?.ctime || 0,
+                atime: f?.atime || 0
+            };
+        };
+
+        const render_results_view = (matches) => {
+            results_list.innerHTML = '';
+
+            if (!Array.isArray(matches) || matches.length === 0) {
+                const empty_state = utilities.add_div(['find_empty']);
+                empty_state.textContent = 'No matches found.';
+                results_list.append(empty_state);
+                return;
+            }
+
+            const results_view = utilities.add_div(['view_container']);
+
+            if (this.view === 'list_view') {
+                results_view.classList.add('list_view');
+                const header = this.get_list_view_header();
+                results_view.append(header);
+            } else {
+                results_view.classList.add('grid_view', 'grid3');
+            }
+
+            matches.forEach((match) => {
+                const item = this.get_view_item(match);
+                results_view.append(item);
+            });
+
+            results_list.append(results_view);
+        };
+
+        const parse_size_value = (value) => {
+            const trimmed = String(value || '').trim();
+            if (!trimmed) {
+                return null;
+            }
+
+            const parsed = Number(trimmed);
+            if (!Number.isFinite(parsed) || parsed < 0) {
+                return null;
+            }
+
+            return Math.floor(parsed);
+        };
+
+        const parse_date_value = (value) => {
+            const trimmed = String(value || '').trim();
+            if (!trimmed) {
+                return null;
+            }
+
+            const parsed = new Date(trimmed);
+            if (Number.isNaN(parsed.getTime())) {
+                return null;
+            }
+
+            return parsed.toISOString();
+        };
+
+        const get_search_options = () => {
+            const options = {};
+
+            const min_size = parse_size_value(min_size_input.value);
+            const max_size = parse_size_value(max_size_input.value);
+            const date_from = parse_date_value(date_from_input.value);
+            const date_to = parse_date_value(date_to_input.value);
+
+            if (min_size !== null) {
+                options.minSize = min_size;
+            }
+
+            if (max_size !== null) {
+                options.maxSize = max_size;
+            }
+
+            if (date_from !== null) {
+                options.dateFrom = date_from;
+            }
+
+            if (date_to !== null) {
+                options.dateTo = date_to;
+            }
+
+            if (
+                options.minSize !== undefined &&
+                options.maxSize !== undefined &&
+                options.minSize > options.maxSize
+            ) {
+                return {
+                    error: true,
+                    message: 'Min size cannot be greater than max size.',
+                    options: {}
+                };
+            }
+
+            if (
+                options.dateFrom !== undefined &&
+                options.dateTo !== undefined &&
+                new Date(options.dateFrom).getTime() > new Date(options.dateTo).getTime()
+            ) {
+                return {
+                    error: true,
+                    message: 'Date From cannot be later than Date To.',
+                    options: {}
+                };
+            }
+
+            return {
+                error: false,
+                message: '',
+                options
+            };
+        };
+
+        const render_results = async (query) => {
+
+            const q = (query || '').trim();
+            results_list.innerHTML = '';
+
+            if (!q) {
+                results_header.textContent = 'Enter a search term.';
+                return;
+            }
+
+            if (!has_search_run) {
+                has_search_run = true;
+            }
+
+            // If navigation swapped in the normal folder view, switch back to search results view.
+            if (!active_tab_content.contains(main_container)) {
+                active_tab_content.innerHTML = '';
+                main_container.append(find_panel, results_window);
+                active_tab_content.append(main_container);
+            }
+
+            // get_view can replace results_window content with a regular view container.
+            if (!results_window.contains(results_list)) {
+                results_window.innerHTML = '';
+                results_window.append(results_list);
+            }
+
+            const search_location = this.location || settingsManager.get_location() || utilities.get_location();
+            const search_options_result = get_search_options();
+
+            if (search_options_result.error) {
+                results_header.textContent = search_options_result.message;
+                return;
+            }
+
+            results_header.textContent = `Searching in ${search_location}...`;
+            find_submit.disabled = true;
+
+            let response;
+            try {
+                response = await ipcRenderer.invoke('find', q, search_location, search_options_result.options);
+            } catch (err) {
+                response = {
+                    error: true,
+                    message: String(err.message || err),
+                    results: []
+                };
+            } finally {
+                find_submit.disabled = false;
+            }
+
+            if (response && response.error) {
+                results_header.textContent = response.message || 'Search failed.';
+                return;
+            }
+
+            const matches = Array.isArray(response?.results) ? response.results : [];
+            const normalized_matches = matches.map((match) => normalize_find_match(match));
+            const sorted_matches = utilities.sort(normalized_matches, this.sort_by, this.sort_direction);
+
+            results_header.textContent = `${sorted_matches.length} result${sorted_matches.length === 1 ? '' : 's'} in search location.`;
+
+            render_results_view(sorted_matches);
+        };
+
+        find_submit.addEventListener('click', () => {
+            render_results(find_input.value);
+        });
+
+        find_input.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                render_results(find_input.value);
+            }
+        });
+
+        [min_size_input, max_size_input, date_from_input, date_to_input].forEach((input) => {
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    render_results(find_input.value);
+                }
+            });
+        });
+
+        close_button.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            this.close_find_view();
+        });
+
+        filters_toggle.addEventListener('click', () => {
+            const expanded = find_row_filters.classList.toggle('find_row_filters_visible');
+            filters_toggle.textContent = expanded ? 'Fewer options' : 'More options';
+            filters_toggle.title = expanded ? 'Hide additional search filters' : 'Show additional search filters';
+        });
+
+        query_field.append(query_label, find_input);
+        min_size_field.append(min_size_label, min_size_input);
+        max_size_field.append(max_size_label, max_size_input);
+        date_from_field.append(date_from_label, date_from_input);
+        date_to_field.append(date_to_label, date_to_input);
+
+        find_actions_inline.append(find_submit, filters_toggle, close_button);
+        find_row_primary.append(query_field, find_actions_inline);
+
+        find_date_range.append(date_from_field, date_to_field);
+        find_size_range.append(min_size_field, max_size_field);
+        find_row_filters.append(find_date_range, find_size_range);
+
+        find_form.append(find_row_primary, find_row_filters, results_header);
+        find_panel.append(find_form);
+        active_tab_content.prepend(find_panel);
+
+        setTimeout(() => {
+            find_input.focus();
+        }, 0);
+    }
+
+    // Settings View
+    get_settings_view() {
+
+        // build settings view (cleanly formatted)
+        console.log('get settings view');
+
+        // If a Settings tab already exists, activate it instead of creating a duplicate
+        const existingSettingsTab = document.querySelector('.tab[data-href="Settings"]');
+        if (existingSettingsTab) {
+            existingSettingsTab.click();
+            return;
+        }
+
+        tabManager.add_tab('Settings');
+
+        const active_tab_content = tabManager.get_active_tab_content();
+        if (!active_tab_content) {
+            console.log('error getting active tab content');
+            return;
+        }
+        active_tab_content.innerHTML = '';
+
+        let view_container = utilities.add_div(['view_container', 'settings_view']);
+
+        const settings = settingsManager.get_settings();
+        if (!settings || typeof settings !== 'object') {
+            utilities.set_msg('Error: Invalid settings');
+            return;
+        }
+
+        Object.keys(settings.schema.properties).forEach((key, idx) => {
+
+            let header;
+
+            if (settings.schema.properties[key].type === 'object') {
+                header = document.createElement('h4');
+                header.classList.add('header');
+                header.innerHTML = `${key.charAt(0).toUpperCase()}${key.slice(1)}`;
+                view_container.append(header);
+
+                const properties = settings.schema.properties[key].properties;
+                if (properties) {
+
+                    Object.keys(properties).forEach((propKey) => {
+
+                        if (properties[propKey].type === 'boolean') {
+
+                            // console.log('boolean property', propKey);
+
+                            let settings_item = utilities.add_div(['settings_item']);
+
+                            const label = document.createElement('label');
+                            label.innerText = `${propKey.charAt(0).toUpperCase()}${propKey.slice(1)}`;
+
+                            const checkbox = document.createElement('input');
+                            checkbox.type = 'checkbox';
+                            checkbox.checked = propKey === 'name' ? true : properties[propKey].default;
+                            if (propKey === 'name') {
+                                checkbox.disabled = true;
+                                label.innerText = `${propKey.charAt(0).toUpperCase()}${propKey.slice(1)} (always visible)`;
+                            }
+                            checkbox.addEventListener('change', (e) => {
+                                const latest_settings = settingsManager.get_settings() || {};
+                                const latest_properties = latest_settings?.schema?.properties?.[key]?.properties;
+                                if (!latest_properties || !latest_properties[propKey]) {
+                                    return;
+                                }
+
+                                if (propKey === 'name') {
+                                    latest_properties[propKey].default = true;
+                                    checkbox.checked = true;
+                                    settingsManager.update_settings(latest_settings);
+                                    return;
+                                }
+
+                                latest_properties[propKey].default = checkbox.checked;
+
+                                // Keep legacy flat settings updated where still referenced.
+                                if (propKey === 'Show Hidden') {
+                                    latest_settings.show_hidden = checkbox.checked;
+                                    if (checkbox.checked) {
+                                        this.show_hidden_files();
+                                    } else {
+                                        this.hide_hidden_files();
+                                    }
+                                }
+
+                                settingsManager.update_settings(latest_settings);
+
+                                if (key === 'List View Columns' || key === 'Grid View Columns') {
+                                    this.refresh_file_tabs_for_column_settings(key);
+                                }
+                            });
+
+                            settings_item.append(label, checkbox);
+                            view_container.append(settings_item);
+
+                        }
+
+                        if (properties[propKey].type === 'string') {
+
+                            const label = document.createElement('label');
+                            label.innerText = `${propKey.charAt(0).toUpperCase()}${propKey.slice(1)}`;
+
+                            let input;
+                            if (properties[propKey].enum && Array.isArray(properties[propKey].enum)) {
+                                // Enum: Render dropdown
+                                input = document.createElement('select');
+                                properties[propKey].enum.forEach(option => {
+                                    const opt = document.createElement('option');
+                                    opt.value = option;
+                                    opt.textContent = option.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+                                    input.appendChild(opt);
+                                });
+                                input.value = properties[propKey].default || settings[propKey] || '';
+                            } else {
+                                // Plain string: Text input
+                                input = document.createElement('input');
+                                input.type = 'text';
+                                input.value = settings[propKey] || '';
+                            }
+
+                            input.addEventListener('change', (e) => {
+                                const latest_settings = settingsManager.get_settings() || {};
+                                const latest_properties = latest_settings?.schema?.properties?.[key]?.properties;
+                                if (!latest_properties || !latest_properties[propKey]) {
+                                    return;
+                                }
+
+                                latest_properties[propKey].default = e.target.value;
+
+                                // Keep legacy flat settings updated where still referenced.
+                                if (propKey === 'View') {
+                                    ipcRenderer.emit('switch_view', null, e.target.value);
+                                    return;
+                                }
+
+                                if (propKey === 'Sort By') {
+                                    latest_settings.sort_by = e.target.value;
+                                }
+
+                                if (propKey === 'Sort Direction') {
+                                    latest_settings.sort_direction = e.target.value;
+                                }
+
+                                if (propKey === 'Grid Icon Size') {
+                                    latest_settings.icon_size = parseInt(e.target.value, 10) || 32;
+                                    iconManager.resize_icons(latest_settings.icon_size, 'grid_view');
+                                }
+
+                                if (propKey === 'List Icon Size') {
+                                    latest_settings.list_icon_size = parseInt(e.target.value, 10) || 24;
+                                    iconManager.resize_icons(latest_settings.list_icon_size, 'list_view');
+                                }
+
+                                settingsManager.update_settings(latest_settings);
+                            });
+
+                            const item = utilities.add_div(['settings_item']);
+                            item.append(label, input);
+                            view_container.append(item);
+
+                        }
+
+
+                    });
+                }
+
+            }
+
+        })
+
+        // console.log('view_container', view_container);
+
+        // Object.keys(settings).forEach((key, idx) => {
+
+        //     const value = settings[key];
+
+        //     if (typeof value === 'string') {
+
+        //         console.log('key', key, 'value', value);
+
+        //         let input = document.createElement('input');
+        //         input.classList.add('input');
+
+        //         let settings_item = utilities.add_div(['settings_item']);
+        //         let label = document.createElement('label');
+
+        //         label.innerText = `${key.charAt(0).toUpperCase()}${key.slice(1)}`;
+
+        //         switch (key.toLocaleLowerCase()) {
+        //             case 'view': {
+        //                 input = document.createElement('select');
+        //                 let options = ['list_view', 'grid_view']
+        //                 options.forEach((option, i) => {
+        //                     let option_select = document.createElement('option');
+        //                     option_select.text = option
+        //                     option_select.value = option
+        //                     input.append(option_select);
+
+        //                     if (option.toLocaleLowerCase() === value.toLocaleLowerCase()) {
+        //                         option_select.selected = true
+        //                     }
+        //                 })
+
+        //                 input.addEventListener('change', (e) => {
+        //                     // ipcRenderer.send('change_theme', input.value);
+        //                     // ipcRenderer.send('update_settings', [key], input.value)
+        //                 })
+
+        //                 settings_item.append(label, input)
+        //                 break;
+        //             }
+        //             case 'theme': {
+        //                 input = document.createElement('select');
+        //                 let options = ['Light', 'Dark']
+        //                 options.forEach((option, i) => {
+        //                     let option_select = document.createElement('option');
+        //                     option_select.text = option
+        //                     option_select.value = option
+        //                     input.append(option_select);
+
+        //                     if (option.toLocaleLowerCase() === value.toLocaleLowerCase()) {
+        //                         option_select.selected = true
+        //                     }
+        //                 })
+
+        //                 input.addEventListener('change', (e) => {
+        //                     ipcRenderer.send('change_theme', input.value);
+        //                     ipcRenderer.send('update_settings', [key], input.value)
+        //                 })
+
+        //                 settings_item.append(label, input)
+        //                 break;
+        //             }
+        //             case 'terminal': {
+        //                 input.addEventListener('change', (e) => {
+        //                     ipcRenderer.send('update_settings', [key], input.value)
+        //                 })
+        //                 settings_item.append(label, input);
+        //                 break;
+        //             }
+        //             case 'disk_utility': {
+        //                 input.addEventListener('change', (e) => {
+        //                     ipcRenderer.send('update_settings', [key], input.value)
+        //                 })
+        //                 settings_item.append(label, input);
+
+        //                 break;
+        //             }
+        //         }
+
+        //         input.value = settings[key];
+        //         view_container.append(settings_item);
+
+        //     }
+
+
+        //     if (typeof value === 'object') {
+
+        //         let header = document.createElement('h4');
+        //         let hr = document.createElement('hr');
+
+        //         header.classList.add('header');
+
+        //         header.innerHTML = `${key.charAt(0).toUpperCase()}${key.slice(1)}`; //key.toUpperCase();
+        //         view_container.append(hr, header);
+
+        //         for (let sub_key in settings[key]) {
+
+        //             let input;
+        //             let settings_item = utilities.add_div(['settings_item']);
+
+        //             let sub_value = settings[`${key}`][`${sub_key}`];
+        //             let type = typeof sub_value;
+
+        //             let label = document.createElement('label');
+        //             label.textContent = `${sub_key.charAt(0).toUpperCase() + sub_key.slice(1)}:`;
+
+        //             // Create input field for non-nested properties
+        //             switch (type) {
+        //                 case 'boolean': {
+
+        //                     let item = utilities.add_div(['settings_checkbox_item']);
+
+        //                     input = document.createElement('input');
+        //                     input.type = 'checkbox';
+        //                     input.checked = sub_value;
+
+        //                     input.addEventListener('click', (e) => {
+        //                         if (input.checked) {
+        //                             ipcRenderer.send('update_settings', settings);
+        //                             fileManager.get_view();
+        //                         } else {
+        //                             ipcRenderer.send('update_settings', settings);
+        //                             fileManager.get_view();
+        //                         }
+
+        //                         switch (key) {
+        //                             case 'File Menu': {
+        //                                 // ipcRenderer.send('show_menubar')
+        //                                 break;
+        //                             }
+        //                             case 'Header Menu': {
+        //                                 // this.showHeaderMenu();
+        //                                 break;
+        //                             }
+        //                             case 'Navigation Menu': {
+        //                                 // this.moveNavMenu();
+        //                                 break;
+        //                             }
+        //                             case 'Minibar': {
+        //                                 // this.showMinibar();
+        //                                 break;
+        //                             }
+        //                         }
+
+        //                     })
+
+        //                     if (sub_key === 'name') {
+        //                         input.disabled = true;
+        //                     }
+        //                     item.append(label, input);
+        //                     view_container.append(item);
+        //                     break;
+        //                 }
+        //                 case 'string': {
+        //                     input = document.createElement('input');
+        //                     input.type = 'text';
+        //                     input.value = sub_value
+        //                     if (key.toLocaleLowerCase() === 'keyboard_shortcuts') {
+        //                         console.log(sub_key, sub_value)
+        //                         input.disabled = true;
+        //                     }
+        //                     settings_item.append(label, input);
+        //                     view_container.append(settings_item);
+        //                     break;
+        //                 }
+        //                 case 'number': {
+        //                     input = document.createElement('input');
+        //                     input.type = 'number';
+        //                     input.value = sub_value;
+
+        //                     settings_item.append(label, input);
+        //                     view_container.append(settings_item);
+
+        //                     break;
+        //                 }
+        //                 default: {
+        //                     // input = document.createElement('input');
+        //                     // input.type = 'text';
+        //                     // input.value = sub_value;
+
+        //                     // settings_item.append(label, input);
+        //                     // view_container.append(settings_item);
+
+        //                     break;
+        //                 }
+
+        //             }
+
+        //             // let label = document.createElement('label');
+        //             // label.textContent = `${sub_key.charAt(0).toUpperCase() + sub_key.slice(1)}:`;
+        //             // settings_item.append(label, input);
+        //             // form.append(settings_item);
+
+        //         }
+
+        //         // viewManager.resize();
+
+        //     }
+
+        // })
+
+        active_tab_content.appendChild(view_container);
+
+    }
+
+    refresh_file_tabs_for_column_settings(section_name) {
+        const tab_contents = document.querySelectorAll('.tab-content');
+        tab_contents.forEach((tab_content) => {
+            const tab = document.querySelector(`.tab[data-id="${tab_content.dataset.id}"]`);
+            if (!tab || tab.dataset.href === 'Settings') {
+                return;
+            }
+
+            const view_container = tab_content.querySelector('.view_container');
+            if (!view_container || view_container.classList.contains('settings_view')) {
+                return;
+            }
+
+            const is_list = section_name === 'List View Columns' && view_container.classList.contains('list_view');
+            const is_grid = section_name === 'Grid View Columns' && view_container.classList.contains('grid_view');
+            if (!is_list && !is_grid) {
+                return;
+            }
+
+            this.apply_view_settings_to_container(view_container, is_grid ? 'grid_view' : 'list_view');
+        });
     }
 
     // // get grid view item
@@ -5165,6 +6939,20 @@ class FileManager {
                     item = this.get_view_item(f);
                     lazy_item.replaceWith(item);
 
+                    const icon_img = item.querySelector('.icon .img.lazy[data-icon-href]');
+                    if (icon_img) {
+                        ipcRenderer.invoke('get_icon', icon_img.dataset.iconHref).then((icon_path) => {
+                            if (!icon_path) {
+                                return;
+                            }
+
+                            icon_img.dataset.src = icon_path;
+                            icon_img.src = icon_path;
+                            icon_img.classList.remove('lazy');
+                        }).catch(() => {
+                        });
+                    }
+
                     // }
 
                     this.handleDataAttributes(item, f);
@@ -5186,303 +6974,39 @@ class FileManager {
 
     }
 
-    // // get list view
-    // get_list_view(files_arr) {
-
-    //     this.clear_filter();
-
-    //     // const start = this.loaded_rows;
-    //     // const end = Math.min(start + this.chunk_size, files_arr.length);
-
-    //     // Set up tab content
-    //     let active_tab_content = tabManager.get_active_tab_content();
-    //     if (!active_tab_content) {
-    //         this.tabManager.add_tab(utilities.get_location());
-    //         active_tab_content = document.querySelector('.active-tab-content');
-    //     }
-    //     active_tab_content.innerHTML = '';
-
-    //     // scroll to top of active tab content
-    //     active_tab_content.scrollTop = 0;
-
-    //     let table = document.createElement('table');
-    //     table.classList.add('table');
-
-    //     let thead = document.createElement('thead');
-    //     let tr = document.createElement('tr');
-
-    //     let tbody = document.createElement('tbody');
-
-    //     this.settings = settingsManager.get_settings();
-    //     this.list_view_settings = settingsManager.get_list_view_settings();
-
-    //     for (const key in this.settings.columns) {
-    //         if (this.settings.columns[key]) {
-
-    //             let th_sort_icon = document.createElement('i');
-    //             th_sort_icon.classList.add('th_sort_icon');
-    //             if (this.settings.sort_by === key) {
-
-    //                 // th_sort_icon.classList.add('bi', 'bi-caret-up-fill');
-    //                 if (this.settings.sort_direction === 'desc') {
-    //                     th_sort_icon.classList.remove('bi', 'bi-caret-up-fill');
-    //                     th_sort_icon.classList.add('bi', 'bi-caret-down-fill');
-    //                 } else {
-    //                     th_sort_icon.classList.remove('bi', 'bi-caret-down-fill');
-    //                     th_sort_icon.classList.add('bi', 'bi-caret-up-fill');
-    //                 }
-    //             }
-
-    //             let drag_handle = document.createElement('div');
-    //             drag_handle.classList.add('drag_handle');
-
-    //             let th = document.createElement('th');
-    //             th.classList.add('sort_column');
-
-    //             // handle name column
-    //             if (key === 'name') {
-
-    //                 th.innerHTML = 'Name';
-    //                 th.appendChild(drag_handle);
-    //                 th.dataset.col_name = key;
-    //                 tr.appendChild(th);
-
-    //                 th.style.width = this.list_view_settings.col_width[key] + 'px';
-
-    //             } else {
-
-    //                 // let th = document.createElement('th');
-
-    //                 switch (key) {
-    //                     case 'size':
-    //                         th.innerHTML = 'Size';
-    //                         break;
-    //                     case 'mtime':
-    //                         th.innerHTML = 'Modified';
-    //                         break;
-    //                     case 'ctime':
-    //                         th.innerHTML = 'Created';
-    //                         break;
-    //                     case 'atime':
-    //                         th.innerHTML = 'Accessed';
-    //                         break;
-    //                     case 'type':
-    //                         th.innerHTML = 'Type';
-    //                         break;
-    //                     case 'location':
-    //                         th.innerHTML = 'Location';
-    //                         break;
-    //                     case 'count':
-    //                         th.innerHTML = 'Count';
-    //                         break;
-    //                 }
-
-    //                 th.appendChild(th_sort_icon);
-    //                 th.appendChild(drag_handle);
-    //                 th.dataset.col_name = key;
-    //                 tr.appendChild(th);
-
-    //                 th.style.width = this.list_view_settings.col_width[key] + 'px';
-
-    //             }
-
-    //             // init resize column
-    //             drag_handle.addEventListener('mousedown', (e) => {
-    //                 this.init_col_resize(e);
-    //             });
-
-    //             // handle sort event
-    //             this.handleColumnSort(th, key);
-
-    //         }
-
-    //     }
-
-    //     // table.appendChild(colgroup);
-    //     thead.appendChild(tr);
-    //     table.appendChild(thead);
-    //     table.appendChild(tbody);
-
-    //     // sort files array
-    //     files_arr = utilities.sort(files_arr, this.settings.sort_by, this.settings.sort_direction);
-
-    //     files_arr.forEach((f, idx) => {
-    //         let tr = document.createElement('tr'); //this.get_list_view_item(f);
-    //         tr.classList.add('tr', 'lazy');
-    //         tr.dataset.id = f.id;
-    //         tr.dataset.href = f.href;
-    //         tr.dataset.name = f.display_name;
-    //         tr.dataset.size = f.size;
-    //         tr.dataset.mtime = f.mtime;
-    //         tr.dataset.content_type = f.content_type;
-    //         tr.dataset.is_dir = f.is_dir;
-    //         tr.dataset.location = f.location;
-    //         tbody.appendChild(tr);
-    //     });
-
-    //     table.appendChild(tbody);
-    //     active_tab_content.appendChild(table);
-    //     this.lazy_load_files(files_arr);
-
-    //     thead.addEventListener('contextmenu', (e) => {
-    //         e.preventDefault();
-    //         e.stopPropagation();
-    //         ipcRenderer.send('columns_menu');
-    //     })
-
-    //     active_tab_content.addEventListener('mouseover', (e) => {
-    //         e.target.focus();
-    //     });
-
-
-    // }
-
-    // // add_list_view_item(f) {
-    // get_list_view_item(f) {
-
-    //     // loop f to make sure its complete
-    //     for (let items in f) {
-    //         if (f[items] === undefined || f[items] === null) {
-    //             console.log('error getting grid view item', f);
-    //             return -1;
-    //         }
-    //     }
-
-    //     let tr = document.createElement('tr');
-    //     tr.classList.add('tr');
-    //     tr.draggable = true;
-
-    //     // add data attributes from column settings
-    //     this.handleDataAttributes(tr, f);
-
-    //     // add hover over title
-    //     this.handleTitle(tr, f);
-
-    //     let div_name = utilities.add_div(['div_name']);
-    //     let icon = utilities.add_div(['icon']);
-    //     let img = document.createElement('img');
-    //     let input = document.createElement('input');
-    //     let link = utilities.add_link(f.href, f.display_name);
-
-    //     // input settings
-    //     input.type = 'text';
-    //     input.value = f.display_name;
-    //     input.classList.add('edit_name', 'hidden');
-    //     input.spellcheck = false;
-
-    //     icon.style = 'cursor: pointer';
-    //     img.classList.add('img');
-    //     img.loading = 'lazy';
-
-    //     link.draggable = false;
-    //     link.classList.add('href');
-
-    //     // handle columns
-    //     this.settings = settingsManager.get_settings();
-    //     for (const key in this.settings.columns) {
-    //         if (this.settings.columns[key]) {
-
-    //             let td = document.createElement('td');
-
-    //             // handle name column
-    //             if (key === 'name') {
-
-    //                 img.loading = 'lazy';
-    //                 icon.appendChild(img);
-
-    //                 td.classList.add('name');
-
-    //                 div_name.append(icon, link, input);
-    //                 td.append(div_name);
-
-    //                 // tr.appendChild(td_icon);
-    //                 tr.appendChild(td);
-
-    //                 // handle icons
-    //                 if (f.is_dir) {
-
-    //                     ipcRenderer.send('get_folder_icon', f.href);
-    //                     ipcRenderer.send('get_folder_size', f.href);
-
-    //                 } else {
-
-    //                     this.handleIcon(icon, f);
-
-    //                 }
-
-    //                 // handle click events
-    //                 this.handleClick(tr, f);
-    //                 this.handleClick(link, f);
-    //                 this.handleClick(img, f);
-
-    //                 // handle rename
-    //                 this.handleRename(input, f);
-
-    //             } else {
-
-    //                 switch (key) {
-    //                     case 'size':
-    //                         td.innerHTML = utilities.get_file_size(f.size);
-    //                         td.classList.add('size');
-    //                         break;
-    //                     case 'mtime':
-    //                         td.innerHTML = utilities.get_date_time(f.mtime);
-    //                         break;
-    //                     case 'ctime':
-    //                         td.innerHTML = utilities.get_date_time(f.ctime);
-    //                         break;
-    //                     case 'atime':
-    //                         td.innerHTML = utilities.get_date_time(f.atime);
-    //                         break;
-    //                     case 'type':
-    //                         td.innerHTML = f.content_type;
-    //                         break;
-    //                     default:
-    //                         td.innerHTML = f[key];
-    //                         break;
-    //                 }
-
-    //                 td.dataset.col_name = key;
-    //                 tr.appendChild(td);
-
-    //             }
-
-    //         }
-
-    //     }
-
-    //     // handle context menu
-    //     if (f.is_dir) {
-
-    //         // handle folder context menu
-    //         tr.addEventListener('contextmenu', (e) => {
-    //             e.preventDefault();
-    //             e.stopPropagation();
-    //             tr.classList.add('highlight_select');
-    //             ipcRenderer.send('folder_menu', f);
-    //         })
-
-    //     } else {
-
-    //         // handle file context menu
-    //         tr.addEventListener('contextmenu', (e) => {
-    //             e.preventDefault();
-    //             e.stopPropagation();
-    //             tr.classList.add('highlight_select');
-    //             ipcRenderer.send('file_menu', f);
-    //         })
-    //     }
-
-    //     this.handleDragStart(tr);
-    //     this.handleDragOver(tr);
-    //     this.handleDragLeave(tr);
-    //     this.handleDrop(tr);
-
-    //     return tr;
-
-    // }
-
-    // handleDrag
+    // show hidden files
+    show_hidden_files() {
+
+        console.log('show hidden files');
+
+        let views = document.querySelectorAll('.grid_view, .list_view');
+        console.log('views', views);
+        views.forEach(view => {
+            let hidden_files = view.querySelectorAll('.card[data-is_hidden="true"]');
+            console.log('hidden files', hidden_files.length);
+            hidden_files.forEach(file => {
+                file.classList.remove('hidden');
+            })
+        });
+
+    }
+
+    // hide hidden files
+    hide_hidden_files() {
+
+        console.log('hide hidden files');
+
+        let views = document.querySelectorAll('.grid_view, .list_view');
+        console.log('views', views);
+        views.forEach(view => {
+            let hidden_files = view.querySelectorAll('.card[data-is_hidden="true"]');
+            console.log('hidden files', hidden_files.length);
+            hidden_files.forEach(file => {
+                file.classList.add('hidden');
+            })
+        });
+
+    }
 
     // sort event
     handleColumnSort(item) {
@@ -5497,9 +7021,17 @@ class FileManager {
             }
 
             console.log('running sort by column', e.target);
-            this.settings.sort_by = e.target.dataset.col_name;
-            this.settings.sort_direction = this.settings.sort_direction === 'asc' ? 'desc' : 'asc';
-            settingsManager.update_settings(this.settings);
+            const latest_settings = settingsManager.get_settings() || {};
+            latest_settings.sort_by = e.target.dataset.col_name;
+            latest_settings.sort_direction = latest_settings.sort_direction === 'asc' ? 'desc' : 'asc';
+            if (latest_settings?.schema?.properties?.['Default View']?.properties?.['Sort By']) {
+                latest_settings.schema.properties['Default View'].properties['Sort By'].default = latest_settings.sort_by;
+            }
+            if (latest_settings?.schema?.properties?.['Default View']?.properties?.['Sort Direction']) {
+                latest_settings.schema.properties['Default View'].properties['Sort Direction'].default = latest_settings.sort_direction;
+            }
+            settingsManager.update_settings(latest_settings);
+            this.settings = latest_settings;
             this.get_files(this.location);
 
         });
@@ -5544,17 +7076,16 @@ class FileManager {
         item.dataset.is_readable = f.is_readable;
         item.dataset.location = f.location;
         item.dataset.content_type = f.content_type;
+        item.dataset.is_hidden = f.is_hidden;
 
     }
 
     // handle icon
-    handleIcon(icon, f) {
+    handleIcon(icon, f, view_type_hint) {
 
-        for (let field in f) {
-            if (f[field] === undefined || f[field] === null) {
-                console.log('error getting icon', f);
-                return -1;
-            }
+        if (!f) {
+            console.log('error getting icon data', f);
+            return -1;
         }
 
         if (icon === undefined || icon === null) {
@@ -5573,12 +7104,6 @@ class FileManager {
             return -2;
         }
 
-        if (f.content_type === undefined || f.content_type === null) {
-            console.log('Error getting icon content type', f.content_type);
-            utilities.set_msg(`Error getting icon content type ${f.content_type}`);
-            return -3;
-        }
-
         let img = icon.querySelector('.img');
         if (!img) {
             console.log('Error getting .img for icon', img);
@@ -5591,16 +7116,21 @@ class FileManager {
 
         try {
 
+            // Always start with a local generic icon so metadata-poor files still render.
+            img.src = '../renderer/icons/file.png';
+
+            const content_type = typeof f.content_type === 'string' ? f.content_type : '';
+
             if (f.is_dir || f.type === 'inode/directory') {
 
                 ipcRenderer.send('get_folder_icon', f.href);
 
             } else if (f.is_dir === false) {
 
-                if (f.content_type.includes('image/')) {
+                if (content_type.includes('image/')) {
 
                     // check for svg
-                    if (f.content_type.includes('svg')) {
+                    if (content_type.includes('svg')) {
                         img.src = f.href;
                         img.classList.add('svg');
                     } else {
@@ -5608,19 +7138,21 @@ class FileManager {
                     }
 
 
-                } else if (f.content_type.includes('video/')) {
+                } else if (content_type.includes('video/')) {
 
                     let video = document.createElement('video');
                     video.src = f.href;
                     video.classList.add('video');
                     icon.innerHTML = '';
                     icon.append(video);
+                    const view_container = icon.closest('.view_container');
+                    const view_type = view_type_hint || (view_container?.classList.contains('list_view') ? 'list_view' : 'grid_view');
+                    iconManager.apply_icon_size_to_media(video, view_type);
 
                 } else {
                     img.classList.add('lazy');
-                    ipcRenderer.invoke('get_icon', f.href).then(icon => {
-                        img.src = icon;
-                    })
+                    img.dataset.iconHref = f.href;
+                    img.dataset.src = '';
                 }
 
             }
@@ -5645,8 +7177,11 @@ class FileManager {
                 })
             }
 
-            img.style.width = `${this.settings.icon_size}px`;
-            img.style.height = `${this.settings.icon_size}px`;
+            {
+                const view_container = icon.closest('.view_container');
+                const view_type = view_type_hint || (view_container?.classList.contains('list_view') ? 'list_view' : 'grid_view');
+                iconManager.apply_icon_size_to_media(img, view_type);
+            }
 
         } catch (err) {
 
@@ -5657,8 +7192,11 @@ class FileManager {
                 img.src = res;
             })
 
-            img.style.width = `${this.settings.icon_size}px`;
-            img.style.height = `${this.settings.icon_size}px`
+            {
+                const view_container = icon.closest('.view_container');
+                const view_type = view_type_hint || (view_container?.classList.contains('list_view') ? 'list_view' : 'grid_view');
+                iconManager.apply_icon_size_to_media(img, view_type);
+            }
 
         }
 
@@ -5675,6 +7213,18 @@ class FileManager {
             // utilities.copy();
 
             item.classList.add('highlight_select');
+
+            const href = item?.dataset?.href;
+            if (href) {
+                // Provide standard drag payloads so Linux desktop apps can accept the drop.
+                e.dataTransfer.setData('text/plain', href);
+                e.dataTransfer.setData('text/uri-list', `file://${href}`);
+
+                // Native startDrag can crash on some Linux/X11 Electron builds.
+                if (process.platform !== 'linux') {
+                    ipcRenderer.send('start_drag_external', href);
+                }
+            }
 
             e.dataTransfer.effectAllowed = 'copyMove';
             this.is_dragging = true;
@@ -5885,6 +7435,116 @@ class FileManager {
         })
     }
 
+    // Show overwrite conflict resolution view in a new tab
+    show_overwrite_view(overwrite_arr, operation) {
+
+        tabManager.add_tab('File Conflicts');
+        const active_tab_content = tabManager.get_active_tab_content();
+
+        const container = utilities.add_div(['overwrite_view']);
+        container.style.cssText = 'padding: 10px; overflow-y: auto; height: 100%;';
+
+        // --- Header bar ---
+        const header = utilities.add_div();
+        header.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border);';
+
+        const title = utilities.add_div();
+        title.innerHTML = `<strong>${overwrite_arr.length} file conflict${overwrite_arr.length !== 1 ? 's' : ''}</strong>`;
+        title.style.flex = '1';
+
+        const btn_overwrite_all = utilities.add_div();
+        btn_overwrite_all.innerHTML = 'Overwrite All';
+        btn_overwrite_all.style.cssText = 'cursor: pointer; padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--menu);';
+
+        const btn_skip_all = utilities.add_div();
+        btn_skip_all.innerHTML = 'Skip All';
+        btn_skip_all.style.cssText = 'cursor: pointer; padding: 4px 10px; border: 1px solid var(--border); border-radius: 4px; background: var(--menu);';
+
+        header.append(title, btn_overwrite_all, btn_skip_all);
+        container.append(header);
+
+        // --- Column headers ---
+        const col_header = utilities.add_div();
+        col_header.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 4px; opacity: 0.6; font-weight: bold; border-bottom: 1px solid var(--border); margin-bottom: 4px;';
+        const ch_name = utilities.add_div(); ch_name.innerHTML = 'Name'; ch_name.style.flex = '1';
+        const ch_dest = utilities.add_div(); ch_dest.innerHTML = 'Destination'; ch_dest.style.flex = '2';
+        const ch_actions = utilities.add_div(); ch_actions.innerHTML = 'Action'; ch_actions.style.cssText = 'width: 140px; text-align: right;';
+        col_header.append(ch_name, ch_dest, ch_actions);
+        container.append(col_header);
+
+        // --- File list ---
+        const list = utilities.add_div();
+        container.append(list);
+
+        // track remaining conflicts so bulk actions work on unresolved ones
+        let remaining = [...overwrite_arr];
+
+        const remove_row = (f, row) => {
+            row.remove();
+            remaining = remaining.filter(r => r.source !== f.source);
+            if (remaining.length === 0) {
+                utilities.set_msg('All conflicts resolved.');
+            }
+        };
+
+        overwrite_arr.forEach(f => {
+            const row = utilities.add_div();
+            row.style.cssText = 'display: flex; align-items: center; gap: 8px; padding: 5px 4px; border-bottom: 1px solid var(--border);';
+
+            const icon = document.createElement('i');
+            icon.classList.add('bi', f.is_dir ? 'bi-folder' : 'bi-file-earmark');
+            icon.style.cssText = 'font-size: 14px; flex-shrink: 0;';
+
+            const name_div = utilities.add_div();
+            name_div.innerHTML = f.name;
+            name_div.title = `${f.source} → ${f.destination}`;
+            name_div.style.cssText = 'flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;';
+
+            const dest_div = utilities.add_div();
+            dest_div.innerHTML = f.destination;
+            dest_div.title = f.destination;
+            dest_div.style.cssText = 'flex: 2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; opacity: 0.7;';
+
+            const btn_overwrite = utilities.add_div();
+            btn_overwrite.innerHTML = 'Overwrite';
+            btn_overwrite.style.cssText = 'cursor: pointer; padding: 3px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--menu); white-space: nowrap; flex-shrink: 0;';
+            btn_overwrite.addEventListener('click', () => {
+                ipcRenderer.send('overwrite_one', f, operation);
+                remove_row(f, row);
+            });
+
+            const btn_keep = utilities.add_div();
+            btn_keep.innerHTML = 'Keep';
+            btn_keep.style.cssText = 'cursor: pointer; padding: 3px 8px; border: 1px solid var(--border); border-radius: 4px; background: var(--menu); white-space: nowrap; flex-shrink: 0;';
+            btn_keep.addEventListener('click', () => {
+                remove_row(f, row);
+            });
+
+            const actions = utilities.add_div();
+            actions.style.cssText = 'display: flex; gap: 4px; flex-shrink: 0;';
+            actions.append(btn_overwrite, btn_keep);
+
+            row.append(icon, name_div, dest_div, actions);
+            list.append(row);
+        });
+
+        btn_overwrite_all.addEventListener('click', () => {
+            const to_overwrite = [...remaining];
+            ipcRenderer.send('overwrite_all', to_overwrite, operation);
+            list.innerHTML = '';
+            remaining = [];
+            utilities.set_msg(`Overwriting ${to_overwrite.length} file${to_overwrite.length !== 1 ? 's' : ''}.`);
+        });
+
+        btn_skip_all.addEventListener('click', () => {
+            list.innerHTML = '';
+            remaining = [];
+            utilities.set_msg('Skipped all conflicts.');
+        });
+
+        active_tab_content.appendChild(container);
+    }
+
     // create a breadcrumbs from location
     get_breadcrumbs(location) {
 
@@ -5898,7 +7558,6 @@ class FileManager {
         }
 
         breadcrumb_div.innerHTML = '';
-
         if (location === '/') {
 
             let breadcrumb_item = document.createElement('div');
@@ -5980,12 +7639,12 @@ class FileManager {
 
         }
 
-        // click event for breadcrumbs div
-        breadcrumb_div.addEventListener('click', (e) => {
+        // click event for breadcrumbs div (use onclick to avoid accumulating duplicate listeners)
+        breadcrumb_div.onclick = (e) => {
             e.preventDefault();
             e.stopPropagation();
             utilities.show_location_input();
-        });
+        };
 
     }
 
@@ -6230,6 +7889,7 @@ class PropertiesManager {
                 let content = utilities.add_div();
 
                 card.dataset.properties_href = file.href;
+                card.dataset.href = file.href;
 
                 let close_btn = utilities.add_div();
                 let close_icon = document.createElement('i');
@@ -6254,15 +7914,14 @@ class PropertiesManager {
 
                 content.append(utilities.add_item('Name:'), utilities.add_item(file.display_name));
 
-                let folder_count = utilities.add_div();
-                folder_count.classList.add('item', 'folder_count');
+                let contents_item = utilities.add_div();
+                contents_item.classList.add('item', 'folder_count');
 
                 let size = utilities.add_div();
                 size.classList.add('size');
-                // size.append('Calculating..');
 
                 content.append(utilities.add_item('Type:'), utilities.add_item(file.content_type));
-                content.append(utilities.add_item(`Contents:`), folder_count);
+                content.append(utilities.add_item(`Contents:`), contents_item);
 
                 let location = utilities.add_item(file.location);
                 location.title = file.location;
@@ -6281,33 +7940,23 @@ class PropertiesManager {
                     content.append(utilities.add_item('Size:'), utilities.add_item(size));
 
                     if (file.is_readable) {
+                        size.append('Calculating...');
 
-                        // // Calculate Folder Count
-                        // let spinner = utilities.add_img('assets/icons/spinner.gif');
-                        // spinner.style = 'width: 12px; height: 12px;'
+                        contents_item.textContent = this.get_contents_text(file);
 
-                        // size.append(spinner, ` Calculating...`);
-                        // ipcRenderer.send('get_folder_count', file.href);
-
-                        // // Calculate Folder Size
-                        // spinner = utilities.add_img('assets/icons/spinner.gif');
-                        // spinner.style = 'width: 12px; height: 12px;'
-
-                        // folder_count.append(spinner, ` Calculating...`);
-                        // // console.log('getting folder size')
-                        // ipcRenderer.send('get_folder_size', file.href);
+                        ipcRenderer.send('get_folder_size', file.href);
 
                     } else {
 
                         size.append('Unknown')
-                        folder_count.append('Unknown')
+                        contents_item.textContent = 'Unknown';
 
                     }
 
 
                 } else {
 
-                    folder_count.append('1');
+                    contents_item.textContent = this.get_contents_text(file);
                     content.append(utilities.add_item('Size:'), utilities.add_item(utilities.get_file_size(file.size)));
 
                     ipcRenderer.invoke('get_icon', (file.href)).then(res => {
@@ -6414,6 +8063,45 @@ class PropertiesManager {
 
     }
 
+    get_contents_text(file) {
+
+        if (!file || typeof file !== 'object') {
+            return '--';
+        }
+
+        const as_num = (value) => {
+            const n = Number(value);
+            return Number.isFinite(n) && n >= 0 ? Math.trunc(n) : null;
+        };
+
+        const fmt = (n) => n.toLocaleString();
+
+        const folder_count = as_num(
+            file.folder_count ?? file.folders_count ?? file.dir_count ?? file.dirs_count ?? file.directories_count
+        );
+        const file_count = as_num(
+            file.file_count ?? file.files_count
+        );
+        const total_count = as_num(file.count ?? file.total_count ?? file.items_count);
+
+        if (file.is_dir) {
+            if (folder_count !== null || file_count !== null) {
+                const fdirs = folder_count ?? 0;
+                const ffiles = file_count ?? 0;
+                const total = total_count !== null ? total_count : (fdirs + ffiles);
+                return `${fmt(fdirs)} folders, ${fmt(ffiles)} files (${fmt(total)} items)`;
+            }
+
+            if (total_count !== null) {
+                return `${fmt(total_count)} items`;
+            }
+
+            return '--';
+        }
+
+        return '1 file';
+    }
+
     getPermissions(unixMode) {
 
         // const special = unixMode & 0xF000;
@@ -6476,19 +8164,6 @@ class Navigation {
     }
 
 }
-
-// class ViewManager {
-
-//     constructor() {
-//         this.view = 'list_view';
-//     }
-
-//     // get view
-//     get_view(source) {
-//         fileManager.get_files(source);
-//     }
-
-// }
 
 class MenuManager {
 
@@ -6582,7 +8257,21 @@ class MenuManager {
                     break;
                 }
                 case 'properties': {
-                    let selected_files_arr = utilities.get_selected_files();
+                    let selected_files_arr = [];
+                    const active_tab_content = tabManager.get_active_tab_content();
+                    const selected_items = active_tab_content
+                        ? active_tab_content.querySelectorAll('.highlight, .highlight_select')
+                        : [];
+
+                    if (selected_items.length > 0) {
+                        selected_files_arr = utilities.get_selected_files();
+                    } else {
+                        const current_location = utilities.get_location() || settingsManager.get_location();
+                        if (current_location) {
+                            selected_files_arr = [{ href: current_location }];
+                        }
+                    }
+
                     ipcRenderer.send('get_properties', selected_files_arr);
                     selected_files_arr = [];
                     utilities.clear();
@@ -6594,7 +8283,7 @@ class MenuManager {
                     items.forEach(item => {
                         if (item.classList.contains('highlight_select')) {
                             let file_arr = [];
-                            file_arr.push(item.dataset.href);
+                            file_arr.push({ href: item.dataset.href });
                             console.log('item', item.dataset.href);
                             ipcRenderer.send('get_properties', file_arr);
                             clearHighlight();
@@ -6634,7 +8323,7 @@ class WindowManager {
 
 
             let content = document.querySelector('.active-tab-content');
-            console.log('resize window', content.width);
+            // console.log('resize window', content.width);
 
             //     let window_settings = settingsManager.get_window_settings();
             //     // console.log('window_settings', window_settings);
@@ -6651,36 +8340,30 @@ class WindowManager {
 
 }
 
-let eventManager
-let utilities;
-let settingsManager;
-let km;
-// let viewManager;
-let iconManager;
-let tabManager;
-let dragSelect;
-let fileManager;
-let propertiesManager;
-let menuManager;
-let deviceManager;
-let workspaceManager;
-let sideBarManager;
-let windowManager;
-
-// on document ready
-document.addEventListener('DOMContentLoaded', (e) => {
-    init();
-});
+// the @type is so jump to definition works in vscode for these variables that are initialized in the init function below
+/** @type {EventManager} */ let eventManager
+/** @type {Utilities} */ let utilities;
+/** @type {SettingsManager} */ let settingsManager;
+/** @type {KeyBoardManager} */ let km;
+/** @type {IconManager} */ let iconManager;
+/** @type {TabManager} */ let tabManager;
+/** @type {DragSelect} */ let dragSelect;
+/** @type {FileManager} */ let fileManager;
+/** @type {PropertiesManager} */ let propertiesManager;
+/** @type {MenuManager} */ let menuManager;
+/** @type {DeviceManager} */ let deviceManager;
+/** @type {WorkspaceManager} */ let workspaceManager;
+/** @type {SideBarManager} */ let sideBarManager;
+/** @type {WindowManager} */ let windowManager;
 
 // init
-init = () => {
+function init() {
 
     eventManager = new EventManager();
 
     utilities = new Utilities();
     settingsManager = new SettingsManager();
-    km = new KeyBoardManager(utilities);
-    // viewManager = new ViewManager();
+    km = new KeyBoardManager();
     iconManager = new IconManager();
     tabManager = new TabManager();
     dragSelect = new DragSelect();
@@ -6688,17 +8371,17 @@ init = () => {
     propertiesManager = new PropertiesManager();
     menuManager = new MenuManager();
     windowManager = new WindowManager();
-    const navigation = new Navigation(FileManager);
-    // const keyboardManager = new KeyBoardManager(utilities);
+    const navigation = new Navigation();
 
     // side bar init
-    sideBarManager = new SideBarManager(utilities, fileManager);
+    sideBarManager = new SideBarManager();
     deviceManager = new DeviceManager();
     workspaceManager = new WorkspaceManager();
 
-
-
 }
+
+document.addEventListener('DOMContentLoaded', init);
+
 
 // setTimeout(() => {
 //     dragSelect.initialize();

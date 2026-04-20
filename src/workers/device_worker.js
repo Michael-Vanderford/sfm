@@ -87,6 +87,9 @@ class DeviceManager {
                 return;
             }
             let filter_arr = data_arr.filter(x => x.name != 'mtp')
+
+            console.log(filter_arr);
+
             for (let i = 0; i < filter_arr.length; i++) {
                 try {
                     if (filter_arr[i].path.indexOf('file://') > -1) {

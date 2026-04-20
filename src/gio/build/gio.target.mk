@@ -35,8 +35,6 @@ CFLAGS_Debug := \
 	-Wno-unused-parameter \
 	-I/usr/include/glib-2.0 \
 	-I/usr/lib/x86_64-linux-gnu/glib-2.0/include \
-	-I/usr/include/sysprof-6 \
-	-pthread \
 	-lglib-2.0 \
 	-m64 \
 	-g \
@@ -95,8 +93,6 @@ CFLAGS_Release := \
 	-Wno-unused-parameter \
 	-I/usr/include/glib-2.0 \
 	-I/usr/lib/x86_64-linux-gnu/glib-2.0/include \
-	-I/usr/include/sysprof-6 \
-	-pthread \
 	-lglib-2.0 \
 	-m64 \
 	-O3 \

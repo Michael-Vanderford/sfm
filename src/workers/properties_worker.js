@@ -13,6 +13,16 @@ parentPort.on('message', (data) => {
             if (data.selected_files_arr.length > 0) {
                 data.selected_files_arr.forEach(file => {
                     let properties = gio.get_file(file.href);
+                    if (properties && properties.is_dir) {
+                        try {
+                            const counts = gio.count(file.href);
+                            properties.folder_count = counts.folders;
+                            properties.file_count = counts.files;
+                            properties.count = counts.total;
+                        } catch (e) {
+                            // leave counts undefined if not readable
+                        }
+                    }
                     properties_arr.push(properties);
                 })
             } else {
