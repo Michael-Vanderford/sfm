@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Custom title bar logic for Electron frameless window
 window.addEventListener('DOMContentLoaded', () => {
     const { ipcRenderer } = require('electron');
@@ -86,6 +87,15 @@ window.addEventListener('DOMContentLoaded', () => {
                     break;
                 case 'about':
                     showAboutDialog();
+                    break;
+                case 'cut':
+                    window.utilities.cut();
+                    break;
+                case 'copy':
+                    window.utilities.copy();
+                    break;
+                case 'paste':
+                    window.utilities.paste();
                     break;
                 // Add more actions as needed
                 default:

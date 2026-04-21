@@ -2474,10 +2474,10 @@ class DeviceManager {
         if (this.device_view) {
 
             // Devices section label
-            let devices_label = utilities.add_div(['workspace_accordion']);
+            let devices_label = utilities.add_div(['devices_label']);
             devices_label.textContent = 'Devices';
-            this.device_view.append(devices_label);
             this.device_view.append(document.createElement('hr'));
+            this.device_view.append(devices_label);
 
             this.device_arr.sort((a, b) => {
                 // First, compare by 'type'
@@ -6065,6 +6065,22 @@ class FileManager {
             });
 
             results_list.append(results_view);
+
+            // Load icons for lazy items in search results
+            setTimeout(() => {
+                const lazy_icons = results_view.querySelectorAll('.icon .img.lazy[data-icon-href]');
+                lazy_icons.forEach((icon_img) => {
+                    ipcRenderer.invoke('get_icon', icon_img.dataset.iconHref).then((icon_path) => {
+                        if (!icon_path) {
+                            return;
+                        }
+                        icon_img.dataset.src = icon_path;
+                        icon_img.src = icon_path;
+                        icon_img.classList.remove('lazy');
+                    }).catch(() => {
+                    });
+                });
+            }, 10);
         };
 
         const parse_size_value = (value) => {
@@ -8377,6 +8393,9 @@ function init() {
     sideBarManager = new SideBarManager();
     deviceManager = new DeviceManager();
     workspaceManager = new WorkspaceManager();
+
+    // Expose utilities to window for use in other renderer scripts (e.g., titlebar.js)
+    window.utilities = utilities;
 
 }
 

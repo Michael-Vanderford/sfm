@@ -894,6 +894,12 @@ tr {
     cursor: pointer;
 }
 
+.devices_label {
+    margin-left: 24px;
+    margin-bottom: 10px;
+    /* font-weight: bold; */
+}
+
 .device_href {
     flex: 1;
     min-width: 0;

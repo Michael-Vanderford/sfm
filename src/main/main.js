@@ -360,7 +360,7 @@ class SettingsManager {
             let list_view_settings = {};
             fs.writeFileSync(this.list_view_file, JSON.stringify(list_view_settings, null, 4));
         }
-        console.log('getListViewSetting', this.list_view_settings);
+        // console.log('getListViewSetting', this.list_view_settings);
         return this.list_view_settings;
     }
 
